@@ -77,22 +77,31 @@ static void print_banner(int port, ng_session *sess) {
 
 static void usage(const char *argv0) {
   fprintf(stderr,
-    "nanobot %s — tiny Grok agent (browser session + CLI tool + MCP)\n\n"
+    "nanobot %s — tiny standalone agent host (UI + shell + MCP)\n\n"
+    "Outer layer (always): HTTP UI, @! shell, memory, peer bus, MCP.\n"
+    "LLM backend (pluggable): Grok cloud (browser session) OR llama.cpp / OpenAI-compatible.\n\n"
     "Usage:\n"
-    "  %s                 # start UI; print browser activation link\n"
-    "  %s --login         # force new browser device login, then serve\n"
-    "  %s --mcp           # MCP server on stdio\n"
-    "  %s -p 'prompt'     # one-shot (requires existing session)\n"
-    "  %s --port N\n"
-    "  %s --home DIR\n",
-    NG_VERSION, argv0, argv0, argv0, argv0, argv0, argv0);
+    "  %s                      # serve UI; Grok login if using default cloud base\n"
+    "  %s --offline            # local OpenAI API (default http://127.0.0.1:8080/v1)\n"
+    "  %s --llama              # same as --offline\n"
+    "  %s --base-url URL       # e.g. http://127.0.0.1:8080/v1  (llama.cpp server)\n"
+    "  %s --model NAME\n"
+    "  %s --login              # force Grok browser device login\n"
+    "  %s --mcp                # MCP on stdio (no browser if not Grok backend)\n"
+    "  %s -p 'prompt'          # one-shot (@! works without session)\n"
+    "  %s --port N  --home DIR\n\n"
+    "Env: NANOBOT_BASE_URL NANOBOT_MODEL NANOBOT_API_KEY NANOBOT_TOOLS NANOBOT_HOME\n",
+    NG_VERSION, argv0, argv0, argv0, argv0, argv0, argv0, argv0, argv0, argv0);
 }
 
 int main(int argc, char **argv) {
   int port = NG_DEFAULT_PORT;
   int mode_mcp = 0;
   int force_login = 0;
+  int force_offline = 0;
   char *oneshot = NULL;
+  const char *cli_base = NULL;
+  const char *cli_model = NULL;
   const char *home = getenv("NANOBOT_HOME");
   if (!home || !home[0]) {
     if (access("/mnt/data", W_OK) == 0) home = "/mnt/data/nanobot";
@@ -106,6 +115,12 @@ int main(int argc, char **argv) {
       mode_mcp = 1;
     } else if (strcmp(argv[i], "--login") == 0) {
       force_login = 1;
+    } else if (strcmp(argv[i], "--offline") == 0 || strcmp(argv[i], "--llama") == 0) {
+      force_offline = 1;
+    } else if ((strcmp(argv[i], "--base-url") == 0 || strcmp(argv[i], "--base") == 0) && i + 1 < argc) {
+      cli_base = argv[++i];
+    } else if (strcmp(argv[i], "--model") == 0 && i + 1 < argc) {
+      cli_model = argv[++i];
     } else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
       port = atoi(argv[++i]);
     } else if (strcmp(argv[i], "--home") == 0 && i + 1 < argc) {
@@ -139,17 +154,35 @@ int main(int argc, char **argv) {
   snprintf(envpath, sizeof envpath, "%s/env", home);
   ng_agent_load_env(&agent, envpath);
 
+  if (force_offline && !cli_base)
+    ng_agent_set_local_backend(&agent, NG_DEFAULT_LOCAL_BASE,
+                               cli_model ? cli_model : NG_DEFAULT_LOCAL_MODEL);
+  if (cli_base)
+    ng_agent_set_local_backend(&agent, cli_base, cli_model ? cli_model : agent.model);
+  else if (cli_model) {
+    free(agent.model);
+    agent.model = strdup(cli_model);
+  }
+
+  int need_browser = ng_agent_needs_browser_session(&agent);
+  fprintf(stderr, "  backend: %s  base=%s  model=%s\n",
+          ng_agent_backend_kind(&agent),
+          agent.base_url ? agent.base_url : "?",
+          agent.model ? agent.model : "?");
+
   if (mode_mcp) {
-    if (!ng_session_valid(&session)) {
-      fprintf(stderr, "nanobot --mcp needs a browser session.\n"
-                      "Run: nanobot --login   (open the printed link on BlackCube)\n");
-      if (ng_session_login_blocking(&session) != 0) {
-        ng_session_free(&session);
-        ng_agent_cfg_free(&agent);
-        return 1;
+    if (need_browser) {
+      if (!ng_session_valid(&session)) {
+        fprintf(stderr, "nanobot --mcp (Grok backend) needs a browser session.\n"
+                        "Run: nanobot --login   or use --offline / --base-url for llama.cpp\n");
+        if (ng_session_login_blocking(&session) != 0) {
+          ng_session_free(&session);
+          ng_agent_cfg_free(&agent);
+          return 1;
+        }
+      } else {
+        ng_session_ensure(&session);
       }
-    } else {
-      ng_session_ensure(&session);
     }
     int rc = ng_mcp_stdio_run(&agent);
     ng_session_free(&session);
@@ -158,13 +191,17 @@ int main(int argc, char **argv) {
   }
 
   if (oneshot) {
-    if (!ng_session_valid(&session)) {
-      fprintf(stderr, "No session. Run nanobot (open browser activation link) first.\n");
-      ng_session_free(&session);
-      ng_agent_cfg_free(&agent);
-      return 1;
+    int is_shell = oneshot[0] == '@' && oneshot[1] == '!';
+    if (need_browser && !is_shell) {
+      if (!ng_session_valid(&session)) {
+        fprintf(stderr, "No Grok session. Use nanobot --login, or --offline for llama.cpp,\n"
+                        "or @! <cmd> for shell without a model.\n");
+        ng_session_free(&session);
+        ng_agent_cfg_free(&agent);
+        return 1;
+      }
+      ng_session_ensure(&session);
     }
-    ng_session_ensure(&session);
     char *reply = ng_agent_run(&agent, oneshot);
     puts(reply ? reply : "");
     free(reply);
@@ -173,19 +210,19 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  /* Peer listener: bind HTTP immediately. Browser login is on-demand
-   * (UI /activate or POST /api/auth/start) so other Grok sessions can always
-   * reach /peer/v1/info even without a session yet.
-   */
-  if (force_login) {
+  /* Peer listener always up. Browser login only for Grok cloud backend. */
+  if (force_login && need_browser) {
     ng_session_clear(&session);
     fprintf(stderr, "  --login: open /activate after server starts\n");
-  } else if (ng_session_valid(&session)) {
+  } else if (need_browser && ng_session_valid(&session)) {
     if (ng_session_ensure(&session) != 0)
       fprintf(stderr, "  Session refresh failed; use /activate when ready\n");
-  } else {
+  } else if (need_browser) {
     fprintf(stderr,
-            "  No Grok session yet — peer bus up; activate via /activate\n");
+            "  No Grok session yet — outer UI/peer up; activate via /activate\n"
+            "  Or restart with --offline for llama.cpp (no browser)\n");
+  } else {
+    fprintf(stderr, "  Local/OpenAI-compatible backend — no browser session required\n");
   }
 
   /* lab peer token (optional shared secret for other Grok sessions) */

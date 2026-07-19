@@ -43,6 +43,55 @@ static int is_grok_endpoint(const char *url) {
   return 0;
 }
 
+int ng_agent_is_grok_backend(const ng_agent_cfg *c) {
+  return c && is_grok_endpoint(c->base_url);
+}
+
+int ng_agent_needs_browser_session(const ng_agent_cfg *c) {
+  return ng_agent_is_grok_backend(c);
+}
+
+const char *ng_agent_backend_kind(const ng_agent_cfg *c) {
+  if (!c || !c->base_url) return "unknown";
+  if (is_grok_endpoint(c->base_url)) return "grok";
+  return "openai_compatible"; /* llama.cpp, local proxies, etc. */
+}
+
+void ng_agent_set_local_backend(ng_agent_cfg *c, const char *base_url, const char *model) {
+  if (!c) return;
+  free(c->base_url);
+  c->base_url = strdup(base_url && base_url[0] ? base_url : NG_DEFAULT_LOCAL_BASE);
+  if (model && model[0]) {
+    free(c->model);
+    c->model = strdup(model);
+  } else if (!c->model) {
+    c->model = strdup(NG_DEFAULT_LOCAL_MODEL);
+  }
+}
+
+void ng_agent_set_grok_backend(ng_agent_cfg *c, const char *model) {
+  if (!c) return;
+  free(c->base_url);
+  c->base_url = strdup(NG_DEFAULT_BASE);
+  free(c->model);
+  c->model = strdup(model && model[0] ? model : NG_DEFAULT_MODEL);
+}
+
+int ng_agent_save_env(const ng_agent_cfg *c) {
+  if (!c || !c->base_url) return -1;
+  char path[640];
+  snprintf(path, sizeof path, "%s/env", ng_workdir());
+  char buf[1024];
+  int n = snprintf(buf, sizeof buf,
+    "# written by nanobot UI settings\n"
+    "NANOBOT_BASE_URL=%s\n"
+    "NANOBOT_MODEL=%s\n",
+    c->base_url,
+    c->model ? c->model : "");
+  if (n < 0 || n >= (int)sizeof buf) return -1;
+  return ng_write_file(path, buf, (size_t)n);
+}
+
 /* OpenAI-compatible POST. Grok-only headers when talking to xAI; plain Bearer for llama.cpp. */
 static char *curl_post_json(const char *url, const char *bearer, const char *body) {
   char tmpl[] = "/tmp/ng_req_XXXXXX";

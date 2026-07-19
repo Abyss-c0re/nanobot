@@ -11,14 +11,21 @@
     font: 16px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   #wrap { display:flex; flex-direction:column; height:100%; max-width:52rem; margin:0 auto; padding:0.5rem; }
   header { color:var(--mut); font-size:12px; letter-spacing:0.04em; padding:0.25rem 0 0.5rem;
-    border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:0.5rem; }
+    border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; }
   header b { color:var(--acc); font-weight:600; }
-  #gate { flex:1; display:flex; flex-direction:column; justify-content:center; gap:1rem; padding:1rem 0; }
+  #gate { flex:1; display:flex; flex-direction:column; justify-content:center; gap:0.85rem; padding:1rem 0; }
   #gate h1 { font-size:1.1rem; margin:0; color:var(--fg); font-weight:600; }
   #gate p { margin:0; color:var(--mut); font-size:14px; max-width:36rem; }
-  #act { display:inline-block; text-align:center; text-decoration:none; background:var(--acc); color:#00343a;
-    font-weight:700; padding:0.9rem 1.2rem; border-radius:8px; font-size:16px; }
-  #act:focus { outline:2px solid #fff; outline-offset:2px; }
+  #settings { border:1px solid var(--line); border-radius:8px; padding:0.75rem; display:flex; flex-direction:column; gap:0.5rem; max-width:28rem; }
+  #settings label { font-size:12px; color:var(--mut); }
+  #settings select, #settings input { width:100%; background:#11181c; color:var(--fg); border:1px solid var(--line);
+    border-radius:6px; padding:0.55rem 0.6rem; font: inherit; }
+  .row { display:flex; gap:0.5rem; flex-wrap:wrap; }
+  .btn { text-align:center; text-decoration:none; background:var(--acc); color:#00343a;
+    font-weight:700; padding:0.75rem 1rem; border-radius:8px; font-size:15px; border:0; cursor:pointer; font: inherit; }
+  .btn.sec { background:transparent; color:var(--acc); border:1px solid var(--acc); }
+  .btn:disabled { opacity:0.5; cursor:wait; }
+  #act { display:inline-block; }
   #code { color:var(--acc); letter-spacing:0.12em; font-size:1.25rem; }
   #log { flex:1; overflow:auto; white-space:pre-wrap; word-break:break-word; padding:0.75rem 0; font-size:14px; }
   .u { color:var(--acc); } .a { color:var(--fg); } .s { color:var(--mut); }
@@ -34,29 +41,59 @@
   #app.on { display:flex; }
   #gate.off { display:none; }
   .ok { color:var(--ok); }
+  #linkbox { font-size:12px; color:var(--mut); word-break:break-all; }
+  #linkbox a { color:var(--acc); }
 </style>
 </head>
 <body>
 <div id="wrap">
-  <header><span><b>nanobot</b> · browser Grok session</span><span id="st">…</span></header>
+  <header>
+    <span><b>nanobot</b> · standalone outer host</span>
+    <span id="st">…</span>
+  </header>
 
   <div id="gate">
-    <h1>Activate Grok session</h1>
-    <p>Open the link below on <b>BlackCube</b> in a browser where you use Grok.
-       It uses your normal browser login — no API keys.</p>
+    <h1>Connect &amp; backend</h1>
+    <p>Select LLM backend. <b>Connect Grok</b> starts device-code auth and shows an
+       <code>http</code> activation link (browser login — no API keys).</p>
+
+    <div id="settings">
+      <label for="backend">Backend</label>
+      <select id="backend">
+        <option value="grok">Grok (cloud, browser auth)</option>
+        <option value="local">Local / llama.cpp (OpenAI-compatible)</option>
+      </select>
+      <label for="base">Local base URL (llama.cpp)</label>
+      <input id="base" type="text" placeholder="http://127.0.0.1:8080/v1" value="http://127.0.0.1:8080/v1"/>
+      <label for="model">Model id</label>
+      <input id="model" type="text" placeholder="grok-4.5 or local model" value=""/>
+      <div class="row">
+        <button class="btn sec" type="button" id="applyBackend">Apply backend</button>
+        <button class="btn" type="button" id="connectGrok">Connect Grok</button>
+      </div>
+    </div>
+
     <p>Code: <span id="code">—</span></p>
-    <a id="act" href="#" target="_blank" rel="noopener">Open activation link</a>
-    <p class="s" id="wait">Waiting for browser approval… this page updates automatically.</p>
+    <a id="act" class="btn" href="#" target="_blank" rel="noopener" style="display:none">Open activation link</a>
+    <div id="linkbox"></div>
+    <p class="s" id="wait">Waiting…</p>
   </div>
 
   <div id="app">
+    <div class="row" style="padding:0.4rem 0; gap:0.4rem;">
+      <select id="backendApp" style="background:#11181c;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:0.35rem;">
+        <option value="grok">Grok</option>
+        <option value="local">llama.cpp / local</option>
+      </select>
+      <button class="btn sec" type="button" id="reconnect" style="padding:0.35rem 0.7rem;font-size:13px">Connect Grok</button>
+    </div>
     <div id="log" aria-live="polite"></div>
     <div id="bar">
       <input id="q" type="text" autocomplete="off" autocorrect="off" spellcheck="false"
-        placeholder="one line → Enter…" autofocus maxlength="2000"/>
+        placeholder="one line → Enter…  (@! shell)" autofocus maxlength="2000"/>
       <button id="go" type="button">Go</button>
     </div>
-    <div id="hint">Titan2: type → Enter · @! shell · /s status · /log · /clear</div>
+    <div id="hint">@! shell · help · /s · /log · /clear · backend pluggable · not affiliated with xAI</div>
   </div>
 </div>
 <script>
@@ -68,33 +105,95 @@ const gate = document.getElementById('gate');
 const app = document.getElementById('app');
 const act = document.getElementById('act');
 const codeEl = document.getElementById('code');
+const waitEl = document.getElementById('wait');
+const linkbox = document.getElementById('linkbox');
+const backendSel = document.getElementById('backend');
+const backendApp = document.getElementById('backendApp');
+const baseIn = document.getElementById('base');
+const modelIn = document.getElementById('model');
+
 function add(cls, t){ const d=document.createElement('div'); d.className=cls; d.textContent=t; log.appendChild(d); log.scrollTop=log.scrollHeight; }
 function showApp(){ gate.classList.add('off'); app.classList.add('on'); q.focus(); }
 function showGate(){ gate.classList.remove('off'); app.classList.remove('on'); }
 
+function applyAuthUi(j){
+  if (j.backend === 'grok') { backendSel.value = 'grok'; backendApp.value = 'grok'; }
+  else { backendSel.value = 'local'; backendApp.value = 'local'; }
+  if (j.base_url && j.backend !== 'grok') baseIn.value = j.base_url;
+  if (j.model) modelIn.value = j.model;
+  const local = j.needs_browser === false || j.backend === 'openai_compatible';
+  if (j.signed_in || local) {
+    const tag = local ? 'local' : 'session✓';
+    st.innerHTML = '<span class="ok">'+tag+'</span> · '+(j.model||'')+(j.backend?' · '+j.backend:'');
+    showApp();
+    return true;
+  }
+  st.textContent = 'need browser login';
+  showGate();
+  const u = j.verification_uri_complete || j.verification_uri;
+  if (u) {
+    act.href = u;
+    act.style.display = 'inline-block';
+    act.textContent = 'Open activation link';
+    linkbox.innerHTML = 'Link: <a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>';
+  }
+  if (j.user_code) codeEl.textContent = j.user_code;
+  waitEl.textContent = 'Waiting for browser approval…';
+  return false;
+}
+
 async function refreshAuth(){
   try {
     const r = await fetch('/api/auth'); const j = await r.json();
-    if (j.signed_in) {
-      st.innerHTML = '<span class="ok">session✓</span> · '+(j.model||'');
-      showApp();
-      return true;
-    }
-    st.textContent = 'need browser login';
-    showGate();
-    if (j.verification_uri_complete || j.verification_uri) {
-      const u = j.verification_uri_complete || j.verification_uri;
-      act.href = u;
-      act.textContent = 'Open activation link';
-    }
-    if (j.user_code) codeEl.textContent = j.user_code;
-    return false;
+    return applyAuthUi(j);
   } catch(e){ st.textContent = 'offline'; return false; }
 }
+
+async function applyBackend(fromApp){
+  const b = (fromApp ? backendApp : backendSel).value;
+  const body = b === 'local'
+    ? { backend:'local', base_url: baseIn.value || 'http://127.0.0.1:8080/v1', model: modelIn.value || 'local' }
+    : { backend:'grok', model: modelIn.value || undefined };
+  const r = await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!j.ok) { waitEl.textContent = j.error || 'backend failed'; return j; }
+  waitEl.textContent = 'Backend: ' + j.backend + (j.base_url ? ' @ '+j.base_url : '');
+  await refreshAuth();
+  return j;
+}
+
+async function connectGrok(){
+  waitEl.textContent = 'Starting Grok device login…';
+  await applyBackend(false);
+  // force grok backend then start auth
+  await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ backend:'grok', model: modelIn.value || undefined }) });
+  const r = await fetch('/api/auth/start', { method:'POST' });
+  const j = await r.json();
+  if (j.signed_in) { waitEl.textContent = 'Already signed in'; await refreshAuth(); return; }
+  const u = j.verification_uri_complete || j.verification_uri || (location.origin + '/activate');
+  // Prefer full device URI; also show local activate redirect
+  const localAct = location.origin + '/activate';
+  act.href = u;
+  act.style.display = 'inline-block';
+  act.textContent = 'Open activation link';
+  codeEl.textContent = j.user_code || '—';
+  linkbox.innerHTML =
+    'Authorize: <a href="'+u+'" target="_blank" rel="noopener">'+u+'</a><br/>'+
+    'Or open: <a href="'+localAct+'" target="_blank" rel="noopener">'+localAct+'</a> (nanobot redirects to Grok)';
+  waitEl.textContent = 'Open the link, approve in browser, this page will unlock.';
+  showGate();
+}
+
+document.getElementById('applyBackend').onclick = () => applyBackend(false);
+document.getElementById('connectGrok').onclick = connectGrok;
+document.getElementById('reconnect').onclick = connectGrok;
+backendApp.onchange = () => applyBackend(true);
 
 async function send(){
   let text = q.value.trim(); if(!text) return;
   if(text==='/clear'){ log.innerHTML=''; q.value=''; return; }
+  if(text==='help'||text==='/help'){ add('s','@! cmd · /s status · /log · /clear · Connect Grok button · backend Grok|local'); q.value=''; return; }
   if(text==='/log'){
     const r=await fetch('/api/log'); const j=await r.json(); add('s', j.log||'(empty)'); q.value=''; return;
   }
@@ -104,7 +203,7 @@ async function send(){
     const r = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({prompt:text}) });
     const j = await r.json();
-    if (j.need_login) { add('s', j.error||'need login'); await refreshAuth(); }
+    if (j.need_login) { add('s', j.error||'need login — use Connect Grok'); showGate(); await connectGrok(); }
     else add('a', j.reply || j.error || '(no reply)');
   } catch(e){ add('s','error: '+e); }
   go.disabled=false; q.focus();
@@ -114,22 +213,17 @@ q.addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
   if(e.key==='Escape'){ q.focus(); q.select(); }
 });
-document.addEventListener('keydown', e => {
-  if(e.key==='/' && document.activeElement!==q && app.classList.contains('on')){ e.preventDefault(); q.focus(); }
-});
 
 (async function boot(){
   const ok = await refreshAuth();
-  if (ok) add('s','Session active. One line in — shell tools run on the SSH host.');
+  if (ok) add('s','Ready. Backend selectable; Connect Grok generates http activation link.');
   else {
-    // ensure device login started
-    await fetch('/api/auth/start', {method:'POST'});
-    await refreshAuth();
+    waitEl.textContent = 'Pick backend, or Connect Grok for browser authorize.';
   }
   setInterval(async ()=>{
     if (!app.classList.contains('on')) {
       const ok = await refreshAuth();
-      if (ok) add('s','✓ Grok session active. Type a command line.');
+      if (ok) add('s','✓ Session active. Type a command line.');
     }
   }, 3000);
 })();

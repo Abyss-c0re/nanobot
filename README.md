@@ -1,12 +1,12 @@
 # nanobot
 
-**Tiny, standalone Grok agent** for constrained devices and the lab desktop.
+**Tiny, standalone agent host** for constrained devices and the lab desktop — Grok cloud *or* offline llama.cpp.
 
 | | |
 |--|--|
 | **Language** | C (static-friendly) |
 | **Size** | ~80KB host / stripped armv7 |
-| **Auth** | Browser device-code only (no API keys in the binary) |
+| **Auth** | Grok: browser device-code · Local: none / optional API key |
 | **Status** | **Unpublished** private project — not a public product release |
 
 Same *idea* as Grok Build headless (HTTPS chat proxy + tool loop), **not** the full TUI.
@@ -31,8 +31,8 @@ This is an independent hobby/lab tool that uses publicly available browser/devic
 cd ~/Dev/nanobot
 make host
 ./build/host/nanobot --version
-./build/host/nanobot --port 8787
-# open http://127.0.0.1:8787/activate  then UI at http://127.0.0.1:8787/
+./build/host/nanobot --port 8787          # Grok path → /activate
+./build/host/nanobot --offline --port 8787  # llama.cpp outer, no browser
 ```
 
 One-shot (needs existing session):
@@ -108,14 +108,27 @@ toolchain/     arm cross (gitignored)
 Blocks crude destructive patterns (`rm -rf /`, `mkfs`, …). On a rooted vacuum you are still root — prefer allowlisted ops.
 
 
-## Offline outer level (llama.cpp)
+## Architecture: reusable outer host
 
-The **outer agent** (UI, shell tool, MCP, peer) is designed to be **reusable offline**:
+| Layer | Always | Notes |
+|-------|--------|--------|
+| **Outer** | UI `:8787`, `@!` shell, memory, peer, MCP | Independent of which LLM you use |
+| **Backend** | Pluggable | Grok cloud **or** OpenAI-compatible (llama.cpp) |
 
-- Default backend: Grok (browser session)
-- Planned/parallel: **llama.cpp** local server — same message envelope, no xAI auth
+```bash
+# Offline / llama.cpp — same binary & UI, no browser login
+./llama-server -m model.gguf --port 8080   # separate process
+./build/host/nanobot --offline --port 8787
+# open http://127.0.0.1:8787/  → ready (backend: openai_compatible)
 
-See [docs/PLATFORM.md](docs/PLATFORM.md) § Offline.
+# Or explicit base URL
+./build/host/nanobot --base-url http://127.0.0.1:8080/v1 --model local
+
+# Shell without any model
+./build/host/nanobot -p '@! uname -a'
+```
+
+See [docs/BACKENDS.md](docs/BACKENDS.md). Not affiliated with xAI/Grok — local mode never talks to them.
 
 ## Version control
 

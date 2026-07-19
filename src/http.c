@@ -96,6 +96,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   int is_get = strncmp(req, "GET ", 4) == 0 || strncmp(req, "HEAD ", 5) == 0;
   int is_post = strncmp(req, "POST ", 5) == 0;
+  int is_put = strncmp(req, "PUT ", 4) == 0;
   int is_opts = strncmp(req, "OPTIONS ", 8) == 0;
   const char *pathstart = path_of(req);
   char path[256];
@@ -142,58 +143,180 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/status") == 0)) {
-    int signed_in = session && ng_session_valid(session);
+    int need_browser = agent && ng_agent_needs_browser_session(agent);
+    int signed_in = need_browser ? (session && ng_session_valid(session)) : 1;
+    const char *backend = agent ? ng_agent_backend_kind(agent) : "unknown";
+    const char *auth_mode = need_browser ? "browser_device_code" : "local_openai_compatible";
     char *vu = NULL, *vuc = NULL, *uc = NULL;
-    if (session) {
+    char *base_esc = NULL;
+    if (session && need_browser) {
       if (session->verification_uri) vu = ng_json_escape(session->verification_uri);
       if (session->verification_uri_complete) vuc = ng_json_escape(session->verification_uri_complete);
       if (session->user_code) uc = ng_json_escape(session->user_code);
     }
-    char body[2048];
+    if (agent && agent->base_url) base_esc = ng_json_escape(agent->base_url);
+    char body[2560];
     int n = snprintf(body, sizeof body,
       "{\"ok\":true,\"version\":\"%s\",\"model\":\"%s\",\"signed_in\":%s,"
       "\"login_pending\":%s,\"user_code\":\"%s\","
       "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
-      "\"workdir\":\"%s\",\"auth\":\"browser_device_code\"}",
+      "\"workdir\":\"%s\",\"auth\":\"%s\",\"backend\":\"%s\","
+      "\"base_url\":\"%s\",\"needs_browser\":%s}",
       NG_VERSION,
-      agent->model ? agent->model : "",
+      agent && agent->model ? agent->model : "",
       signed_in ? "true" : "false",
-      (session && session->login_pending) ? "true" : "false",
+      (need_browser && session && session->login_pending) ? "true" : "false",
       uc ? uc : "",
       vu ? vu : "",
       vuc ? vuc : "",
-      ng_workdir());
+      ng_workdir(),
+      auth_mode,
+      backend,
+      base_esc ? base_esc : "",
+      need_browser ? "true" : "false");
     http_response(cfd, 200, "application/json", body, (size_t)n);
-    free(vu); free(vuc); free(uc);
+    free(vu); free(vuc); free(uc); free(base_esc);
     free(req); close(cfd); return;
   }
 
   if (is_post && strcmp(path, "/api/auth/start") == 0) {
-    if (!session) {
+    if (!session || !agent) {
       http_response(cfd, 500, "application/json", "{\"error\":\"no session\"}", 21);
       free(req); close(cfd); return;
     }
-    if (ng_session_valid(session)) {
-      http_response(cfd, 200, "application/json", "{\"ok\":true,\"signed_in\":true}", 28);
-      free(req); close(cfd); return;
+    /* Connect Grok: ensure Grok backend, then device-code login link. */
+    char *body0 = strstr(req, "\r\n\r\n");
+    body0 = body0 ? body0 + 4 : "";
+    int force = 0;
+    if (strstr(body0, "\"force\"") && strstr(body0, "true")) force = 1;
+    if (!ng_agent_is_grok_backend(agent)) {
+      ng_agent_set_grok_backend(agent, NULL);
+      ng_agent_save_env(agent);
+      ng_log("settings: switched backend to grok for Connect");
     }
-    if (!session->login_pending) {
-      if (ng_session_start_device_login(session) != 0) {
-        http_response(cfd, 500, "application/json", "{\"error\":\"device login failed\"}", 30);
-        free(req); close(cfd); return;
+    if (force || !ng_session_valid(session)) {
+      if (force) ng_session_clear(session);
+      if (!session->login_pending || force) {
+        if (ng_session_start_device_login(session) != 0) {
+          http_response(cfd, 500, "application/json",
+            "{\"error\":\"device login failed (network/DNS?)\"}", 48);
+          free(req); close(cfd); return;
+        }
       }
+    }
+    if (ng_session_valid(session)) {
+      http_response(cfd, 200, "application/json",
+        "{\"ok\":true,\"signed_in\":true,\"login_pending\":false,"
+        "\"backend\":\"grok\",\"message\":\"already connected\"}", 95);
+      free(req); close(cfd); return;
     }
     char *vuc = session->verification_uri_complete
       ? ng_json_escape(session->verification_uri_complete)
       : ng_json_escape(session->verification_uri ? session->verification_uri : "");
+    char *vu = session->verification_uri ? ng_json_escape(session->verification_uri) : NULL;
     char *uc = ng_json_escape(session->user_code ? session->user_code : "");
     char *body = NULL;
     asprintf(&body,
       "{\"ok\":true,\"signed_in\":false,\"login_pending\":true,"
-      "\"user_code\":\"%s\",\"verification_uri_complete\":\"%s\"}",
-      uc ? uc : "", vuc ? vuc : "");
+      "\"backend\":\"grok\",\"needs_browser\":true,"
+      "\"user_code\":\"%s\","
+      "\"verification_uri\":\"%s\","
+      "\"verification_uri_complete\":\"%s\","
+      "\"activate_path\":\"/activate\","
+      "\"message\":\"Open the link to authorize Grok in your browser\"}",
+      uc ? uc : "",
+      vu ? vu : "",
+      vuc ? vuc : "");
     http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
-    free(body); free(vuc); free(uc);
+    free(body); free(vuc); free(vu); free(uc);
+    free(req); close(cfd); return;
+  }
+
+  /* UI settings: select backend (grok | local) + optional base/model */
+  if ((is_post || is_put) && strcmp(path, "/api/settings") == 0) {
+    if (!agent) {
+      http_response(cfd, 500, "application/json", "{\"error\":\"no agent\"}", 20);
+      free(req); close(cfd); return;
+    }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    char *backend = ng_json_get_string(body, "backend");
+    char *base = ng_json_get_string(body, "base_url");
+    if (!base) base = ng_json_get_string(body, "base");
+    char *model = ng_json_get_string(body, "model");
+    if (!backend && !base) {
+      free(backend); free(base); free(model);
+      http_response(cfd, 400, "application/json",
+        "{\"error\":\"need backend (grok|local) or base_url\"}", 52);
+      free(req); close(cfd); return;
+    }
+    if (backend && (strcmp(backend, "grok") == 0 || strcmp(backend, "cloud") == 0)) {
+      ng_agent_set_grok_backend(agent, model);
+    } else if (backend && (strcmp(backend, "local") == 0 || strcmp(backend, "llama") == 0 ||
+                           strcmp(backend, "offline") == 0 ||
+                           strcmp(backend, "openai_compatible") == 0)) {
+      ng_agent_set_local_backend(agent, base, model);
+    } else if (base && base[0]) {
+      /* Infer from URL */
+      if (strstr(base, "grok.com") || strstr(base, "x.ai"))
+        ng_agent_set_grok_backend(agent, model);
+      else
+        ng_agent_set_local_backend(agent, base, model);
+    }
+    ng_agent_save_env(agent);
+    ng_log("settings: backend=%s base=%s model=%s",
+           ng_agent_backend_kind(agent),
+           agent->base_url ? agent->base_url : "?",
+           agent->model ? agent->model : "?");
+    char *be = ng_json_escape(agent->base_url ? agent->base_url : "");
+    char *me = ng_json_escape(agent->model ? agent->model : "");
+    char *out = NULL;
+    asprintf(&out,
+      "{\"ok\":true,\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+      "\"needs_browser\":%s,\"signed_in\":%s}",
+      ng_agent_backend_kind(agent),
+      be ? be : "",
+      me ? me : "",
+      ng_agent_needs_browser_session(agent) ? "true" : "false",
+      (ng_agent_needs_browser_session(agent) && session && ng_session_valid(session))
+        ? "true" : (ng_agent_needs_browser_session(agent) ? "false" : "true"));
+    http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
+    free(out); free(be); free(me);
+    free(backend); free(base); free(model);
+    free(req); close(cfd); return;
+  }
+
+
+  if (is_post && strcmp(path, "/api/backend") == 0) {
+    /* alias: switch backend; same as /api/settings */
+    if (!agent) {
+      http_response(cfd, 500, "application/json", "{\"error\":\"no agent\"}", 20);
+      free(req); close(cfd); return;
+    }
+    char *jsonp = strstr(req, "\r\n\r\n");
+    const char *json = jsonp ? jsonp + 4 : "{}";
+    char *bk = ng_json_get_string(json, "backend");
+    char *base = ng_json_get_string(json, "base_url");
+    char *model = ng_json_get_string(json, "model");
+    if (bk && (strcmp(bk, "openai_compatible") == 0 || strcmp(bk, "llama") == 0 ||
+               strcmp(bk, "local") == 0 || strcmp(bk, "offline") == 0)) {
+      ng_agent_set_local_backend(agent, base ? base : NG_DEFAULT_LOCAL_BASE,
+                                 model ? model : NG_DEFAULT_LOCAL_MODEL);
+    } else {
+      ng_agent_set_grok_backend(agent, model);
+    }
+    free(bk); free(base); free(model);
+    ng_agent_save_env(agent);
+    const char *kind = ng_agent_backend_kind(agent);
+    char *be = ng_json_escape(agent->base_url ? agent->base_url : "");
+    char *me = ng_json_escape(agent->model ? agent->model : "");
+    char body[768];
+    int n = snprintf(body, sizeof body,
+      "{\"ok\":true,\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\",\"needs_browser\":%s}",
+      kind, be ? be : "", me ? me : "",
+      ng_agent_needs_browser_session(agent) ? "true" : "false");
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(be); free(me);
     free(req); close(cfd); return;
   }
 
@@ -217,14 +340,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_response(cfd, 400, "application/json", "{\"error\":\"missing prompt\"}", 27);
       free(req); close(cfd); return;
     }
-    /* @! shell is offline — no Grok session required */
-    int offline = (prompt[0] == '@' && prompt[1] == '!');
-    if (!offline && (!session || !ng_session_valid(session))) {
+    /* Outer shell always: @! shell. Local/llama backend: no browser session. */
+    int shell_only = (prompt[0] == '@' && prompt[1] == '!');
+    int need_browser = agent && ng_agent_needs_browser_session(agent);
+    if (!shell_only && need_browser && (!session || !ng_session_valid(session))) {
       if (session && session->login_pending) ng_session_poll_login(session);
       if (!session || !ng_session_valid(session)) {
         free(prompt);
         http_response(cfd, 401, "application/json",
-          "{\"error\":\"Open activation link, or use @! <cmd> offline\",\"need_login\":true}", 76);
+          "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}", 88);
         free(req); close(cfd); return;
       }
     }
@@ -303,10 +427,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     free(need);
 
-    if (!session || !ng_session_valid(session)) {
-      http_response(cfd, 401, "application/json",
-        "{\"error\":\"robot Grok session not active; open activation link on host browser\",\"need_login\":true}", 96);
-      free(req); close(cfd); return;
+    {
+      int need_browser = agent && ng_agent_needs_browser_session(agent);
+      if (need_browser && (!session || !ng_session_valid(session))) {
+        http_response(cfd, 401, "application/json",
+          "{\"error\":\"Grok session not active; use --offline for llama or open /activate\",\"need_login\":true}", 94);
+        free(req); close(cfd); return;
+      }
     }
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";

@@ -3,12 +3,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NG_VERSION "0.2.3"
+#define NG_VERSION "0.3.0"
 /* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*). */
 #define NG_CLI_VERSION_DEFAULT "0.1.220"
 #define NG_DEFAULT_PORT 8787
 #define NG_DEFAULT_BASE "https://127.0.0.1:8080/v1"
 #define NG_DEFAULT_MODEL "grok-4.5"
+/* Default when --offline / --llama (OpenAI-compatible outer API). */
+#define NG_DEFAULT_LOCAL_BASE "http://127.0.0.1:8080/v1"
+#define NG_DEFAULT_LOCAL_MODEL "local"
 #define NG_MAX_TURNS 12
 #define NG_CMD_TIMEOUT_SEC 60
 #define NG_HTTP_MAX_CHILDREN 24
