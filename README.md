@@ -1,5 +1,8 @@
 # nanobot
 
+> **Robot UI:** remote host dashboard is **Dash** (`~/Dev/external-dashboard`), not this project. nanobot is only an optional assistant backend.
+
+
 **Standalone** tiny agent host written in C: web dashboard, shell tool, compact memory, MCP, optional peer bus.
 
 | | |
