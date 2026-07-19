@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>nanobot</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0f12; --fg:#e8eef2; --acc:#00e5ff; --mut:#7a8a94; --line:#1c262c; --ok:#3ddc97; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font: 16px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #wrap { display:flex; flex-direction:column; height:100%; max-width:52rem; margin:0 auto; padding:0.5rem; }
+  header { color:var(--mut); font-size:12px; letter-spacing:0.04em; padding:0.25rem 0 0.5rem;
+    border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:0.5rem; }
+  header b { color:var(--acc); font-weight:600; }
+  #gate { flex:1; display:flex; flex-direction:column; justify-content:center; gap:1rem; padding:1rem 0; }
+  #gate h1 { font-size:1.1rem; margin:0; color:var(--fg); font-weight:600; }
+  #gate p { margin:0; color:var(--mut); font-size:14px; max-width:36rem; }
+  #act { display:inline-block; text-align:center; text-decoration:none; background:var(--acc); color:#00343a;
+    font-weight:700; padding:0.9rem 1.2rem; border-radius:8px; font-size:16px; }
+  #act:focus { outline:2px solid #fff; outline-offset:2px; }
+  #code { color:var(--acc); letter-spacing:0.12em; font-size:1.25rem; }
+  #log { flex:1; overflow:auto; white-space:pre-wrap; word-break:break-word; padding:0.75rem 0; font-size:14px; }
+  .u { color:var(--acc); } .a { color:var(--fg); } .s { color:var(--mut); }
+  #bar { display:flex; gap:0.4rem; border-top:1px solid var(--line); padding-top:0.5rem; }
+  #q { flex:1; min-width:0; background:#11181c; color:var(--fg); border:1px solid var(--line);
+    border-radius:6px; padding:0.7rem 0.75rem; font: inherit; outline:none; }
+  #q:focus { border-color:var(--acc); }
+  #go { background:var(--acc); color:#00343a; border:0; border-radius:6px; padding:0 1rem;
+    font: inherit; font-weight:700; cursor:pointer; min-width:4.5rem; }
+  #go:disabled { opacity:0.5; cursor:wait; }
+  #hint { font-size:11px; color:var(--mut); padding:0.35rem 0 0; }
+  #app { display:none; flex-direction:column; flex:1; min-height:0; }
+  #app.on { display:flex; }
+  #gate.off { display:none; }
+  .ok { color:var(--ok); }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span><b>nanobot</b> · browser Grok session</span><span id="st">…</span></header>
+
+  <div id="gate">
+    <h1>Activate Grok session</h1>
+    <p>Open the link below on <b>BlackCube</b> in a browser where you use Grok.
+       It uses your normal browser login — no API keys.</p>
+    <p>Code: <span id="code">—</span></p>
+    <a id="act" href="#" target="_blank" rel="noopener">Open activation link</a>
+    <p class="s" id="wait">Waiting for browser approval… this page updates automatically.</p>
+  </div>
+
+  <div id="app">
+    <div id="log" aria-live="polite"></div>
+    <div id="bar">
+      <input id="q" type="text" autocomplete="off" autocorrect="off" spellcheck="false"
+        placeholder="one line → Enter…" autofocus maxlength="2000"/>
+      <button id="go" type="button">Go</button>
+    </div>
+    <div id="hint">Titan2: type → Enter · @! shell · /s status · /log · /clear</div>
+  </div>
+</div>
+<script>
+const log = document.getElementById('log');
+const q = document.getElementById('q');
+const go = document.getElementById('go');
+const st = document.getElementById('st');
+const gate = document.getElementById('gate');
+const app = document.getElementById('app');
+const act = document.getElementById('act');
+const codeEl = document.getElementById('code');
+function add(cls, t){ const d=document.createElement('div'); d.className=cls; d.textContent=t; log.appendChild(d); log.scrollTop=log.scrollHeight; }
+function showApp(){ gate.classList.add('off'); app.classList.add('on'); q.focus(); }
+function showGate(){ gate.classList.remove('off'); app.classList.remove('on'); }
+
+async function refreshAuth(){
+  try {
+    const r = await fetch('/api/auth'); const j = await r.json();
+    if (j.signed_in) {
+      st.innerHTML = '<span class="ok">session✓</span> · '+(j.model||'');
+      showApp();
+      return true;
+    }
+    st.textContent = 'need browser login';
+    showGate();
+    if (j.verification_uri_complete || j.verification_uri) {
+      const u = j.verification_uri_complete || j.verification_uri;
+      act.href = u;
+      act.textContent = 'Open activation link';
+    }
+    if (j.user_code) codeEl.textContent = j.user_code;
+    return false;
+  } catch(e){ st.textContent = 'offline'; return false; }
+}
+
+async function send(){
+  let text = q.value.trim(); if(!text) return;
+  if(text==='/clear'){ log.innerHTML=''; q.value=''; return; }
+  if(text==='/log'){
+    const r=await fetch('/api/log'); const j=await r.json(); add('s', j.log||'(empty)'); q.value=''; return;
+  }
+  if(text==='/s'||text==='/status'){ await refreshAuth(); q.value=''; return; }
+  go.disabled=true; add('u','› '+text); q.value='';
+  try {
+    const r = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({prompt:text}) });
+    const j = await r.json();
+    if (j.need_login) { add('s', j.error||'need login'); await refreshAuth(); }
+    else add('a', j.reply || j.error || '(no reply)');
+  } catch(e){ add('s','error: '+e); }
+  go.disabled=false; q.focus();
+}
+go.onclick = send;
+q.addEventListener('keydown', e => {
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
+  if(e.key==='Escape'){ q.focus(); q.select(); }
+});
+document.addEventListener('keydown', e => {
+  if(e.key==='/' && document.activeElement!==q && app.classList.contains('on')){ e.preventDefault(); q.focus(); }
+});
+
+(async function boot(){
+  const ok = await refreshAuth();
+  if (ok) add('s','Session active. One line in — shell tools run on the SSH host.');
+  else {
+    // ensure device login started
+    await fetch('/api/auth/start', {method:'POST'});
+    await refreshAuth();
+  }
+  setInterval(async ()=>{
+    if (!app.classList.contains('on')) {
+      const ok = await refreshAuth();
+      if (ok) add('s','✓ Grok session active. Type a command line.');
+    }
+  }, 3000);
+})();
+</script>
+</body>
+</html>

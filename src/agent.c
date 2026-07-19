@@ -1,0 +1,400 @@
+#include "agent.h"
+#include "memory.h"
+#include "shell.h"
+#include "util.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+
+void ng_agent_cfg_init(ng_agent_cfg *c) {
+  memset(c, 0, sizeof *c);
+  c->base_url = strdup(NG_DEFAULT_BASE);
+  c->model = strdup(NG_DEFAULT_MODEL);
+  c->max_turns = NG_MAX_TURNS;
+  c->timeout_sec = NG_CMD_TIMEOUT_SEC;
+}
+
+void ng_agent_cfg_free(ng_agent_cfg *c) {
+  free(c->base_url); free(c->model);
+  memset(c, 0, sizeof *c);
+}
+
+void ng_agent_load_env(ng_agent_cfg *c, const char *env_path) {
+  if (env_path) {
+    char *b = ng_slurp_env_file(env_path, "NANOBOT_BASE_URL");
+    if (b) { free(c->base_url); c->base_url = b; }
+    char *m = ng_slurp_env_file(env_path, "NANOBOT_MODEL");
+    if (m) { free(c->model); c->model = m; }
+  }
+  char *b2 = ng_getenv_dup("NANOBOT_BASE_URL");
+  if (b2) { free(c->base_url); c->base_url = b2; }
+  char *m2 = ng_getenv_dup("NANOBOT_MODEL");
+  if (m2) { free(c->model); c->model = m2; }
+}
+
+static int is_grok_endpoint(const char *url) {
+  if (!url) return 0;
+  if (strstr(url, "grok.com")) return 1;
+  if (strstr(url, "api.x.ai")) return 1;
+  if (strstr(url, "x.ai")) return 1;
+  return 0;
+}
+
+/* OpenAI-compatible POST. Grok-only headers when talking to xAI; plain Bearer for llama.cpp. */
+static char *curl_post_json(const char *url, const char *bearer, const char *body) {
+  char tmpl[] = "/tmp/ng_req_XXXXXX";
+  int fd = mkstemp(tmpl);
+  if (fd < 0) return strdup("mkstemp failed");
+  write(fd, body, strlen(body));
+  close(fd);
+
+  char outtmpl[] = "/tmp/ng_resp_XXXXXX";
+  int ofd = mkstemp(outtmpl);
+  if (ofd < 0) { unlink(tmpl); return strdup("mkstemp out failed"); }
+  close(ofd);
+
+  char errtmpl[] = "/tmp/ng_cerr_XXXXXX";
+  int efd = mkstemp(errtmpl);
+  if (efd < 0) { unlink(tmpl); unlink(outtmpl); return strdup("mkstemp err failed"); }
+  close(efd);
+
+  char auth[1600];
+  if (bearer && bearer[0])
+    snprintf(auth, sizeof auth, "Authorization: Bearer %s", bearer);
+  else
+    snprintf(auth, sizeof auth, "Authorization: Bearer none");
+
+  char dataarg[80];
+  snprintf(dataarg, sizeof dataarg, "@%s", tmpl);
+  char ua[96];
+  snprintf(ua, sizeof ua, "User-Agent: %s", ng_cli_user_agent());
+  char verhdr[80];
+  snprintf(verhdr, sizeof verhdr, "x-grok-client-version: %s", ng_cli_version());
+  int grok = is_grok_endpoint(url);
+
+  pid_t p2 = fork();
+  if (p2 == 0) {
+    int er = open(errtmpl, O_WRONLY | O_TRUNC);
+    if (er >= 0) { dup2(er, STDERR_FILENO); close(er); }
+    char *argv[40];
+    int a = 0;
+    argv[a++] = "curl";
+    argv[a++] = "-sS";
+    argv[a++] = "--max-time";
+    argv[a++] = "45";
+    argv[a++] = "--connect-timeout";
+    argv[a++] = "12";
+    argv[a++] = "-H";
+    argv[a++] = "Content-Type: application/json";
+    if (bearer && bearer[0]) {
+      argv[a++] = "-H";
+      argv[a++] = auth;
+    }
+    if (grok) {
+      argv[a++] = "-H";
+      argv[a++] = "X-XAI-Token-Auth: " NG_AUTH_TOKEN_HDR;
+      argv[a++] = "-H";
+      argv[a++] = "x-grok-client-mode: headless";
+      argv[a++] = "-H";
+      argv[a++] = "x-grok-client-surface: cli";
+      argv[a++] = "-H";
+      argv[a++] = verhdr;
+      argv[a++] = "-H";
+      argv[a++] = ua;
+    } else {
+      /* llama.cpp / OpenAI-compatible */
+      argv[a++] = "-H";
+      argv[a++] = "User-Agent: nanobot/" NG_VERSION;
+    }
+    argv[a++] = "--data-binary";
+    argv[a++] = dataarg;
+    argv[a++] = "-o";
+    argv[a++] = outtmpl;
+    argv[a++] = (char *)url;
+    argv[a++] = NULL;
+    execvp("curl", argv);
+    _exit(127);
+  }
+  int st = 0;
+  waitpid(p2, &st, 0);
+  unlink(tmpl);
+  if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) {
+    char *err = ng_read_file(outtmpl, NULL);
+    char *cerr = ng_read_file(errtmpl, NULL);
+    unlink(outtmpl);
+    unlink(errtmpl);
+    if (err && err[0]) { free(cerr); return err; }
+    free(err);
+    if (cerr && cerr[0]) {
+      char *out = NULL;
+      asprintf(&out, "curl failed: %s", cerr);
+      free(cerr);
+      return out ? out : strdup("curl failed talking to API");
+    }
+    free(cerr);
+    return strdup("curl failed talking to API");
+  }
+  unlink(errtmpl);
+  char *resp = ng_read_file(outtmpl, NULL);
+  unlink(outtmpl);
+  return resp ? resp : strdup("");
+}
+
+static char *extract_command_arg(const char *args_json) {
+  char *c = ng_json_get_string(args_json, "command");
+  if (c) return c;
+  return strdup(args_json ? args_json : "");
+}
+
+/* Safe messages array builder (avoids broken hist embedding). */
+static int msg_append(char **msgs, const char *role, const char *content) {
+  char *esc = ng_json_escape(content ? content : "");
+  if (!esc) return -1;
+  char *piece = NULL;
+  int need_comma = (*msgs && (*msgs)[0] && (*msgs)[0] != '[');
+  /* *msgs holds body without outer [] yet — we store inner parts starting empty */
+  if (!*msgs) {
+    asprintf(msgs, "{\"role\":\"%s\",\"content\":\"%s\"}", role, esc);
+  } else {
+    asprintf(&piece, "%s,{\"role\":\"%s\",\"content\":\"%s\"}", *msgs, role, esc);
+    free(*msgs);
+    *msgs = piece;
+  }
+  free(esc);
+  (void)need_comma;
+  return *msgs ? 0 : -1;
+}
+
+static char *run_shell_direct(ng_agent_cfg *c, const char *cmd) {
+  while (*cmd == ' ' || *cmd == '\t') cmd++;
+  if (!cmd[0]) return strdup("usage: @! <shell command>");
+  ng_log("agent: @! shell: %.200s", cmd);
+  ng_cmd_result cr = ng_run_command(cmd, c->timeout_sec);
+  char *out = NULL;
+  asprintf(&out, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
+  ng_cmd_result_free(&cr);
+  return out ? out : strdup("(no output)");
+}
+
+char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt) {
+  if (!user_prompt || !user_prompt[0]) return strdup("(empty prompt)");
+
+  /* Direct shell: @! command  (offline, no LLM, works on vacuum without Grok) */
+  if (user_prompt[0] == '@' && user_prompt[1] == '!') {
+    char *r = run_shell_direct(c, user_prompt + 2);
+    /* lightweight memory of shell for context */
+    if (r) ng_memory_record_exchange(user_prompt, r);
+    return r;
+  }
+
+  int grok = is_grok_endpoint(c->base_url);
+  const char *bearer = NULL;
+  if (grok) {
+    if (!c->session || ng_session_ensure(c->session) != 0) {
+      return strdup("Not signed in. Open the activation link nanobot printed "
+                    "(browser on BlackCube) to attach a Grok session. "
+                    "Or use @! <cmd> for offline shell.");
+    }
+    bearer = ng_session_bearer(c->session);
+    if (!bearer) {
+      return strdup("No Grok session. Re-run nanobot and open the browser activation link.");
+    }
+  } else {
+    /* llama.cpp / OpenAI: optional API key from env file or env */
+    char envpath[640];
+    snprintf(envpath, sizeof envpath, "%s/env", ng_workdir());
+    char *key = ng_slurp_env_file(envpath, "NANOBOT_API_KEY");
+    if (!key) key = ng_slurp_env_file(envpath, "OPENAI_API_KEY");
+    if (!key) key = ng_getenv_dup("NANOBOT_API_KEY");
+    if (!key) key = ng_getenv_dup("OPENAI_API_KEY");
+    bearer = key; /* may be NULL for open local llama.cpp */
+    /* leak key intentionally until end — free at return paths is hard; store on stack via static free later */
+    (void)key;
+  }
+
+  ng_log("agent: user: %.200s", user_prompt);
+
+  /* Compact memory: always-on vacuum identity + recent turns (pruned). */
+  char *sys = ng_memory_system_prompt();
+  char *inner = NULL;
+  if (msg_append(&inner, "system", sys ? sys : "You are nanobot on a robot vacuum.") != 0) {
+    free(sys);
+    return strdup("oom building messages");
+  }
+  free(sys);
+
+  /* Recent history as discrete user/assistant messages only */
+  {
+    char path[640];
+    snprintf(path, sizeof path, "%s/memory/recent.jsonl", ng_workdir());
+    size_t len = 0;
+    char *raw = ng_read_file(path, &len);
+    if (raw && len) {
+      char *p = raw;
+      int count = 0;
+      while (*p && count < NG_MEM_MAX_RECENT_TURNS * 2) {
+        char *nl = strchr(p, '\n');
+        if (nl) *nl = 0;
+        if (p[0] == '{') {
+          char *role = ng_json_get_string(p, "role");
+          char *content = ng_json_get_string(p, "content");
+          if (role && content &&
+              (strcmp(role, "user") == 0 || strcmp(role, "assistant") == 0) &&
+              content[0] &&
+              strncmp(content, "API error:", 10) != 0 &&
+              strncmp(content, "(no content)", 12) != 0 &&
+              strncmp(content, "Failed to parse", 15) != 0) {
+            msg_append(&inner, role, content);
+            count++;
+          }
+          free(role); free(content);
+        }
+        if (!nl) break;
+        p = nl + 1;
+      }
+    }
+    free(raw);
+  }
+
+  msg_append(&inner, "user", user_prompt);
+
+  char *messages = NULL;
+  asprintf(&messages, "[%s]", inner ? inner : "");
+  free(inner);
+  if (!messages) return strdup("oom messages");
+
+  /* Tools: OpenAI-style; llama.cpp supports when built with tools. Disable with NANOBOT_TOOLS=0 */
+  int use_tools = 1;
+  {
+    const char *t = getenv("NANOBOT_TOOLS");
+    if (t && (t[0] == '0' || t[0] == 'n' || t[0] == 'N' || t[0] == 'f' || t[0] == 'F'))
+      use_tools = 0;
+  }
+
+  const char *tools =
+    "[{\"type\":\"function\",\"function\":{"
+    "\"name\":\"run_terminal_command\","
+    "\"description\":\"Run a shell command on the device; returns stdout/stderr/exit code\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{"
+    "\"command\":{\"type\":\"string\",\"description\":\"shell command\"}"
+    "},\"required\":[\"command\"]}}}]";
+
+  char *final = NULL;
+  int version_retries = 0;
+  for (int turn = 0; turn < c->max_turns; turn++) {
+    if (grok) {
+      if (ng_session_ensure(c->session) != 0) {
+        free(messages);
+        return strdup("Grok session expired. Restart nanobot and re-activate in the browser.");
+      }
+      bearer = ng_session_bearer(c->session);
+    }
+
+    char *body = NULL;
+    if (use_tools) {
+      asprintf(&body,
+        "{\"model\":\"%s\",\"messages\":%s,\"tools\":%s,\"tool_choice\":\"auto\","
+        "\"stream\":false}",
+        c->model, messages, tools);
+    } else {
+      asprintf(&body,
+        "{\"model\":\"%s\",\"messages\":%s,\"stream\":false}",
+        c->model, messages);
+    }
+
+    char url[512];
+    snprintf(url, sizeof url, "%s/chat/completions", c->base_url);
+
+    ng_log("agent: turn %d POST %s (cli %s tools=%d)", turn + 1, url, ng_cli_version(), use_tools);
+    char *resp = curl_post_json(url, bearer, body);
+    free(body);
+
+    if (!resp) {
+      free(messages);
+      return strdup("no response from API");
+    }
+
+    if (strstr(resp, "\"error\"") || strstr(resp, "Failed to parse")) {
+      if (grok && version_retries < 3 && ng_cli_version_handle_error(resp)) {
+        version_retries++;
+        free(resp);
+        turn--;
+        continue;
+      }
+      /* If tools rejected by backend, retry without tools once */
+      if (use_tools && (strstr(resp, "tool") || strstr(resp, "tools") ||
+                        strstr(resp, "unknown field") || strstr(resp, "not supported"))) {
+        ng_log("agent: tools rejected — retry without tools (llama.cpp compat)");
+        use_tools = 0;
+        free(resp);
+        turn--;
+        continue;
+      }
+      char *em = ng_json_get_string(resp, "message");
+      if (!em) em = ng_json_get_string(resp, "error");
+      char *out = NULL;
+      asprintf(&out, "API error: %s\n%.600s", em ? em : "?", resp);
+      free(em); free(resp); free(messages);
+      return out;
+    }
+
+    char *tname = NULL, *targs = NULL, *tid = NULL;
+    if (use_tools && ng_json_first_tool_call(resp, &tname, &targs, &tid)) {
+      ng_log("agent: tool %s id=%s args=%.200s", tname, tid, targs);
+      char *cmd = NULL;
+      if (strcmp(tname, "run_terminal_command") == 0 ||
+          strcmp(tname, "run_terminal_cmd") == 0 ||
+          strcmp(tname, "shell") == 0 ||
+          strcmp(tname, "bash") == 0) {
+        cmd = extract_command_arg(targs);
+      } else {
+        asprintf(&cmd, "echo 'unknown tool %s'", tname);
+      }
+      ng_cmd_result cr = ng_run_command(cmd, c->timeout_sec);
+      ng_log("agent: exit=%d out=%.200s", cr.exit_code, cr.output ? cr.output : "");
+
+      char *tool_content = NULL;
+      asprintf(&tool_content, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
+      char *esc_out = ng_json_escape(tool_content);
+      free(tool_content);
+      char *esc_args = ng_json_escape(targs);
+
+      size_t ml = strlen(messages);
+      if (ml && messages[ml-1] == ']') messages[ml-1] = 0;
+      char *new_messages = NULL;
+      asprintf(&new_messages,
+        "%s,{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"%s\","
+        "\"type\":\"function\",\"function\":{\"name\":\"%s\",\"arguments\":\"%s\"}}]},"
+        "{\"role\":\"tool\",\"tool_call_id\":\"%s\",\"content\":\"%s\"}]",
+        messages, tid, tname, esc_args, tid, esc_out);
+      free(messages);
+      messages = new_messages;
+      free(esc_args); free(esc_out);
+      free(tname); free(targs); free(tid); free(cmd);
+      ng_cmd_result_free(&cr);
+      free(resp);
+      continue;
+    }
+
+    final = ng_json_message_content(resp);
+    if (!final || !final[0]) {
+      free(final);
+      asprintf(&final, "(no content)\n%.800s", resp);
+    }
+    free(resp);
+    break;
+  }
+
+  free(messages);
+  if (!final) final = strdup("(max turns reached without final answer)");
+  if (final && strncmp(final, "API error:", 10) != 0 &&
+      strncmp(final, "(no content)", 12) != 0 &&
+      strncmp(final, "curl failed", 11) != 0) {
+    ng_memory_record_exchange(user_prompt, final);
+  }
+  ng_log("agent: final: %.300s", final);
+  return final;
+}

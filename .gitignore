@@ -1,0 +1,31 @@
+# Builds & toolchains (do not ship)
+/build/
+/toolchain/
+*.o
+*.a
+*.so
+*.dylib
+
+# Runtime / secrets (never commit)
+**/session
+**/peer_token
+**/cli_version
+**/nanobot.log
+**/nanobot.out
+**/nanobot.pid
+**/memory/
+.env
+env
+*.pem
+*.key
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+.cache/
+
+# Test scratch
+/tmp-nanobot-*/
