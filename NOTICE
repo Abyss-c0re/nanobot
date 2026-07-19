@@ -1,9 +1,8 @@
 nanobot
 Copyright (c) 2026 nanobot contributors
-SPDX-License-Identifier: MIT
 
-This product is independent software and is not affiliated with xAI, Grok,
-SpaceX, SpaceXAI, or any other third-party trademark owner.
+This product includes software developed independently of xAI, Grok, SpaceX,
+SpaceXAI, OpenAI, Meta (llama.cpp), and any robot vendor (e.g. Roborock).
 
-Third-party names are used only for interoperability description.
-See LEGAL.md and LICENSE.
+Third-party services and trademarks are the property of their respective owners
+and are referenced only for interoperability.
