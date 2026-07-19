@@ -50,3 +50,7 @@ nanobot --backend grok   # default (browser session)
 ```
 
 Message shape stays **llama.cpp / OpenAI-chat compatible** (`messages[{role,content}]`) so offline and online share the same outer loop.
+
+## Project boundary
+
+nanobot = **separate tool**. Robot (/rockctl) and Titanus ROM are other projects. Same machine may run nanobot; releases and ownership stay independent.

@@ -12,6 +12,19 @@
 Same *idea* as Grok Build headless (HTTPS chat proxy + tool loop), **not** the full TUI.
 
 
+
+## Scope: separate tool (not a robot product)
+
+**nanobot is a standalone project.** It is **not** part of the Roborock/ robot product, Titanus ROM product, or Project Nexus device firmware.
+
+| nanobot is | nanobot is not |
+|-------------|-----------------|
+| A small optional host/CLI for Grok (or local LLM) sessions | The vacuum robot software |
+| Deployable on a lab PC, phone, or any Linux box | Required for /rockctl |
+| Independently versioned under this private repo | Coupled to robot hardware releases |
+
+Lab notes may mention running nanobot **on** a robot for convenience; that is an **install target**, not ownership of the robot stack.
+
 ## Disclaimer
 
 **Not affiliated** with Grok, xAI, SpaceX, SpaceXAI, or any related company or product.
