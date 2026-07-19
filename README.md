@@ -107,6 +107,16 @@ toolchain/     arm cross (gitignored)
 
 Blocks crude destructive patterns (`rm -rf /`, `mkfs`, …). On a rooted vacuum you are still root — prefer allowlisted ops.
 
+
+## Offline outer level (llama.cpp)
+
+The **outer agent** (UI, shell tool, MCP, peer) is designed to be **reusable offline**:
+
+- Default backend: Grok (browser session)
+- Planned/parallel: **llama.cpp** local server — same message envelope, no xAI auth
+
+See [docs/PLATFORM.md](docs/PLATFORM.md) § Offline.
+
 ## Version control
 
 This tree is meant as a **private / unpublished** GitHub repo (or local-only git):
