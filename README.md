@@ -11,6 +11,12 @@
 
 Same *idea* as Grok Build headless (HTTPS chat proxy + tool loop), **not** the full TUI.
 
+
+## Disclaimer
+
+**Not affiliated** with Grok, xAI, SpaceX, SpaceXAI, or any related company or product.
+This is an independent hobby/lab tool that uses publicly available browser/device auth and HTTP APIs at the user's own risk. Names of third parties are used only for interoperability description.
+
 ## Features
 
 - One-line **HTTP UI** (`:8787`) for hardware keyboards
