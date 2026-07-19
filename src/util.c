@@ -8,8 +8,8 @@
 #include <time.h>
 #include <sys/stat.h>
 
-static char g_workdir[512] = "/mnt/data/nanobot";
-static char g_logpath[576] = "/mnt/data/nanobot/nanobot.log";
+static char g_workdir[512] = "/tmp/nanobot";
+static char g_logpath[576] = "/tmp/nanobot/nanobot.log";
 static FILE *g_logf;
 
 void ng_set_workdir(const char *dir) {

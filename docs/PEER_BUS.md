@@ -1,39 +1,28 @@
-# Peer bus — other Grok sessions → robot
+# Peer bus — other agents → this nanobot host
 
-nanobot listens for **incoming** calls from other lab Grok sessions.
+Optional LAN/API surface for another process to talk to a running nanobot instance.
 
-## Robot listener
+## Endpoints
 
-```bash
-ssh root@192.168.1.88
-export PATH=/mnt/data/nanobot/bin:$PATH
-nanobot --port 8787
-# activate browser Grok session once (printed link)
-```
-
-### Endpoints (private nets only; firewall allows 8787)
-
-| Method | Path | Body |
-|--------|------|------|
-| GET | `/peer/v1/health` | — |
-| GET | `/peer/v1/info` | capabilities + signed_in |
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/peer/v1/health` | Liveness |
+| GET | `/peer/v1/info` | capabilities + `signed_in` / backend |
 | POST | `/peer/v1/prompt` | `{"prompt":"..."}` |
 | POST | `/peer/v1/shell` | `{"command":"..."}` |
 
-Optional header: `X-Nanobot-Peer-Token: <token>`  
-Token file on robot: `/mnt/data/nanobot/peer_token`
+Optional peer token: `$NANOBOT_HOME/peer_token` (`token=...`) or header `X-Nanobot-Peer-Token`.
 
-## Other Grok sessions (BlackCube MCP)
+## Example
 
-```toml
-[mcp_servers.nanobot_robot]
-command = "python3"
-args = ["/home/voldemar/Dev/nanobot/scripts/peer_mcp_bridge.py"]
-
-[mcp_servers.nanobot_robot.env]
-NANOBOT_PEER_URL = "http://192.168.1.88:8787"
+```bash
+nanobot --port 8787
+curl -s http://127.0.0.1:8787/peer/v1/info
+curl -s -X POST http://127.0.0.1:8787/peer/v1/shell \
+  -H 'Content-Type: application/json' \
+  -d '{"command":"uname -a"}'
 ```
 
-Tools: `robot_info`, `robot_prompt`, `robot_shell`.
+## MCP bridge
 
-SSH remains open (firewall never closes :22).
+`scripts/peer_mcp_bridge.py` exposes peer tools to an MCP client. Point `NANOBOT_PEER_URL` at your host (not product-specific).

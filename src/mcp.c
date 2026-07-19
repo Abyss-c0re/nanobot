@@ -231,7 +231,7 @@ int ng_mcp_stdio_run(ng_agent_cfg *agent) {
       const char *tools =
         "{\"tools\":["
         "{\"name\":\"run_terminal_command\","
-        "\"description\":\"Run a shell command on the nanobot host (robot/device). Returns exit code and output.\","
+        "\"description\":\"Run a shell command on the nanobot host machine. Returns exit code and output.\","
         "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
         "\"command\":{\"type\":\"string\",\"description\":\"Shell command to run\"}},"
         "\"required\":[\"command\"]}},"

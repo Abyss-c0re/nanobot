@@ -1,4 +1,4 @@
-# nanobot — host (x86_64) + armv7 static (Roborock)
+# nanobot — host (native) + optional armv7 static cross
 ROOT := $(abspath .)
 SRC := src/util.c src/shell.c src/auth.c src/memory.c src/agent.c src/http.c src/mcp.c src/main.c
 HDR := src/*.h
@@ -19,7 +19,7 @@ ARM_CFLAGS := $(CFLAGS_COMMON) -static
 ARM_OUT := $(ROOT)/build/armv7
 ARM_BIN := $(ARM_OUT)/nanobot
 
-.PHONY: all host arm install-robot clean test-mcp
+.PHONY: all host arm install-remote clean test-mcp
 
 all: host
 	@if [ -x "$(ARM_CC)" ]; then $(MAKE) arm; else echo "skip arm (no $(ARM_CC))"; fi
@@ -43,8 +43,8 @@ $(ARM_BIN): $(SRC) $(HDR)
 	@mkdir -p $(ARM_OUT)
 	$(ARM_CC) $(ARM_CFLAGS) -o $@ $(SRC) $(LDFLAGS_COMMON)
 
-install-robot: arm
-	./scripts/install_robot.sh
+install-remote: arm
+	./scripts/install_remote.sh
 
 clean:
 	rm -rf build

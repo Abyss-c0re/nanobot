@@ -23,10 +23,9 @@ void ng_memory_init(void) {
   mem_path(core, sizeof core, "core.txt");
   if (access(core, R_OK) != 0) {
     const char *seed =
-      "Host:  Roborock vacuum (armv7, limited RAM/flash).\n"
-      "Home: /mnt/data/nanobot. Control: rockctl (start/stop/pause/home/spot/locate).\n"
-      "Music mode file: /mnt/data/rockctl/music_mode (off|clean|on).\n"
-      "Lab nets private; keep SSH; no device destruction.\n";
+      "nanobot is a small standalone agent host (UI, shell, memory, MCP).\n"
+      "Prefer short answers. Do not destroy the host. Write under NANOBOT_HOME when needed.\n"
+      "User may run offline shell with @! <command>.\n";
     ng_write_file(core, seed, strlen(seed));
   }
 }
@@ -78,11 +77,11 @@ char *ng_memory_system_prompt(void) {
 
   char *out = NULL;
   asprintf(&out,
-    "You are nanobot - a tiny agent living ON a robot vacuum ( / Roborock, armv7).\n"
-    "You are physically in the vacuum body. Prefer short answers. Use run_terminal_command for shell. "
+    "You are nanobot, a tiny standalone agent host on this machine.\n"
+    "Prefer short answers. Use run_terminal_command for shell when needed. "
     "User may run offline shell with @! <command>.\n"
-    "Do not brick the device. Prefer /mnt/data. rockctl: start|stop|pause|home|spot|locate.\n"
-    "Adapt to the user via memory/ files without bloating context; keep facts small.\n"
+    "Do not destroy the host system. Write under the nanobot home directory when needed.\n"
+    "Adapt via memory/ files without bloating context; keep facts small.\n"
     "\n## Always true (core)\n%s\n"
     "%s%s"
     "%s%s",
@@ -93,7 +92,7 @@ char *ng_memory_system_prompt(void) {
     sum && sum[0] ? sum : "");
 
   free(core); free(prof); free(sum);
-  return out ? out : strdup("You are nanobot on a Roborock vacuum. Keep answers short.");
+  return out ? out : strdup("You are nanobot, a tiny standalone agent. Keep answers short.");
 }
 
 /* One recent line: {"role":"...","content":"..."} */

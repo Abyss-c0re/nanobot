@@ -38,7 +38,7 @@ static void print_banner(int port, ng_session *sess) {
   fprintf(stderr, "\n");
   fprintf(stderr, "  nanobot %s\n", NG_VERSION);
   fprintf(stderr, "  ─────────────────────────────────────────────\n");
-  fprintf(stderr, "  1) Open UI on BlackCube (then activate Grok in browser):\n");
+  fprintf(stderr, "  1) Open UI (then Connect Grok in Settings if using cloud):\n");
   fprintf(stderr, "       http://%s:%d/\n", host, port);
   fprintf(stderr, "     or activate directly:\n");
   fprintf(stderr, "       http://%s:%d/activate\n", host, port);
@@ -57,13 +57,13 @@ static void print_banner(int port, ng_session *sess) {
   fprintf(stderr, "       ssh -N -L %d:127.0.0.1:%d USER@HOST\n", port, port);
   fprintf(stderr, "       http://127.0.0.1:%d/\n", port);
   fprintf(stderr, "  ─────────────────────────────────────────────\n");
-  fprintf(stderr, "  Auth: browser device-code only (no API keys).\n");
-  fprintf(stderr, "  Titan2: one line → Enter after session is active.\n");
-  fprintf(stderr, "\n  Peer bus for other Grok sessions (lab private nets):\n");
+  fprintf(stderr, "  Auth: Grok browser device-code, or --offline for llama.cpp.\n");
+  fprintf(stderr, "  Standalone tool — not tied to any robot product.\n");
+  fprintf(stderr, "\n  Peer bus (optional):\n");
   fprintf(stderr, "       GET  http://%s:%d/peer/v1/info\n", host, port);
   fprintf(stderr, "       POST http://%s:%d/peer/v1/prompt  {\"prompt\":\"...\"}\n", host, port);
   fprintf(stderr, "       POST http://%s:%d/peer/v1/shell   {\"command\":\"...\"}\n", host, port);
-  fprintf(stderr, "  MCP bridge on BlackCube: nanobot/scripts/peer_mcp_bridge.py\n\n");
+  fprintf(stderr, "  MCP: nanobot --mcp  |  bridge: scripts/peer_mcp_bridge.py\n\n");
 
   /* Primary copy-paste line: prefer Grok activation URL, else UI */
   if (sess && sess->verification_uri_complete)
@@ -102,10 +102,16 @@ int main(int argc, char **argv) {
   char *oneshot = NULL;
   const char *cli_base = NULL;
   const char *cli_model = NULL;
+  static char home_buf[640];
   const char *home = getenv("NANOBOT_HOME");
   if (!home || !home[0]) {
-    if (access("/mnt/data", W_OK) == 0) home = "/mnt/data/nanobot";
-    else home = "/tmp/nanobot";
+    const char *h = getenv("HOME");
+    if (h && h[0]) {
+      snprintf(home_buf, sizeof home_buf, "%s/.nanobot", h);
+      home = home_buf;
+    } else {
+      home = "/tmp/nanobot";
+    }
   }
 
   for (int i = 1; i < argc; i++) {

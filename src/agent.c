@@ -231,7 +231,7 @@ static char *run_shell_direct(ng_agent_cfg *c, const char *cmd) {
 char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt) {
   if (!user_prompt || !user_prompt[0]) return strdup("(empty prompt)");
 
-  /* Direct shell: @! command  (offline, no LLM, works on vacuum without Grok) */
+  /* Direct shell: @! command  (offline, no LLM, works without an LLM) */
   if (user_prompt[0] == '@' && user_prompt[1] == '!') {
     char *r = run_shell_direct(c, user_prompt + 2);
     /* lightweight memory of shell for context */
@@ -244,8 +244,8 @@ char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt) {
   if (grok) {
     if (!c->session || ng_session_ensure(c->session) != 0) {
       return strdup("Not signed in. Open the activation link nanobot printed "
-                    "(browser on BlackCube) to attach a Grok session. "
-                    "Or use @! <cmd> for offline shell.");
+                    "(open Connect Grok / activation link in a browser) to attach a session. "
+                    "Or use --offline / @! <cmd> without Grok.");
     }
     bearer = ng_session_bearer(c->session);
     if (!bearer) {
@@ -266,10 +266,10 @@ char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt) {
 
   ng_log("agent: user: %.200s", user_prompt);
 
-  /* Compact memory: always-on vacuum identity + recent turns (pruned). */
+  /* Compact memory: always-on core identity + recent turns (pruned). */
   char *sys = ng_memory_system_prompt();
   char *inner = NULL;
-  if (msg_append(&inner, "system", sys ? sys : "You are nanobot on a robot vacuum.") != 0) {
+  if (msg_append(&inner, "system", sys ? sys : "You are nanobot, a tiny standalone agent.") != 0) {
     free(sys);
     return strdup("oom building messages");
   }

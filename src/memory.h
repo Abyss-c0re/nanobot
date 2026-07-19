@@ -19,7 +19,7 @@
 
 void ng_memory_init(void); /* mkdir memory/ */
 
-/* Build system content: vacuum identity + core + profile + summary. malloc'd */
+/* Build system content: core identity + profile + profile + summary. malloc'd */
 char *ng_memory_system_prompt(void);
 
 /* Load recent history as JSON array fragment of messages (no outer []).

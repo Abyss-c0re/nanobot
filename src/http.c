@@ -367,7 +367,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char body[256];
     int n = snprintf(body, sizeof body,
       "{\"ok\":true,\"service\":\"nanobot-peer\",\"version\":\"%s\","
-      "\"role\":\"robot-session-bus\"}", NG_VERSION);
+      "\"role\":\"session-bus\"}", NG_VERSION);
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
   }

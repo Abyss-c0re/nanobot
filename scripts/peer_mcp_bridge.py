@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""MCP stdio bridge → nanobot peer bus on the robot.
+"""MCP stdio bridge → nanobot peer bus on any host.
 
-Other Grok sessions on BlackCube can load this as an MCP server to call the
-robot listener:
+Load as MCP against a running nanobot instance:
 
-  [mcp_servers.nanobot_robot]
+  [mcp_servers.nanobot_peer]
   command = "python3"
-  args = ["/home/voldemar/Dev/nanobot/scripts/peer_mcp_bridge.py"]
+  args = ["/path/to/nanobot/scripts/peer_mcp_bridge.py"]
 
 Env:
-  NANOBOT_PEER_URL   default http://192.168.1.88:8787
+  NANOBOT_PEER_URL   default http://127.0.0.1:8787
   NANOBOT_PEER_TOKEN optional shared secret (or file)
 """
 from __future__ import annotations
@@ -20,12 +19,12 @@ import sys
 import urllib.error
 import urllib.request
 
-BASE = os.environ.get("NANOBOT_PEER_URL", "http://192.168.1.88:8787").rstrip("/")
+BASE = os.environ.get("NANOBOT_PEER_URL", "http://127.0.0.1:8787").rstrip("/")
 TOKEN = os.environ.get("NANOBOT_PEER_TOKEN", "")
 if not TOKEN:
     for p in (
+        os.path.expanduser("~/.nanobot/peer_token"),
         os.path.expanduser("~/.nanobot_peer_token"),
-        "/mnt/data/nanobot/peer_token",
     ):
         try:
             with open(p) as f:
@@ -88,8 +87,8 @@ def http_json(method: str, path: str, payload: dict | None = None) -> dict:
 
 TOOLS = [
     {
-        "name": "robot_prompt",
-        "description": "Send a prompt to nanobot on the robot (uses robot browser Grok session + shell tool).",
+        "name": "nanobot_prompt",
+        "description": "Send a prompt to a remote nanobot peer (LLM backend + tools on that host).",
         "inputSchema": {
             "type": "object",
             "properties": {"prompt": {"type": "string"}},
@@ -97,8 +96,8 @@ TOOLS = [
         },
     },
     {
-        "name": "robot_shell",
-        "description": "Run a shell command on the robot via nanobot peer bus.",
+        "name": "nanobot_shell",
+        "description": "Run a shell command via nanobot peer bus.",
         "inputSchema": {
             "type": "object",
             "properties": {"command": {"type": "string"}},
@@ -106,8 +105,8 @@ TOOLS = [
         },
     },
     {
-        "name": "robot_info",
-        "description": "Peer bus health/info from the robot nanobot listener.",
+        "name": "nanobot_info",
+        "description": "Peer bus health/info from the nanobot listener.",
         "inputSchema": {"type": "object", "properties": {}},
     },
 ]
@@ -128,7 +127,7 @@ def main() -> None:
                     "result": {
                         "protocolVersion": "2024-11-05",
                         "capabilities": {"tools": {}},
-                        "serverInfo": {"name": "nanobot-robot-peer", "version": "0.1.0"},
+                        "serverInfo": {"name": "nanobot-peer", "version": "0.3.0"},
                     },
                 }
             )
@@ -141,11 +140,12 @@ def main() -> None:
             params = msg.get("params") or {}
             name = params.get("name")
             args = params.get("arguments") or {}
-            if name == "robot_info":
+            # new names + legacy aliases
+            if name in ("nanobot_info", "robot_info", "host_info"):
                 out = http_json("GET", "/peer/v1/info")
-            elif name == "robot_prompt":
+            elif name in ("nanobot_prompt", "robot_prompt", "host_prompt"):
                 out = http_json("POST", "/peer/v1/prompt", {"prompt": args.get("prompt", "")})
-            elif name == "robot_shell":
+            elif name in ("nanobot_shell", "robot_shell", "host_shell"):
                 out = http_json("POST", "/peer/v1/shell", {"command": args.get("command", "")})
             else:
                 out = {"error": f"unknown tool {name}"}
@@ -160,16 +160,19 @@ def main() -> None:
                     },
                 }
             )
-        elif method and method.startswith("notifications/"):
-            pass
-        elif mid is not None:
-            write_message(
-                {
-                    "jsonrpc": "2.0",
-                    "id": mid,
-                    "error": {"code": -32601, "message": f"method not found: {method}"},
-                }
-            )
+        elif method == "shutdown":
+            if mid is not None:
+                write_message({"jsonrpc": "2.0", "id": mid, "result": {}})
+            break
+        else:
+            if mid is not None:
+                write_message(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": mid,
+                        "error": {"code": -32601, "message": f"Method not found: {method}"},
+                    }
+                )
 
 
 if __name__ == "__main__":

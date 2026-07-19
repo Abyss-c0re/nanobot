@@ -291,7 +291,7 @@ int ng_session_login_blocking(ng_session *s) {
 
   fprintf(stderr, "\n");
   fprintf(stderr, "  ═══════════════════════════════════════════════\n");
-  fprintf(stderr, "  ACTIVATE GROK SESSION (browser on BlackCube)\n");
+  fprintf(stderr, "  ACTIVATE GROK SESSION (browser device login)\n");
   fprintf(stderr, "  ═══════════════════════════════════════════════\n");
   fprintf(stderr, "  Open this link while logged into your Grok account:\n\n");
   fprintf(stderr, "    %s\n\n", link);
