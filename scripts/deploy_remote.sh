@@ -4,7 +4,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${NANOBOT_REMOTE_BIN:-$ROOT/build/armv7/nanobot}"
-HOST="${NANOBOT_REMOTE_HOST:-${NANOBOT_REMOTE_HOST:-}}"
+HOST="${NANOBOT_REMOTE_HOST:-}"
 KEY="${NANOBOT_SSH_KEY:-$HOME/.ssh/id_rsa}"
 DEST="${NANOBOT_REMOTE_DIR:-/opt/nanobot}"
 
@@ -17,7 +17,7 @@ echo "Deploy nanobot → root@$HOST:$DEST"
 "${SSH[@]}" "root@$HOST" "mkdir -p '$DEST/bin'"
 "${SSH[@]}" "root@$HOST" \
   "cat > '$DEST/bin/nanobot' && chmod 755 '$DEST/bin/nanobot' && \
-   ln -sfn nanobot '$DEST/bin/nanobot' && ln -sfn nanobot '$DEST/bin/nanobot-mcp'" \
+   ln -sfn nanobot '$DEST/bin/nanobot-mcp'" \
   < "$BIN"
 "${SSH[@]}" "root@$HOST" "cat > '$DEST/run.sh' && chmod 755 '$DEST/run.sh'" < "$ROOT/scripts/run.sh" || true
 "${SSH[@]}" "root@$HOST" "ls -la '$DEST/bin'; echo OK"

@@ -2,7 +2,7 @@
 # Boot/runtime entry: apply persisted settings, then exec nanobot.
 # NANOBOT_HOME defaults to this install's parent when run from $HOME/bin layout.
 
-HOME_DIR="${NANOBOT_HOME:-${NANOBOT_HOME:-}}"
+HOME_DIR="${NANOBOT_HOME:-}"
 if [ -z "$HOME_DIR" ]; then
   # if this script lives in $HOME/run.sh use that dir; else ~/.nanobot
   SELF=$(dirname "$0")

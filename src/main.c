@@ -106,11 +106,9 @@ int main(int argc, char **argv) {
   const char *cli_base = NULL;
   const char *cli_model = NULL;
   const char *www_root = getenv("NANOBOT_WWW");
-  if (!www_root || !www_root[0]) www_root = getenv("NANOBOT_WWW"); /* legacy */
   static char home_buf[640];
   static char www_buf[640];
   const char *home = getenv("NANOBOT_HOME");
-  if (!home || !home[0]) home = getenv("NANOBOT_HOME"); /* legacy alias */
   if (!home || !home[0]) {
     const char *h = getenv("HOME");
     if (h && h[0]) {

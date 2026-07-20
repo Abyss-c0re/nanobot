@@ -92,7 +92,6 @@ static char *peer_token_expected(void) {
     free(raw);
   }
   if (!need) need = ng_getenv_dup("NANOBOT_PEER_TOKEN");
-  if (!need) need = ng_getenv_dup("NANOBOT_PEER_TOKEN"); /* legacy */
   return need;
 }
 
@@ -113,8 +112,6 @@ static int require_peer_auth(int cfd, const char *req, int allow_loopback) {
   }
   int ok = 0;
   const char *h = strstr(req, "X-Nanobot-Peer-Token:");
-  if (!h) h = strstr(req, "x-nanobot-peer-token:");
-  if (!h) h = strstr(req, "X-Nanobot-Peer-Token:");
   if (!h) h = strstr(req, "x-nanobot-peer-token:");
   if (h) {
     h = strchr(h, ':');

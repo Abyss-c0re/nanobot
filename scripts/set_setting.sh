@@ -1,6 +1,6 @@
 #!/bin/sh
 # Usage: set_setting.sh KEY VALUE   (writes $NANOBOT_HOME/settings)
-HOME_DIR="${NANOBOT_HOME:-${NANOBOT_HOME:-${HOME:-/tmp}/.nanobot}}"
+HOME_DIR="${NANOBOT_HOME:-${HOME:-/tmp}/.nanobot}"
 SETTINGS="$HOME_DIR/settings"
 KEY="$1"
 VAL="$2"

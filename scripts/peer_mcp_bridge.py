@@ -16,12 +16,9 @@ import urllib.request
 
 _TOKEN_FILES = (
     os.path.expanduser("~/.nanobot/peer_token"),
-    os.path.expanduser("~/.nanobot/peer_token"),
-    os.path.expanduser("~/.nanobot_peer_token"),
     os.path.expanduser("~/.nanobot_peer_token"),
 )
 _URL_FILES = (
-    os.path.expanduser("~/.nanobot/peer_url"),
     os.path.expanduser("~/.nanobot/peer_url"),
 )
 
@@ -41,11 +38,7 @@ def _read_first_line(path: str) -> str:
 
 def peer_base() -> str:
     """Reload each call so peer_url file / env changes apply without MCP restart."""
-    base = (
-        os.environ.get("NANOBOT_PEER_URL")
-        or os.environ.get("NANOBOT_PEER_URL")
-        or ""
-    ).strip()
+    base = (os.environ.get("NANOBOT_PEER_URL") or "").strip()
     if not base:
         for p in _URL_FILES:
             line = _read_first_line(p)
@@ -59,11 +52,7 @@ def peer_base() -> str:
 
 def peer_token() -> str:
     """Reload each call so rotated ~/.nanobot/peer_token is picked up live."""
-    tok = (
-        os.environ.get("NANOBOT_PEER_TOKEN")
-        or os.environ.get("NANOBOT_PEER_TOKEN")
-        or ""
-    ).strip()
+    tok = (os.environ.get("NANOBOT_PEER_TOKEN") or "").strip()
     if tok:
         if tok.startswith("token="):
             tok = tok.split("=", 1)[1].strip()
