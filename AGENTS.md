@@ -23,3 +23,11 @@ MCP AUTH PEER HUB SHELL PROVIDERS — see docs/BUILD.md
 ## MCP
 - in-process: `nanobot --mcp`
 - remote bridge: scripts/peer_mcp_bridge.py tools `nanobot_*`
+
+## version control
+```bash
+make clean          # scripts/clean.sh — build junk only
+make maintain       # clean + commit if dirty (no secrets)
+# push: MAINTAIN_PUSH=1 make maintain   or git push origin main
+```
+Never commit peer_token/session. Never force-push.
