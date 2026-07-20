@@ -68,3 +68,4 @@ __pycache__/
 .venv/
 venv/
 .vscode/
+Docker/config.env

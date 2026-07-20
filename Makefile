@@ -5,11 +5,10 @@ DIR ?= /opt/nanobot
 ARCH ?= host
 DOCKER_ARGS ?=
 
-# nanobot — portable build (any POSIX host with C11 + cmake/make)
 ROOT := $(abspath .)
-.PHONY: all host native arm clean clean-all maintain test test-mcp install-remote docker deploy-local deploy-ssh deploy-docker
+.PHONY: all host native arm clean clean-all maintain test test-mcp \
+	docker wizard deploy-local deploy-ssh deploy-docker
 
-# default: native toolchain on this machine (linux/mac/*bsd/arm/x86/…)
 all: host
 
 host native:
@@ -19,7 +18,6 @@ host native:
 	  ln -sf nanobot "$(ROOT)/build/host/nanobot-mcp" 2>/dev/null || true
 	@echo "host: $(ROOT)/build/host/nanobot ($$(wc -c < $(ROOT)/build/host/nanobot)) bytes)"
 
-# optional static armv7 (Linux cross toolchain in-tree only)
 arm:
 	cmake -S "$(ROOT)" -B "$(ROOT)/build/armv7" \
 	  -DCMAKE_TOOLCHAIN_FILE="$(ROOT)/cmake/NanobotArmv7.cmake" \
@@ -40,9 +38,6 @@ test-mcp: host
 	@printf '%s' 'Content-Length: 120\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
 	| NANOBOT_HOME=/tmp/nanobot-test "$(ROOT)/build/host/nanobot" --mcp | head -c 400; echo
 
-install-remote: arm
-	./scripts/install_remote.sh
-
 clean:
 	@./scripts/clean.sh
 
@@ -52,15 +47,20 @@ clean-all: clean
 maintain:
 	@./scripts/repo_maintain.sh
 
-# --- deploy targets (multiplatform) ---
-docker:
-	docker build -f Docker/Dockerfile -t nanobot:local .
-
+# --- deploy: local | ssh | docker (equal citizens) ---
 deploy-local:
 	./scripts/deploy.sh local --home "$(NANOBOT_HOME)" --port "$(PORT)"
 
 deploy-ssh:
+	@test -n "$(HOST)" || (echo "make deploy-ssh HOST=user@host [DIR=/opt/nanobot] [ARCH=host|armv7]" >&2; exit 2)
 	./scripts/deploy.sh ssh --host "$(HOST)" --dir "$(DIR)" --arch "$(ARCH)"
+
+docker:
+	$(MAKE) host
+	docker build -f Docker/Dockerfile -t nanobot:local .
 
 deploy-docker:
 	./scripts/deploy.sh docker --build $(DOCKER_ARGS)
+
+wizard:
+	./Docker/wizard $(ARGS)

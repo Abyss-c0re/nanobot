@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+# nanobot Docker wizard — fast CLI for container deploy
+#
+#   ./Docker/wizard              # same as: default
+#   ./Docker/wizard default      # build image + run peer (defaults)
+#   ./Docker/wizard build
+#   ./Docker/wizard run [args]
+#   ./Docker/wizard config [show|init|edit|set KEY=VAL]
+#   ./Docker/wizard clone URL [--branch B] [--prompt …]
+#   ./Docker/wizard auth export|import FILE
+#   ./Docker/wizard stop [name]
+#   ./Docker/wizard logs [name]
+#   ./Docker/wizard shell [name]
+#
+# Config file (optional): ./Docker/config.env or $NANOBOT_DOCKER_CONFIG
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+WIZ="$(cd "$(dirname "$0")" && pwd)"
+DEPLOY="$ROOT/scripts/deploy.sh"
+CFG_DEFAULT="$WIZ/config.env"
+CFG="${NANOBOT_DOCKER_CONFIG:-$CFG_DEFAULT}"
+IMAGE_DEFAULT="nanobot:local"
+
+log() { printf 'wizard: %s\n' "$*" >&2; }
+die() { log "ERROR: $*"; exit 1; }
+
+load_cfg() {
+  [[ -f "$CFG" ]] || return 0
+  set -a
+  # shellcheck disable=SC1090
+  . "$CFG"
+  set +a
+}
+
+# defaults (overridden by config.env then flags)
+load_cfg
+PORT="${PORT:-${NANOBOT_PORT:-8787}}"
+IMAGE="${IMAGE:-${NANOBOT_IMAGE:-$IMAGE_DEFAULT}}"
+MODE="${MODE:-peer}"
+SSH_ENABLE="${SSH_ENABLE:-1}"
+SSH_PORT="${SSH_PORT:-2222}"
+SSH_PASSWORD="${SSH_PASSWORD:-}"
+AUTH_PASS="${AUTH_PASS:-${AUTH_BUNDLE_PASS:-}}"
+INPUT="${INPUT:-}"
+EXPORT="${EXPORT:-}"
+NAME="${NAME:-nanobot}"
+DOCKER_HOST_NET="${DOCKER_HOST_NET:-1}"
+
+usage() {
+  cat <<'U'
+nanobot Docker wizard
+
+  default     build (if needed) + run peer with defaults
+  build       make host + docker build
+  run         run container (pass-through flags after --)
+  config      show | init | edit | set KEY=VAL
+  clone URL   git clone into temp input and run
+  auth        export|import FILE  (needs AUTH_PASS / --auth-pass)
+  stop        stop container by name
+  logs        docker logs
+  shell       docker exec bash
+  help
+
+Config: Docker/config.env  (wizard config init)
+
+Examples:
+  ./Docker/wizard default
+  ./Docker/wizard config init
+  ./Docker/wizard run -- --input ./proj --prompt 'hi' --export ./out
+  ./Docker/wizard clone https://github.com/org/repo.git --prompt 'review'
+  AUTH_PASS=secret ./Docker/wizard auth export ./auth.nbundle
+U
+  exit 0
+}
+
+cmd="${1:-default}"
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && usage
+shift || true
+
+ensure_image() {
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    log "image missing — building $IMAGE"
+    make -C "$ROOT" host
+    docker build -f "$WIZ/Dockerfile" -t "$IMAGE" "$ROOT"
+  fi
+}
+
+do_build() {
+  make -C "$ROOT" host
+  docker build -f "$WIZ/Dockerfile" -t "$IMAGE" "$ROOT"
+  log "built $IMAGE"
+}
+
+do_config() {
+  local sub="${1:-show}"
+  shift || true
+  case "$sub" in
+    show)
+      if [[ -f "$CFG" ]]; then
+        echo "# $CFG"
+        cat "$CFG"
+      else
+        log "no config at $CFG (run: wizard config init)"
+      fi
+      ;;
+    init)
+      if [[ -f "$CFG" ]]; then
+        log "already exists: $CFG"
+      else
+        cp "$WIZ/config.example.env" "$CFG"
+        log "wrote $CFG"
+      fi
+      ;;
+    edit)
+      ${EDITOR:-vi} "$CFG"
+      ;;
+    set)
+      [[ -n "${1:-}" ]] || die "config set KEY=VAL"
+      [[ -f "$CFG" ]] || cp "$WIZ/config.example.env" "$CFG"
+      local kv="$1" k v
+      k=${kv%%=*}; v=${kv#*=}
+      if grep -q "^${k}=" "$CFG" 2>/dev/null; then
+        sed -i "s|^${k}=.*|${k}=${v}|" "$CFG"
+      else
+        echo "${k}=${v}" >> "$CFG"
+      fi
+      log "set $k"
+      ;;
+    *) die "config: show|init|edit|set" ;;
+  esac
+}
+
+do_run() {
+  if [[ "${1:-}" == "--" ]]; then shift; fi
+  ensure_image
+  export DOCKER_HOST_NET
+  args=(docker --image "$IMAGE" --name "$NAME" --port "$PORT" --mode "$MODE" --ssh-port "$SSH_PORT")
+  [[ "$SSH_ENABLE" == "0" ]] && args+=(--no-ssh)
+  [[ -n "$SSH_PASSWORD" ]] && args+=(--ssh-password "$SSH_PASSWORD")
+  [[ -n "$AUTH_PASS" ]] && args+=(--auth-pass "$AUTH_PASS")
+  [[ -n "$INPUT" ]] && args+=(--input "$INPUT")
+  [[ -n "$EXPORT" ]] && args+=(--export "$EXPORT")
+  args+=("$@")
+  exec "$DEPLOY" "${args[@]}"
+}
+
+do_default() {
+  do_build
+  log "peer :$PORT  ssh :$SSH_PORT  name=$NAME"
+  export DOCKER_HOST_NET
+  args=(docker --image "$IMAGE" --name "$NAME" --port "$PORT" --mode peer --ssh-port "$SSH_PORT")
+  [[ "$SSH_ENABLE" == "0" ]] && args+=(--no-ssh)
+  [[ -n "$SSH_PASSWORD" ]] && args+=(--ssh-password "$SSH_PASSWORD")
+  [[ -n "$AUTH_PASS" ]] && args+=(--auth-pass "$AUTH_PASS")
+  [[ -n "$INPUT" ]] && args+=(--input "$INPUT")
+  [[ -n "$EXPORT" ]] && args+=(--export "$EXPORT")
+  "$DEPLOY" "${args[@]}"
+}
+
+do_clone() {
+  local url="${1:-}"
+  [[ -n "$url" ]] || die "clone URL required"
+  shift || true
+  local branch=""
+  local prompt=""
+  local export_dir=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --branch|-b) branch="$2"; shift 2 ;;
+      --prompt) prompt="$2"; shift 2 ;;
+      --export) export_dir="$2"; shift 2 ;;
+      --) shift; break ;;
+      *) break ;;
+    esac
+  done
+  local tmp
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/nanobot-clone-XXXXXX")
+  log "clone $url → $tmp"
+  if [[ -n "$branch" ]]; then
+    git clone --depth 1 --branch "$branch" "$url" "$tmp/repo"
+  else
+    git clone --depth 1 "$url" "$tmp/repo"
+  fi
+  ensure_image
+  export DOCKER_HOST_NET
+  local args=(
+    docker --image "$IMAGE" --name "${NAME}-clone" --port "$PORT"
+    --mode "${MODE:-prompt}"
+    --input "$tmp/repo"
+    --ssh-port "$SSH_PORT"
+  )
+  [[ -n "$prompt" ]] && args+=(--prompt "$prompt")
+  [[ -n "$export_dir" ]] && args+=(--export "$export_dir")
+  [[ -n "$AUTH_PASS" ]] && args+=(--auth-pass "$AUTH_PASS")
+  [[ -n "$SSH_PASSWORD" ]] && args+=(--ssh-password "$SSH_PASSWORD")
+  # default prompt if none
+  if [[ -z "$prompt" && "$MODE" == "prompt" || -z "$prompt" ]]; then
+    :
+  fi
+  if [[ -z "$prompt" ]]; then
+    args+=(--mode peer)
+  fi
+  set +e
+  "$DEPLOY" "${args[@]}"
+  rc=$?
+  set -e
+  rm -rf "$tmp"
+  return "$rc"
+}
+
+do_auth() {
+  local sub="${1:-}"; shift || true
+  local file="${1:-}"
+  [[ -n "$sub" && -n "$file" ]] || die "auth export|import FILE"
+  [[ -n "$AUTH_PASS" ]] || die "set AUTH_PASS or AUTH_BUNDLE_PASS"
+  export NANOBOT_HOME="${NANOBOT_HOME:-$HOME/.nanobot}"
+  export AUTH_BUNDLE_PASS="$AUTH_PASS"
+  case "$sub" in
+    export) "$ROOT/scripts/auth_bundle" export "$file" ;;
+    import) "$ROOT/scripts/auth_bundle" import "$file" ;;
+    *) die "auth export|import" ;;
+  esac
+}
+
+do_stop() {
+  local n="${1:-$NAME}"
+  docker stop "$n" 2>/dev/null || docker kill "$n" 2>/dev/null || log "not running: $n"
+}
+
+do_logs() {
+  docker logs -f "${1:-$NAME}"
+}
+
+do_shell() {
+  docker exec -it "${1:-$NAME}" bash -l
+}
+
+case "$cmd" in
+  default|start) do_default ;;
+  build) do_build ;;
+  run) do_run "$@" ;;
+  config) do_config "$@" ;;
+  clone) do_clone "$@" ;;
+  auth) do_auth "$@" ;;
+  stop) do_stop "$@" ;;
+  logs) do_logs "$@" ;;
+  shell|exec) do_shell "$@" ;;
+  help|-h|--help) usage ;;
+  *) die "unknown command: $cmd (try: wizard help)" ;;
+esac

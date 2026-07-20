@@ -78,15 +78,19 @@ Backends detail: [docs/BACKENDS.md](docs/BACKENDS.md).
 Peer API: [docs/PEER_BUS.md](docs/PEER_BUS.md).  
 Security: [SECURITY.md](SECURITY.md).
 
-## Deploy (local / SSH / Docker)
+## Deploy
+
+Three equal targets:
 
 ```bash
-./scripts/deploy.sh local
+./scripts/deploy.sh local                          # this machine
 ./scripts/deploy.sh ssh --host root@host --arch armv7
-./scripts/deploy.sh docker --build --input ./ws --prompt "…" --export ./out
+./Docker/wizard default                            # docker fast path
+./scripts/deploy.sh docker --build --input ./ws    # docker low-level
 ```
 
-Docker: [Docker/README.md](Docker/README.md).
+Docker wizard: [Docker/README.md](Docker/README.md).
+
 
 ## Build from source
 
