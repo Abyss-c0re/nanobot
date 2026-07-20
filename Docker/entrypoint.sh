@@ -34,6 +34,7 @@ MODE="${1:-${NANOBOT_MODE:-peer}}"
 if [[ $# -gt 0 ]]; then shift; fi
 
 bash /opt/nanobot/modules/mcp_ready.sh
+bash /opt/nanobot/modules/ssh_ready.sh || true
 
 _DID_EXPORT=0
 cleanup_export() {

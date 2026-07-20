@@ -40,6 +40,11 @@ AUTH_PASS="${AUTH_BUNDLE_PASS:-}"
 IMAGE="${NANOBOT_IMAGE:-nanobot:local}"
 CNAME=""
 KEEP_VOL=0
+SSH_ENABLE="${SSH_ENABLE:-1}"
+SSH_PORT="${SSH_PORT:-2222}"
+SSH_PASSWORD="${SSH_PASSWORD:-}"
+SSH_KEY_FILE=""
+
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -61,6 +66,11 @@ while [[ $# -gt 0 ]]; do
     --auth-pass) AUTH_PASS="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
     --name) CNAME="$2"; shift 2 ;;
+    --ssh-port) SSH_PORT="$2"; shift 2 ;;
+    --ssh-password) SSH_PASSWORD="$2"; shift 2 ;;
+    --ssh-key) SSH_KEY_FILE="$2"; shift 2 ;;
+    --no-ssh) SSH_ENABLE=0; shift ;;
+
     -h|--help)
       sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -184,15 +194,26 @@ deploy_docker() {
     -e "WORKSPACE=/home/nanobot/workspace"
     -e "PROMPT=$PROMPT"
     -e "AUTH_BUNDLE_PASS=$AUTH_PASS"
+    -e "SSH_ENABLE=$SSH_ENABLE"
+    -e "SSH_PORT=$SSH_PORT"
+    -e "SSH_PASSWORD=$SSH_PASSWORD"
     )
   if [[ "${#net[@]}" -eq 0 ]]; then
     args+=(-p "${PORT}:8787")
+    if [[ "$SSH_ENABLE" != "0" ]]; then
+      args+=(-p "${SSH_PORT}:${SSH_PORT}")
+    fi
+  fi
+  mkdir -p "$vol/.ssh"
+  if [[ -n "$SSH_KEY_FILE" && -f "$SSH_KEY_FILE" ]]; then
+    cp -a "$SSH_KEY_FILE" "$vol/.ssh/authorized_keys"
   fi
   args+=(
     -v "$vol:/home/nanobot"
     -v "$vol/workspace:/input:ro"
     -v "${exp:-$vol/.export}:/export"
     -v "$vol/.auth:/auth"
+    -v "$vol/.ssh:/ssh:ro"
   )
 
   # auth out path mapped via /auth/out.nbundle then copied
