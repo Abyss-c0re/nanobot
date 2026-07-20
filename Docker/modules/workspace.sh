@@ -53,6 +53,10 @@ export_diff() {
     while IFS= read -r rel; do
       [[ -z "$rel" || "$rel" == . ]] && continue
       rel=${rel#./}
+      # never copy secrets into plain export tree (use auth bundle instead)
+      case "$rel" in
+        .nanobot/peer_token|.nanobot/session|.nanobot/session.key|.nanobot/device_login) continue ;;
+      esac
       src="$HOME_AGENT/$rel"
       [[ -f "$src" ]] || continue
       mkdir -p "$dest/files/$(dirname "$rel")"
