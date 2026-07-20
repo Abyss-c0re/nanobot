@@ -72,3 +72,4 @@ Docker/config.env
 
 # Docker static helper (built by make docker / make shell-server)
 Docker/bin/shell_server
+.agents/
