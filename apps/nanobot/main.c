@@ -92,7 +92,7 @@ static void print_banner(int port, ng_session *sess, const char *www_root) {
       fprintf(stderr, "     code: %s\n", sess->user_code);
   }
   fprintf(stderr, "  ─────────────────────────────────────────────\n");
-  fprintf(stderr, "  Auth: web device-code (/activate, --login) for cloud provider,\n        or --offline / --base-url for local OpenAI-compatible.\n\n");
+  fprintf(stderr, "  Auth: browser device-code, or --offline for llama.cpp.\n\n");
 
   if (sess && sess->verification_uri_complete)
     printf("%s\n", sess->verification_uri_complete);
@@ -124,7 +124,7 @@ static void usage(const char *argv0) {
     "  %s --offline -p '…'\n"
     "  %s --login | --mcp | --www DIR | --home DIR\n\n"
     "Env: NANOBOT_HOME  NANOBOT_PEER_TOKEN  NANOBOT_OUT_TOKEN\n"
-    "     NANOBOT_MASTER_KEY=path (optional; never hard-required)\n"
+    "     NANOBOT_LABAUTH_MASTER=path (optional; never hard-required)\n"
     "Auth is self-contained: peer_token auto-created under NANOBOT_HOME.\n",
     NG_VERSION,
     NANOBOT_ENABLE_MCP, NANOBOT_ENABLE_AUTH, NANOBOT_ENABLE_PEER,
@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
 #else
     if (need_browser) {
 #if !NANOBOT_ENABLE_AUTH
-      fprintf(stderr, "nanobot: cloud backend needs AUTH; rebuild with NANOBOT_ENABLE_AUTH=ON\n"
+      fprintf(stderr, "nanobot: Grok backend needs AUTH; rebuild with NANOBOT_ENABLE_AUTH=ON\n"
                       "  or use --offline / --base-url\n");
       ng_session_free(&session);
       ng_agent_cfg_free(&agent);
@@ -333,7 +333,7 @@ int main(int argc, char **argv) {
     int is_shell = oneshot[0] == '@' && oneshot[1] == '!';
     if (need_browser && !is_shell) {
       if (!ng_session_valid(&session)) {
-        fprintf(stderr, "No cloud session. Use nanobot --login, or --offline for llama.cpp,\n"
+        fprintf(stderr, "No Grok session. Use nanobot --login, or --offline for llama.cpp,\n"
                         "or @! <cmd> for shell without a model.\n");
         ng_session_free(&session);
         ng_agent_cfg_free(&agent);
@@ -356,7 +356,7 @@ int main(int argc, char **argv) {
   }
 
   /* Auth is self-contained: device-code via --login or GET /activate (if PEER).
-   * Standalone agent host; no external product required. */
+   * Never depends on any vacuum/ product. */
   if (force_login && need_browser) {
 #if !NANOBOT_ENABLE_AUTH
     fprintf(stderr, "  --login: AUTH disabled in this build\n");
@@ -406,27 +406,25 @@ int main(int argc, char **argv) {
   /* Optional external master file (path via env only — no product hardcodes). */
   {
     int master_present = 0;
-    const char *env_m = getenv("NANOBOT_MASTER_KEY");
-    if (!env_m || !env_m[0]) env_m = getenv("NANOBOT_MASTER_KEY"); /* legacy env */
+    const char *env_m = getenv("NANOBOT_LABAUTH_MASTER");
     if (env_m && env_m[0] && access(env_m, R_OK) == 0)
       master_present = 1;
     if (!master_present) {
       char alt[700];
-      snprintf(alt, sizeof alt, "%s/master.key", home);
+      snprintf(alt, sizeof alt, "%s/labauth/master.key", home);
       if (access(alt, R_OK) == 0) master_present = 1;
     }
     if (master_present) {
-      fprintf(stderr, "  optional master key present (NANOBOT_MASTER_KEY or $NANOBOT_HOME/)\n");
+      fprintf(stderr, "  optional master key present (NANOBOT_LABAUTH_MASTER or $HOME/labauth/)\n");
     }
-    const char *req_la = getenv("NANOBOT_REQUIRE_MASTER");
-    if (!req_la || !req_la[0]) req_la = getenv("NANOBOT_REQUIRE_MASTER");
+    const char *req_la = getenv("NANOBOT_REQUIRE_LABAUTH");
     if (req_la && (!strcmp(req_la, "1") || !strcasecmp(req_la, "true") ||
                    !strcasecmp(req_la, "yes"))) {
       if (!master_present) {
         fprintf(stderr,
-                "nanobot: NANOBOT_REQUIRE_MASTER=1 but master key not found\n"
-                "  set NANOBOT_MASTER_KEY=/path/to/master.key\n"
-                "  or place $NANOBOT_HOME/master.key\n");
+                "nanobot: NANOBOT_REQUIRE_LABAUTH=1 but master key not found\n"
+                "  set NANOBOT_LABAUTH_MASTER=/path/to/master.key\n"
+                "  or place $NANOBOT_HOME/labauth/master.key\n");
         ng_session_free(&session);
         ng_agent_cfg_free(&agent);
         return 1;

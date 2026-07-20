@@ -611,7 +611,7 @@ int ng_session_login_blocking(ng_session *s) {
   fprintf(stderr, "  ═══════════════════════════════════════════════\n");
   fprintf(stderr, "  ACTIVATE GROK SESSION (browser device login)\n");
   fprintf(stderr, "  ═══════════════════════════════════════════════\n");
-  fprintf(stderr, "  Open this link while logged into your cloud account:\n\n");
+  fprintf(stderr, "  Open this link while logged into your Grok account:\n\n");
   fprintf(stderr, "    %s\n\n", link);
   fprintf(stderr, "  Code: %s\n", s->user_code ? s->user_code : "?");
   fprintf(stderr, "  (waiting for browser approval…)\n");
@@ -624,7 +624,7 @@ int ng_session_login_blocking(ng_session *s) {
     sleep((unsigned)s->poll_interval);
     int r = ng_session_poll_login(s);
     if (r == 1) {
-      fprintf(stderr, "  ✓ cloud session active\n\n");
+      fprintf(stderr, "  ✓ Grok session active\n\n");
       return 0;
     }
     if (r < 0) return -1;

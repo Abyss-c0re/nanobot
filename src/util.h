@@ -7,10 +7,9 @@
 /* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*). */
 #define NG_CLI_VERSION_DEFAULT "0.1.220"
 #define NG_DEFAULT_PORT 8787
-/* Default: optional cloud provider (browser device-code via /activate or --login). */
 #define NG_DEFAULT_BASE "https://cli-chat-proxy.grok.com/v1"
 #define NG_DEFAULT_MODEL "grok-4.5"
-/* Local OpenAI-compatible (--offline / --llama / --base-url). */
+/* Default when --offline / --llama (OpenAI-compatible outer API). */
 #define NG_DEFAULT_LOCAL_BASE "http://127.0.0.1:8080/v1"
 #define NG_DEFAULT_LOCAL_MODEL "local"
 #define NG_MAX_TURNS 12
@@ -47,7 +46,7 @@ void ng_set_workdir(const char *dir);
 const char *ng_workdir(void);
 char *ng_json_escape(const char *s);
 
-/* Runtime provider CLI version header (auto-bumps when proxy says outdated). */
+/* Runtime Grok CLI version header (auto-bumps when proxy says outdated). */
 void ng_cli_version_init(void);
 const char *ng_cli_version(void);          /* e.g. "0.1.220" */
 const char *ng_cli_user_agent(void);       /* e.g. "grok-cli/0.1.220" */

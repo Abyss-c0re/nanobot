@@ -121,7 +121,7 @@ int ng_cli_version_handle_error(const char *resp) {
   if (!g_cli_inited) ng_cli_version_init();
   int outdated = 0;
   if (strstr(resp, "outdated") || strstr(resp, "CLI version") ||
-      strstr(resp, "cli version") || strstr(resp, "provider CLI version"))
+      strstr(resp, "cli version") || strstr(resp, "Grok CLI version"))
     outdated = 1;
   if (!outdated) return 0;
 
