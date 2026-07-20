@@ -1,10 +1,24 @@
-# Contributing
+# contributing
 
-Pre-release private project. Keep **nanobot**:
+## what we want
+- clear C, small diffs, working builds
+- tests when you change crypto or auth
+- docs that match the code
 
-- Small, readable C; no heavy frameworks
-- Standalone product — no coupling to other lab products in docs or defaults
-- No affiliation claims with Grok or other vendors
-- Security: peer token on sensitive routes; no secrets in git
+## how
+```bash
+make host && make test
+# optional features: docs/BUILD.md
+```
 
-Before handoff: `make host && make test` and optional `make arm`.
+## secrets
+Do not commit tokens, session files, or private keys.  
+`.gitignore` already excludes typical paths under `$NANOBOT_HOME`.
+
+## style
+- Prefer boring, readable C11
+- Prefer fixing root causes over papering over bugs
+- No drive-by refactors unrelated to the change
+
+## security reports
+See SECURITY.md. Prefer private disclosure for real vulnerabilities.

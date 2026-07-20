@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NG_VERSION "0.4.0"
+#define NG_VERSION "0.5.0"
 /* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*). */
 #define NG_CLI_VERSION_DEFAULT "0.1.220"
 #define NG_DEFAULT_PORT 8787

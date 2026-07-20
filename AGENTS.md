@@ -1,33 +1,25 @@
-# nanobot agents
+# agents
 
-## independence
-- product is **nanobot only** — no /rockctl/Dash required for auth or runtime
-- optional master: `NANOBOT_MASTER_KEY` or `$NANOBOT_HOME/master.key`
-- never hardcode `/mnt/data/…` product paths
+Working on **nanobot** source. Parent lab rules may exist outside this repo.
 
-## features (cmake)
-MCP AUTH PEER HUB SHELL PROVIDERS — see docs/BUILD.md
+## public surface (humans)
+- `README.md` — what it is
+- `INSTALL.md` — install anywhere
+- `SECURITY.md` — threat model & secrets
+- `docs/` — build, peer bus, hub, backends
 
-## deploy (remote host or any host)
+## internal (agents / maintainers)
+- `.agents/` — audits, runbooks, reasoning (not for casual readers)
+- `.agents/private/` — local only, gitignored
+
+## hard rules
+- never commit `peer_token`, `session`, `.env`, real keys
+- `make clean` / `make maintain` for hygiene
+- deploy binaries without wiping `NANOBOT_HOME` secrets
+- no product hardcodes (vacuum paths) in core C
+
+## build quick
 ```bash
-./scripts/deploy_binary_safe.sh   # binary only; preserve credentials
+make host && make test
+./build/host/nanobot --port 8787 --offline
 ```
-**Forbidden without human order:** deleting/rotating peer_token, session, device_login.
-
-## auth
-- auto peer_token if missing
-- cloud: --login or GET /activate
-- seal: BLAKE2b-256("nanobot-provider-v1"||peer_token)
-- offline: --offline / --base-url (no browser)
-
-## MCP
-- in-process: `nanobot --mcp`
-- remote bridge: scripts/peer_mcp_bridge.py tools `nanobot_*`
-
-## version control
-```bash
-make clean          # scripts/clean.sh — build junk only
-make maintain       # clean + commit if dirty (no secrets)
-# push: MAINTAIN_PUSH=1 make maintain   or git push origin main
-```
-Never commit peer_token/session. Never force-push.

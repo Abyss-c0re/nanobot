@@ -1,61 +1,104 @@
 # nanobot
 
-Standalone C agent host: **CLI**, **peer HTTP**, **optional MCP**.  
-No vacuum /  / rockctl dependency. Auth is self-contained.
+A small program in **C** that runs a chat agent on **your machine**.
 
-```
-NANOBOT_HOME/          # default ~/.nanobot
-  peer_token           # LAN secret (auto-create; do not rotate casually)
-  session              # sealed provider tokens (nbenc1)
-  settings             # PORT SHELL UI WWW …
-```
+- Talk to a **local model** (llama.cpp or any OpenAI-style HTTP API), or
+- Log in to a **cloud** backend with a one-time browser code, or
+- Run **shell commands** and optional tools without any model (`@! …`)
 
-## install (any machine)
+Also optional: a small **HTTP peer** on a port (default 8787) so other programs can talk to it, and **MCP** for editor integrations.
+
+Works on Linux, macOS, and *BSD — whatever your C compiler targets (armv7, arm64, x86_64, …).
+
+## 1. Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Abyss-c0re/nanobot/main/scripts/install.sh | bash
 ```
 
-Linux, macOS, *BSD — armv7 / arm64 / x86_64 / riscv64 / …. See [INSTALL.md](INSTALL.md).
+Needs: `curl` or `wget`. If no prebuilt binary exists for your machine, also `git`, `cmake`, `make`, and a C compiler (`cc` / `gcc` / `clang`).
 
-## build
+Then in **this** shell:
+
 ```bash
-make host              # all features ON
-make arm
-make test
-# features: docs/BUILD.md  (-DNANOBOT_ENABLE_MCP=OFF …)
+export PATH="$HOME/.local/bin:$PATH"   # root install: /opt/nanobot/bin
+nanobot --version
 ```
 
-## run (auth without any other product)
+Full options: [INSTALL.md](INSTALL.md).
+
+## 2. First run (pick one)
+
+**A — Local model** (no browser; start your model server first, e.g. llama.cpp on `:8080`):
+
 ```bash
-./build/host/nanobot --port 8787 --offline          # local llama/OpenAI-compat
-./build/host/nanobot --port 8787                    # peer up; cloud needs login
-./build/host/nanobot --login                        # device-code → /activate
-# open http://HOST:8787/activate  or use printed user_code URL
-./build/host/nanobot --mcp                          # stdio MCP
-./build/host/nanobot -p 'hello'                     # stream
+nanobot --port 8787 --base-url http://127.0.0.1:8080/v1 --model local
+# short form if defaults match:
+nanobot --port 8787 --offline
 ```
 
-## peer
-| route | auth |
-|-------|------|
-| GET /peer/v1/health /info | open |
-| GET /activate | open (device login UI trigger) |
-| POST /peer/v1/shell prompt jobs control | `X-Nanobot-Peer-Token` |
+**B — Cloud login** (device code in the browser):
 
-## MCP bridge (any host)
 ```bash
-export NANOBOT_PEER_URL=http://127.0.0.1:8787
-# token: ~/.nanobot/peer_token or NANOBOT_PEER_TOKEN
-python3 scripts/peer_mcp_bridge.py   # tools nanobot_*
+nanobot --port 8787 --login
+# open http://127.0.0.1:8787/activate  and finish the code prompt
 ```
 
-## safe remote binary update
+**C — Shell only** (no model):
+
 ```bash
-export NANOBOT_REMOTE_HOST=…   # or NANOBOT_REMOTE_HOST for remote host
-make arm && ./scripts/deploy_binary_safe.sh
-# never deletes peer_token/session
+nanobot --offline -p '@! uname -a'
 ```
 
-## docs
-BUILD.md · PEER_BUS.md · HUB.md · SECURITY.md · AUDIT_20260720.md
+Check the peer is up:
+
+```bash
+curl -s http://127.0.0.1:8787/peer/v1/health
+```
+
+Stop a background install-started process: `kill $(cat ~/.nanobot/nanobot.pid)` (or your `$NANOBOT_HOME`).
+
+## 3. Everyday use
+
+```bash
+nanobot -p 'hello'                 # stream one reply
+nanobot --mcp                      # stdio MCP for tools that speak MCP
+```
+
+Your data dir (`$NANOBOT_HOME`, default `~/.nanobot`):
+
+| file | meaning |
+|------|---------|
+| `peer_token` | secret for LAN peer API (created once; keep private) |
+| `session` | encrypted cloud login (if you use cloud) |
+| `settings` | port / shell flags |
+| `nanobot.out` | log if started in background |
+
+Backends detail: [docs/BACKENDS.md](docs/BACKENDS.md).  
+Peer API: [docs/PEER_BUS.md](docs/PEER_BUS.md).  
+Security: [SECURITY.md](SECURITY.md).
+
+## Build from source
+
+```bash
+git clone https://github.com/Abyss-c0re/nanobot.git && cd nanobot
+make host && make test
+./build/host/nanobot --version
+```
+
+Feature flags (MCP, auth, hub, …): [docs/BUILD.md](docs/BUILD.md).  
+Doc index: [docs/README.md](docs/README.md).
+
+## Layout
+
+```
+apps/nanobot/   program
+libs/           crypto, os, json
+src/            peer HTTP, agent, auth, mcp, hub
+scripts/        install, clean, maintain
+docs/           technical reference
+```
+
+## License
+
+MIT — [LICENSE](LICENSE), [LEGAL.md](LEGAL.md). Not affiliated with third-party AI vendors.

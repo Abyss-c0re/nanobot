@@ -1,53 +1,59 @@
-# Security
+# security
 
-## Reporting
-Report security issues privately to the repository owner.
-Do not open public issues with exploit detail for private pre-release.
+## reporting
+Report security issues privately to the repository owner.  
+Do not open public issues that include working exploit detail for unfixed flaws.
 
-## Threat model
-nanobot is a **local agent host**. When the HTTP peer is reachable on a network,
-it is a high-privilege surface (especially shell). Treat a compromised peer token
-as equivalent to the process user (often root if you run it that way).
+## threat model
+nanobot is a **local agent host**. If the peer HTTP port is reachable on a network,
+treat a stolen peer token as full process privilege (often the same user that runs nanobot).
 
-## Hardening (enforced in code)
-| Control | Detail |
+## controls in code
+| control | detail |
 |---------|--------|
-| Peer token | Required for `/peer/v1/prompt`, `/shell`, `/jobs`, `/control` (POST), and non-loopback `/api/chat|settings|backend|auth/start` |
-| Token compare | Constant-time equality |
-| Auto token | Created at first start under `$NANOBOT_HOME/peer_token` (mode 0600) |
-| Loopback | `127.0.0.1` may call `/api/*` without token (local tooling only) |
-| Static files | Path must be `/…` without `..` or unusual bytes |
-| Job IDs | Digits only; no path separators |
-| Shell denylist | Blocks destructive patterns (not a full sandbox) |
-| Logs | Shell/prompt logs truncated; avoid logging secrets |
+| peer token | required for mutating `/peer/v1/*` and non-loopback chat/settings |
+| constant-time compare | token check |
+| auto token | first start creates `$NANOBOT_HOME/peer_token` (mode 0600) |
+| loopback | `127.0.0.1` may use some local APIs without token |
+| static files | path sanitization |
+| shell denylist | best-effort only — **not** a sandbox |
+| provider seal | OAuth material sealed with KDF(peer_token); see below |
 
-## Operator checklist
-1. Keep `peer_token` secret; use header `X-Nanobot-Peer-Token`.
-2. Prefer firewall: only trusted hosts reach the peer port.
-3. Run as non-root when possible.
-4. Use `--offline` / llama.cpp when you do not need cloud auth.
+## operator checklist
+1. Keep `peer_token` private; send as `X-Nanobot-Peer-Token`.
+2. Firewall peer ports to trusted hosts when exposed.
+3. Prefer non-root when possible.
+4. Use `--offline` / local servers when you do not need cloud auth.
+5. Do not log tokens or sealed session blobs.
 
-## Residual risk
-- Shell is **not** a secure sandbox — denylist is best-effort.
-- Fork-per-request can amplify DoS if exposed to untrusted networks.
-- CORS is open (`*`) for local ergonomics; pair with network controls.
+## provider auth at rest
+After device-code login, access/refresh material is stored encrypted:
 
-See also [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md).
+| | |
+|--|--|
+| preferred key | `BLAKE2b-256("nanobot-provider-v1" \|\| peer_token)` |
+| envelope | `nbenc1:…` under `$NANOBOT_HOME/session` |
+| fallback | `$NANOBOT_HOME/session.key` if no peer token yet |
 
-## Provider auth encryption (peer token)
+Rotating `peer_token` without re-login can make old sealed sessions unreadable.  
+Deploy tools should **not** rotate tokens unless you intend that.
 
-After device-code (browser) login, provider tokens (`access_token` / `refresh_token`)
-and pending `device_login` are stored **AEAD-encrypted** (XChaCha20-Poly1305):
+## residual risk
+- Shell is high privilege.
+- Open CORS on HTTP is for local ergonomics; pair with network controls.
+- Fork-per-request can amplify load if exposed broadly.
 
-| Input | Role |
-|-------|------|
-| `$NANOBOT_HOME/peer_token` | LAN peer secret (Dash generate/install). **Preferred** KDF source |
-| seal key | `BLAKE2b-256("nanobot-provider-v1" \|\| peer_token)` |
-| `$NANOBOT_HOME/session` | sealed envelope `nbenc1:<hex>` |
-| `$NANOBOT_HOME/device_login` | sealed pending device flow |
-| `$NANOBOT_HOME/session.key` | **Fallback only** if peer_token missing |
+## network bind
+Peer and hub listeners bind **`0.0.0.0`** (all interfaces).  
+Firewall or interface policy is the real LAN boundary.
 
-Rotating peer_token without re-login: old sessions sealed under previous KDF will
-not open until re-login (or still openable via legacy session.key if that key remains).
+## deploy
+Prefer updating the binary only; do not rotate `peer_token` unless you intend to invalidate sealed sessions.
+See `scripts/deploy_binary_safe.sh` and `scripts/install.sh` (re-install keeps secrets).
 
-Losing peer_token **and** session.key makes sealed provider auth unrecoverable.
+## verify
+```bash
+curl -s http://127.0.0.1:8787/peer/v1/health
+# mutating call without token must fail:
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8787/peer/v1/shell -d '{"command":"true"}'
+```

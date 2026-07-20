@@ -69,3 +69,6 @@ master.key*
 /tmp-nanobot-*/
 *.tmp
 *.bak
+
+# agent private scratch (never push)
+.agents/private/

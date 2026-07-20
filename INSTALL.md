@@ -1,6 +1,4 @@
-# install — any machine that can run C
-
-nanobot is a **standalone** C agent (POSIX). Not tied to robots, , or a single arch.
+# install
 
 ## one-liner
 
@@ -8,63 +6,56 @@ nanobot is a **standalone** C agent (POSIX). Not tied to robots, , or a single a
 curl -fsSL https://raw.githubusercontent.com/Abyss-c0re/nanobot/main/scripts/install.sh | bash
 ```
 
-Works on **Linux / macOS / *BSD** (and other POSIX).  
-Architectures: **armv7, aarch64/arm64, x86_64, riscv64, …** (whatever `cc` targets).
+### prerequisites
+| path | need |
+|------|------|
+| prebuilt available | `curl` or `wget` |
+| build from source | `git`, `cmake`, `make`, C11 compiler |
 
-## flow
+### what the script does
+1. Tries a GitHub release binary named `nanobot-$OS-$ARCH`
+2. Else clones and runs `make host` on **this** machine
+3. Installs to `/opt/nanobot` (root) or `~/.local` + data in `~/.nanobot`
+4. **Keeps** existing `peer_token` and `session` on re-run
+5. Starts the peer in the background unless `--skip-start`
 
-1. Try prebuilt release asset `nanobot-$OS-$ARCH` (optional).
-2. Else **build on this host** (`git` + `cmake` + `make` + `cc`/`gcc`/`clang`).
-3. Install binary; create data dir; **never delete** existing `peer_token` / `session`.
-
-## options
-
+### after install
 ```bash
-curl -fsSL …/install.sh | bash -s -- --prefix /opt/nanobot --port 8787
+export PATH="$HOME/.local/bin:$PATH"    # or /opt/nanobot/bin
+nanobot --version
+curl -s http://127.0.0.1:8787/peer/v1/health
+```
+
+### options
+```bash
+curl -fsSL https://raw.githubusercontent.com/Abyss-c0re/nanobot/main/scripts/install.sh | bash -s -- \
+  --prefix /opt/nanobot --port 8787
+
 curl -fsSL …/install.sh | bash -s -- --from-source
 curl -fsSL …/install.sh | bash -s -- --skip-start --home /var/lib/nanobot
 
-# pin a binary you built/copied
-BINARY_URL=https://example/nanobot-darwin-aarch64 \
+BINARY_URL=https://example.com/nanobot-linux-x86_64 \
   curl -fsSL …/install.sh | bash
 ```
 
-## manual (developers)
+### platforms
+Linux, macOS, FreeBSD and other POSIX. Architectures: armv7, aarch64/arm64, x86_64, riscv64, …  
+Windows: use WSL or MSYS2 (needs `fork` + sockets).
 
+### manual
 ```bash
 git clone https://github.com/Abyss-c0re/nanobot.git && cd nanobot
-make host          # native for THIS machine
+make host
 ./build/host/nanobot --port 8787 --offline
 ```
 
-Optional Linux static armv7 (needs in-tree musl toolchain): `make arm`.
+Optional Linux static armv7 (in-tree musl toolchain): `make arm`.
 
-## after install
+### data layout
+`$NANOBOT_HOME` (default `~/.nanobot` or install prefix if root):
 
-| | |
-|--|--|
-| binary | `$PREFIX/bin/nanobot` |
-| data | `NANOBOT_HOME` |
-| health | `http://127.0.0.1:8787/peer/v1/health` |
-| cloud login | `http://HOST:8787/activate` or `nanobot --login` |
-| local LLM | `nanobot --offline` / `--base-url` |
-
-## Windows
-
-Use **WSL**, **MSYS2**, or another POSIX environment. Plain Win32 is not the primary target (process model uses `fork` + BSD sockets).
-
-## release assets (optional)
-
-Publish as:
-
-```text
-nanobot-linux-armv7
-nanobot-linux-aarch64
-nanobot-linux-x86_64
-nanobot-darwin-aarch64
-nanobot-darwin-x86_64
-nanobot-freebsd-amd64
-…
-```
+- `peer_token` — do not publish
+- `session` — encrypted cloud auth
+- `settings`, `run.sh`, `nanobot.pid`, `nanobot.out`
 
 Script: [`scripts/install.sh`](scripts/install.sh)

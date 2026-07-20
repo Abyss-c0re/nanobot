@@ -2,7 +2,7 @@
 
 **Rule:** split and reuse. Intersecting code becomes a library.
 
-## L0 (this PR)
+## L0 (later splits)
 
 | Library | Path | Role |
 |---------|------|------|
@@ -26,4 +26,4 @@ See [HUB.md](HUB.md): **IN** (WRITE) + **OUT** (READ events) + workers. CLI stre
 
 tokens, mcp, http_mini, oauth_device, providers/grok, providers/openai_compat, peer, shell, memory, agent, improve.
 
-See session plan: weapon-grade modular nanobot.
+See session plan: modular modular nanobot.
