@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Tiny curl subset: http [-fsS] [-X METHOD] [-H hdr] [-d body] [-m sec] [-o file] [-w fmt] URL"""
+import sys, json, urllib.request, urllib.error, ssl
+
+def main(argv):
+    method = "GET"
+    headers = {}
+    data = None
+    timeout = 30.0
+    out_path = None
+    write_fmt = None
+    silent = False
+    args = []
+    i = 1
+    while i < len(argv):
+        a = argv[i]
+        if a in ("-f", "-s", "-S", "-fsS", "-fs", "-sS"):
+            silent = True
+        elif a == "-X" and i + 1 < len(argv):
+            i += 1; method = argv[i]
+        elif a == "-H" and i + 1 < len(argv):
+            i += 1
+            k, _, v = argv[i].partition(":")
+            headers[k.strip()] = v.strip()
+        elif a == "-d" and i + 1 < len(argv):
+            i += 1; data = argv[i].encode()
+            method = method if method != "GET" else "POST"
+            headers.setdefault("Content-Type", "application/json")
+        elif a == "-m" and i + 1 < len(argv):
+            i += 1; timeout = float(argv[i])
+        elif a == "-o" and i + 1 < len(argv):
+            i += 1; out_path = argv[i]
+        elif a == "-w" and i + 1 < len(argv):
+            i += 1; write_fmt = argv[i]
+        elif a.startswith("-"):
+            pass
+        else:
+            args.append(a)
+        i += 1
+    if not args:
+        print("usage: http URL", file=sys.stderr); return 2
+    url = args[-1]
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    ctx = ssl.create_default_context()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            body = r.read()
+            code = r.status
+    except urllib.error.HTTPError as e:
+        body = e.read(); code = e.code
+        if silent and code >= 400 and "-f" in " ".join(argv):
+            return 22
+    except Exception as e:
+        if not silent:
+            print(e, file=sys.stderr)
+        return 1
+    if out_path:
+        open(out_path, "wb").write(body)
+    else:
+        sys.stdout.buffer.write(body)
+    if write_fmt:
+        sys.stdout.write(write_fmt.replace("%{http_code}", str(code)))
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

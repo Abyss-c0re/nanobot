@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Host-side auth bundle import/export (encrypted).
+#   auth_bundle export out.nbundle
+#   auth_bundle import in.nbundle
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck disable=SC1091
+. "$ROOT/Docker/modules/auth_bundle.sh"
+export NANOBOT_HOME="${NANOBOT_HOME:-$HOME/.nanobot}"
+cmd=${1:-}
+shift || true
+case "$cmd" in
+  export) auth_bundle_export "${1:?out file}" "${AUTH_BUNDLE_PASS:-}" ;;
+  import) auth_bundle_import "${1:?in file}" "${AUTH_BUNDLE_PASS:-}" ;;
+  *) echo "usage: AUTH_BUNDLE_PASS=… $0 export|import FILE" >&2; exit 2 ;;
+esac

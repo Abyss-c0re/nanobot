@@ -1,74 +1,70 @@
-# --- build outputs ---
+
+*~
+*.a
+# agent private scratch (never push)
+.agents/private/
+*.bak
 /build/
-/out/
-/dist/
+# --- build outputs ---
+.cache/
+.cache/clangd/
+.clangd/
+**/cli_version
 /cmake-build-*/
-compile_commands.json
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile.cmake
-*.o
-*.a
-*.so
-*.dylib
-*.dll
-*.exe
-*.out
-
-# optional cross toolchain (large; not source)
-/toolchain/
-
-# --- python ---
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-
-# --- runtime / secrets (never commit) ---
-**/session
+compile_commands.json
 **/device_login
-**/peer_token
-**/cli_version
-**/*.pid
-**/*.log
-**/*.out
-**/nanobot.log
-**/nanobot.out
-**/nanobot.pid
-**/nanobot.log
-**/nanobot.out
-**/nanobot.pid
-**/memory/
-.env
+/dist/
+*.dll
+Docker/.empty/
+!docs/**/*.md
+.DS_Store
+*.dylib
+# --- editor / OS ---
+*.egg-info/
+*.enrolled
 **/.env
 **/env
+.env
 !env.example
-!scripts/settings.example
-*.pem
-*.key
-!docs/**/*.md
-*.p12
-*.tok
-master.key*
-*.enrolled
-
-# --- editor / OS ---
-.DS_Store
+*.exe
 .idea/
-.vscode/
+*.key
+**/*.log
+Makefile.cmake
+master.key*
+**/memory/
+**/nanobot.log
+**/nanobot.out
+**/nanobot.pid
+**/nanobot.log
+**/nanobot.out
+**/nanobot.pid
+*.o
+# optional cross toolchain (large; not source)
+**/*.out
+*.out
+/out/
+*.p12
+**/peer_token
+*.pem
+**/*.pid
+__pycache__/
+*.py[cod]
+# --- python ---
+# --- runtime / secrets (never commit) ---
+!scripts/settings.example
+**/session
+*.so
 *.swp
-*~
-.cache/
-.clangd/
-.cache/clangd/
-
 # --- test / install scratch ---
-/tmp-nanobot-*/
-/tmp-nanobot-*/
 *.tmp
-*.bak
-
-# agent private scratch (never push)
-.agents/private/
+/tmp-nanobot-*/
+/tmp-nanobot-*/
+*.tok
+/toolchain/
+.venv/
+venv/
+.vscode/

@@ -78,6 +78,16 @@ Backends detail: [docs/BACKENDS.md](docs/BACKENDS.md).
 Peer API: [docs/PEER_BUS.md](docs/PEER_BUS.md).  
 Security: [SECURITY.md](SECURITY.md).
 
+## Deploy (local / SSH / Docker)
+
+```bash
+./scripts/deploy.sh local
+./scripts/deploy.sh ssh --host root@host --arch armv7
+./scripts/deploy.sh docker --build --input ./ws --prompt "…" --export ./out
+```
+
+Docker: [Docker/README.md](Docker/README.md).
+
 ## Build from source
 
 ```bash

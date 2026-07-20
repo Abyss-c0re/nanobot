@@ -1,6 +1,13 @@
+NANOBOT_HOME ?= $(HOME)/.nanobot
+PORT ?= 8787
+HOST ?=
+DIR ?= /opt/nanobot
+ARCH ?= host
+DOCKER_ARGS ?=
+
 # nanobot — portable build (any POSIX host with C11 + cmake/make)
 ROOT := $(abspath .)
-.PHONY: all host native arm clean clean-all maintain test test-mcp install-remote
+.PHONY: all host native arm clean clean-all maintain test test-mcp install-remote docker deploy-local deploy-ssh deploy-docker
 
 # default: native toolchain on this machine (linux/mac/*bsd/arm/x86/…)
 all: host
@@ -45,3 +52,15 @@ clean-all: clean
 maintain:
 	@./scripts/repo_maintain.sh
 
+# --- deploy targets (multiplatform) ---
+docker:
+	docker build -f Docker/Dockerfile -t nanobot:local .
+
+deploy-local:
+	./scripts/deploy.sh local --home "$(NANOBOT_HOME)" --port "$(PORT)"
+
+deploy-ssh:
+	./scripts/deploy.sh ssh --host "$(HOST)" --dir "$(DIR)" --arch "$(ARCH)"
+
+deploy-docker:
+	./scripts/deploy.sh docker --build $(DOCKER_ARGS)

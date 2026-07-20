@@ -1,0 +1,17 @@
+.git
+.agents/private
+toolchain
+**/__pycache__
+**/*.o
+**/.DS_Store
+tmp-*
+*.log
+**/peer_token
+**/session
+**/device_login
+.env
+# keep build/host/nanobot for prebuilt image; ignore other build trees
+build/armv7
+build/slim
+build/host/**
+!build/host/nanobot

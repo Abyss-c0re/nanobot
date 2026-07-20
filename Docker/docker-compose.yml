@@ -1,0 +1,34 @@
+# Modular nanobot service. Extend with additional agent services as needed.
+services:
+  nanobot:
+    image: ${NANOBOT_IMAGE:-nanobot:local}
+    build:
+      context: ..
+      dockerfile: Docker/Dockerfile
+    user: "0:0"
+    environment:
+      NANOBOT_HOME: /home/nanobot/.nanobot
+      NANOBOT_PORT: ${NANOBOT_PORT:-8787}
+      NANOBOT_MODE: ${NANOBOT_MODE:-peer}
+      PROMPT: ${PROMPT:-}
+      AUTH_BUNDLE_PASS: ${AUTH_BUNDLE_PASS:-}
+      WORKSPACE: /home/nanobot/workspace
+    ports:
+      - "${NANOBOT_PORT:-8787}:8787"
+    volumes:
+      # temp/home volume — host path injected by deploy.sh
+      - ${NANOBOT_VOL:-nanobot_home}:/home/nanobot
+      - ${NANOBOT_INPUT:-./.empty}:/input:ro
+      - ${NANOBOT_EXPORT:-./.empty}:/export
+      - ${NANOBOT_AUTH_DIR:-./.empty}:/auth
+    working_dir: /home/nanobot
+    restart: "no"
+    # privileged root as requested
+    privileged: false
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+
+volumes:
+  nanobot_home:
