@@ -1,5 +1,6 @@
 ## 0.5.0 (in progress — modular CMake + hub)
-- Modern CMake multi-lib build (`make host` / `make arm` wrap CMake)
+- **Docker tiny by default**: Alpine + static `nanobot`/`shell_server` (~4.6 MB layers vs ~45 MB python-slim); `make docker` / `VARIANT=fat` for openssl + MCP bridge
+- Modern CMake multi-lib build (`make host` / `make arm` / `make static` wrap CMake)
 - L0 libraries: `nanobot_crypto` (CSPRNG, ct_eq, hex), `nanobot_os`, `nanobot_json`
 - Peer token generation uses CSPRNG (not `rand()`)
 - App entry: `apps/nanobot/main.c`; domain code still in `nanobot_legacy` until later PRs

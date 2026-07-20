@@ -160,10 +160,12 @@ deploy_ssh() {
 deploy_docker() {
   command -v docker >/dev/null 2>&1 || die "docker not found (or use: ./Docker/wizard)"
   if [[ "$DOCKER_BUILD" == 1 ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    log "ensure host binary"
-    make -C "$ROOT" host
-    log "docker build $IMAGE"
-    docker build -f "$ROOT/Docker/Dockerfile" -t "$IMAGE" "$ROOT"
+    log "ensure static binary + shell_server (tiny image)"
+    make -C "$ROOT" static shell-server
+    log "docker build $IMAGE (VARIANT=${DOCKER_VARIANT:-tiny})"
+    docker build -f "$ROOT/Docker/Dockerfile" \
+      --build-arg "VARIANT=${DOCKER_VARIANT:-tiny}" \
+      -t "$IMAGE" "$ROOT"
   fi
 
   local vol="${VOL:-}" tmp=0

@@ -1,66 +1,54 @@
-#!/usr/bin/env python3
-"""Tiny curl subset: http [-fsS] [-X METHOD] [-H hdr] [-d body] [-m sec] [-o file] [-w fmt] URL"""
-import sys, json, urllib.request, urllib.error, ssl
+#!/bin/sh
+# curl subset via busybox wget (tiny image)
+set -eu
+method=GET
+post=
+h1=; h2=; h3=; hn=0
+timeout=30
+out=
+fail=0
+url=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -f) fail=1; shift ;;
+    -s|-S|-fsS|-fs|-sS|-fSs|-Ss) shift ;;
+    -X) method=$2; shift 2 ;;
+    -H)
+      hn=$((hn + 1))
+      case $hn in
+        1) h1=$2 ;;
+        2) h2=$2 ;;
+        3) h3=$2 ;;
+      esac
+      shift 2
+      ;;
+    -d) post=$2; method=POST; shift 2 ;;
+    -m) timeout=$2; shift 2 ;;
+    -o) out=$2; shift 2 ;;
+    -w) shift 2 ;;
+    -*) shift ;;
+    *) url=$1; shift; break ;;
+  esac
+done
+[ -n "${url:-}" ] || { echo "usage: http URL" >&2; exit 2; }
 
-def main(argv):
-    method = "GET"
-    headers = {}
-    data = None
-    timeout = 30.0
-    out_path = None
-    write_fmt = None
-    silent = False
-    args = []
-    i = 1
-    while i < len(argv):
-        a = argv[i]
-        if a in ("-f", "-s", "-S", "-fsS", "-fs", "-sS"):
-            silent = True
-        elif a == "-X" and i + 1 < len(argv):
-            i += 1; method = argv[i]
-        elif a == "-H" and i + 1 < len(argv):
-            i += 1
-            k, _, v = argv[i].partition(":")
-            headers[k.strip()] = v.strip()
-        elif a == "-d" and i + 1 < len(argv):
-            i += 1; data = argv[i].encode()
-            method = method if method != "GET" else "POST"
-            headers.setdefault("Content-Type", "application/json")
-        elif a == "-m" and i + 1 < len(argv):
-            i += 1; timeout = float(argv[i])
-        elif a == "-o" and i + 1 < len(argv):
-            i += 1; out_path = argv[i]
-        elif a == "-w" and i + 1 < len(argv):
-            i += 1; write_fmt = argv[i]
-        elif a.startswith("-"):
-            pass
-        else:
-            args.append(a)
-        i += 1
-    if not args:
-        print("usage: http URL", file=sys.stderr); return 2
-    url = args[-1]
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    ctx = ssl.create_default_context()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
-            body = r.read()
-            code = r.status
-    except urllib.error.HTTPError as e:
-        body = e.read(); code = e.code
-        if silent and code >= 400 and "-f" in " ".join(argv):
-            return 22
-    except Exception as e:
-        if not silent:
-            print(e, file=sys.stderr)
-        return 1
-    if out_path:
-        open(out_path, "wb").write(body)
-    else:
-        sys.stdout.buffer.write(body)
-    if write_fmt:
-        sys.stdout.write(write_fmt.replace("%{http_code}", str(code)))
-    return 0
+set -- -T "$timeout" -q
+[ -n "$out" ] && set -- "$@" -O "$out" || set -- "$@" -O -
+[ -n "$h1" ] && set -- "$@" --header "$h1"
+[ -n "$h2" ] && set -- "$@" --header "$h2"
+[ -n "$h3" ] && set -- "$@" --header "$h3"
 
-if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+rc=0
+if [ -n "$post" ] || [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
+  tmp=$(mktemp)
+  printf '%s' "${post:-}" > "$tmp"
+  wget "$@" --post-file "$tmp" "$url" || rc=$?
+  rm -f "$tmp"
+else
+  wget "$@" "$url" || rc=$?
+fi
+if [ "$rc" -ne 0 ]; then
+  [ "$fail" = 1 ] && exit 22
+  exit "$rc"
+fi
+exit 0

@@ -1,17 +1,24 @@
-#!/usr/bin/env bash
-# Prepare bidirectional MCP: peer HTTP + stdio bridge helper.
-set -euo pipefail
+#!/bin/sh
+# Prepare bidirectional MCP: peer HTTP + optional stdio bridge.
+set -eu
 
 MCP_PEER_URL="${MCP_PEER_URL:-http://127.0.0.1:${NANOBOT_PORT:-8787}}"
 export NANOBOT_PEER_URL="$MCP_PEER_URL"
 
-if [[ -z "${NANOBOT_PEER_TOKEN:-}" && -f "${NANOBOT_HOME:-}/peer_token" ]]; then
+if [ -z "${NANOBOT_PEER_TOKEN:-}" ] && [ -f "${NANOBOT_HOME:-}/peer_token" ]; then
   line=$(head -1 "${NANOBOT_HOME}/peer_token" | tr -d '\r\n')
   case "$line" in token=*) line=${line#token=};; esac
   export NANOBOT_PEER_TOKEN="$line"
 fi
 
-cat > /usr/local/bin/mcp-bridge <<'WRAP'
+# json string escape for tiny shell (no python)
+_json_str() {
+  # shellcheck disable=SC2001
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g' | tr '\n' ' '
+}
+
+if [ -f /opt/nanobot/scripts/peer_mcp_bridge.py ] && command -v python3 >/dev/null 2>&1; then
+  cat > /usr/local/bin/mcp-bridge <<'WRAP'
 #!/bin/sh
 export NANOBOT_PEER_URL="${NANOBOT_PEER_URL:-http://127.0.0.1:8787}"
 if [ -z "${NANOBOT_PEER_TOKEN:-}" ] && [ -f "${NANOBOT_HOME:-}/peer_token" ]; then
@@ -21,7 +28,15 @@ if [ -z "${NANOBOT_PEER_TOKEN:-}" ] && [ -f "${NANOBOT_HOME:-}/peer_token" ]; th
 fi
 exec python3 /opt/nanobot/scripts/peer_mcp_bridge.py
 WRAP
-chmod 755 /usr/local/bin/mcp-bridge
+  chmod 755 /usr/local/bin/mcp-bridge
+else
+  cat > /usr/local/bin/mcp-bridge <<'WRAP'
+#!/bin/sh
+echo "mcp-bridge: needs python3 + peer_mcp_bridge.py (use image variant fat)" >&2
+exit 1
+WRAP
+  chmod 755 /usr/local/bin/mcp-bridge
+fi
 
 cat > /usr/local/bin/nanobot-peer <<'WRAP'
 #!/bin/sh
@@ -35,20 +50,19 @@ if [ -z "$TOK" ] && [ -f "${NANOBOT_HOME}/peer_token" ]; then
 fi
 cmd=${1:-health}
 shift || true
+_jesc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' '; }
 case "$cmd" in
-  health) curl -fsS "$URL/peer/v1/health" ;;
-  info)   curl -fsS "$URL/peer/v1/info" ;;
+  health) http -fsS "$URL/peer/v1/health" ;;
+  info)   http -fsS "$URL/peer/v1/info" ;;
   shell)
-    body=$(python3 -c 'import json,sys; print(json.dumps({"command":" ".join(sys.argv[1:])}))' "$@")
-    curl -fsS -X POST "$URL/peer/v1/shell" \
-      -H "Content-Type: application/json" \
-      -H "X-Nanobot-Peer-Token: $TOK" -d "$body"
+    body=$(printf '{"command":"%s"}' "$(_jesc "$*")")
+    http -fsS -X POST -H "Content-Type: application/json" \
+      -H "X-Nanobot-Peer-Token: $TOK" -d "$body" "$URL/peer/v1/shell"
     ;;
   prompt)
-    body=$(python3 -c 'import json,sys; print(json.dumps({"prompt":" ".join(sys.argv[1:])}))' "$@")
-    curl -fsS -X POST "$URL/peer/v1/prompt" \
-      -H "Content-Type: application/json" \
-      -H "X-Nanobot-Peer-Token: $TOK" -d "$body"
+    body=$(printf '{"prompt":"%s"}' "$(_jesc "$*")")
+    http -fsS -X POST -H "Content-Type: application/json" \
+      -H "X-Nanobot-Peer-Token: $TOK" -d "$body" "$URL/peer/v1/prompt"
     ;;
   *) echo "usage: nanobot-peer health|info|shell <cmd>|prompt <text>" >&2; exit 2 ;;
 esac

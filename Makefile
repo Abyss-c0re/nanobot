@@ -6,8 +6,8 @@ ARCH ?= host
 DOCKER_ARGS ?=
 
 ROOT := $(abspath .)
-.PHONY: all host native arm clean clean-all maintain test test-mcp \
-	docker wizard deploy-local deploy-ssh deploy-docker
+.PHONY: all host native arm static shell-server clean clean-all maintain test test-mcp \
+	docker docker-fat wizard deploy-local deploy-ssh deploy-docker
 
 all: host
 
@@ -47,6 +47,18 @@ clean-all: clean
 maintain:
 	@./scripts/repo_maintain.sh
 
+# --- static binary (Docker tiny image) ---
+static:
+	cmake -S "$(ROOT)" -B "$(ROOT)/build/static" -DCMAKE_BUILD_TYPE=Release 	  -DNANOBOT_BUILD_TESTS=OFF -DCMAKE_EXE_LINKER_FLAGS="-static"
+	cmake --build "$(ROOT)/build/static" -j
+	@strip -s "$(ROOT)/build/static/nanobot" 2>/dev/null || strip "$(ROOT)/build/static/nanobot" || true
+	@ln -sfn nanobot "$(ROOT)/build/static/nanobot-mcp" 2>/dev/null || true
+	@echo "static: $(ROOT)/build/static/nanobot ($$(wc -c < $(ROOT)/build/static/nanobot)) bytes"
+
+shell-server:
+	cc -O2 -static -s -o "$(ROOT)/Docker/bin/shell_server" 	  "$(ROOT)/Docker/bin/shell_server.c" -lutil
+	@echo "shell_server: $$(wc -c < $(ROOT)/Docker/bin/shell_server) bytes"
+
 # --- deploy: local | ssh | docker (equal citizens) ---
 deploy-local:
 	./scripts/deploy.sh local --home "$(NANOBOT_HOME)" --port "$(PORT)"
@@ -55,9 +67,14 @@ deploy-ssh:
 	@test -n "$(HOST)" || (echo "make deploy-ssh HOST=user@host [DIR=/opt/nanobot] [ARCH=host|armv7]" >&2; exit 2)
 	./scripts/deploy.sh ssh --host "$(HOST)" --dir "$(DIR)" --arch "$(ARCH)"
 
-docker:
-	$(MAKE) host
-	docker build -f Docker/Dockerfile -t nanobot:local .
+# default docker = tiny alpine (~6–10MB). fat: make docker VARIANT=fat
+VARIANT ?= tiny
+docker: static shell-server
+	docker build -f Docker/Dockerfile --build-arg VARIANT=$(VARIANT) -t nanobot:local .
+	@docker image inspect nanobot:local --format 'image nanobot:local {{.Size}} bytes (variant=$(VARIANT))'
+
+docker-fat:
+	$(MAKE) docker VARIANT=fat
 
 deploy-docker:
 	./scripts/deploy.sh docker --build $(DOCKER_ARGS)

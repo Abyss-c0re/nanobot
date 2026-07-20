@@ -51,14 +51,14 @@ usage() {
 nanobot Docker wizard
 
   default     build (if needed) + run peer with defaults
-  build       make host + docker build
+  build       make static + shell-server + tiny docker build
   run         run container (pass-through flags after --)
   config      show | init | edit | set KEY=VAL
   clone URL   git clone into temp input and run
   auth        export|import FILE  (needs AUTH_PASS / --auth-pass)
   stop        stop container by name
   logs        docker logs
-  shell       docker exec bash
+  shell       docker exec sh
   help
 
 Config: Docker/config.env  (wizard config init)
@@ -79,16 +79,18 @@ shift || true
 
 ensure_image() {
   if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    log "image missing — building $IMAGE"
-    make -C "$ROOT" host
-    docker build -f "$WIZ/Dockerfile" -t "$IMAGE" "$ROOT"
+    log "image missing — building $IMAGE (tiny)"
+    make -C "$ROOT" static shell-server
+    docker build -f "$WIZ/Dockerfile" --build-arg VARIANT="${DOCKER_VARIANT:-tiny}" -t "$IMAGE" "$ROOT"
   fi
 }
 
 do_build() {
-  make -C "$ROOT" host
-  docker build -f "$WIZ/Dockerfile" -t "$IMAGE" "$ROOT"
-  log "built $IMAGE"
+  make -C "$ROOT" static shell-server
+  docker build -f "$WIZ/Dockerfile" --build-arg VARIANT="${DOCKER_VARIANT:-tiny}" -t "$IMAGE" "$ROOT"
+  local sz
+  sz=$(docker image inspect "$IMAGE" --format '{{.Size}}' 2>/dev/null || echo '?')
+  log "built $IMAGE (${sz} bytes layers, VARIANT=${DOCKER_VARIANT:-tiny})"
 }
 
 do_config() {
@@ -232,7 +234,7 @@ do_logs() {
 }
 
 do_shell() {
-  docker exec -it "${1:-$NAME}" bash -l
+  docker exec -it "${1:-$NAME}" /bin/sh -l
 }
 
 case "$cmd" in

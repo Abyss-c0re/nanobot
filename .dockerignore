@@ -10,8 +10,9 @@ tmp-*
 **/session
 **/device_login
 .env
-# keep build/host/nanobot for prebuilt image; ignore other build trees
+# build trees — only ship the static (tiny) and optional host binary
 build/armv7
 build/slim
-build/host/**
-!build/host/nanobot
+build/host
+build/static/**
+!build/static/nanobot
