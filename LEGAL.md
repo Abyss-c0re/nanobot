@@ -8,7 +8,8 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE).
 other AI vendor.
 
 ### Supported interoperability (optional)
-- **Grok account auth** — browser device-code login if *you* choose that backend.
+- **Cloud provider auth (allowed)** — browser **device-code** web login
+  (`--login`, peer `/activate` and related web UI routes) if *you* choose that backend.
   Unofficial interoperability only (**not affiliated**).
 - **llama.cpp** / other **OpenAI-compatible** local servers — point
   `--base-url` / `--offline` at your own runtime.

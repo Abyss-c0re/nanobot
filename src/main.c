@@ -61,7 +61,7 @@ static void print_banner(int port, ng_session *sess, const char *www_root) {
       fprintf(stderr, "     code: %s\n", sess->user_code);
   }
   fprintf(stderr, "  ─────────────────────────────────────────────\n");
-  fprintf(stderr, "  Auth: browser device-code, or --offline for llama.cpp.\n\n");
+  fprintf(stderr, "  Auth: web device-code (/activate, --login) for cloud provider,\n        or --offline / --base-url for local OpenAI-compatible.\n\n");
 
   if (sess && sess->verification_uri_complete)
     printf("%s\n", sess->verification_uri_complete);

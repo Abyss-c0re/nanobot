@@ -29,34 +29,22 @@ Full options: [INSTALL.md](INSTALL.md).
 
 ## 2. First run (pick one)
 
-**A — Local model** (no browser; start your model server first, e.g. llama.cpp on `:8080`):
+**A — Cloud provider + web auth** (device code in the browser; default backend):
 
 ```bash
-nanobot --port 8787 --base-url http://127.0.0.1:8080/v1 --model local
-# short form if defaults match:
+nanobot --port 8787
+# then open the activation link (/activate) or:
+nanobot --login
+```
+
+Session is sealed under `$NANOBOT_HOME`. Provider interop is optional and unaffiliated — see [LEGAL.md](LEGAL.md).
+
+**B — Local model** (no browser; start your OpenAI-compatible server first):
+
+```bash
 nanobot --port 8787 --offline
+# or: --base-url http://127.0.0.1:8080/v1 --model local
 ```
-
-**B — Cloud login** (device code in the browser):
-
-```bash
-nanobot --port 8787 --login
-# open http://127.0.0.1:8787/activate  and finish the code prompt
-```
-
-**C — Shell only** (no model):
-
-```bash
-nanobot --offline -p '@! uname -a'
-```
-
-Check the peer is up:
-
-```bash
-curl -s http://127.0.0.1:8787/peer/v1/health
-```
-
-Stop a background install-started process: `kill $(cat ~/.nanobot/nanobot.pid)` (or your `$NANOBOT_HOME`).
 
 ## 3. Everyday use
 

@@ -7,9 +7,10 @@
 /* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*). */
 #define NG_CLI_VERSION_DEFAULT "0.1.220"
 #define NG_DEFAULT_PORT 8787
-#define NG_DEFAULT_BASE "http://127.0.0.1:8080/v1"
+/* Default: optional cloud provider (browser device-code via /activate or --login). */
+#define NG_DEFAULT_BASE "https://cli-chat-proxy.grok.com/v1"
 #define NG_DEFAULT_MODEL "grok-4.5"
-/* Default when --offline / --llama (OpenAI-compatible outer API). */
+/* Local OpenAI-compatible (--offline / --llama / --base-url). */
 #define NG_DEFAULT_LOCAL_BASE "http://127.0.0.1:8080/v1"
 #define NG_DEFAULT_LOCAL_MODEL "local"
 #define NG_MAX_TURNS 12
