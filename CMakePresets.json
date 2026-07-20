@@ -1,0 +1,31 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 16, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "host-release",
+      "displayName": "Host Release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "NANOBOT_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "armv7-static",
+      "displayName": "ARMv7 static musl",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/armv7",
+      "toolchainFile": "${sourceDir}/cmake/NanobotArmv7.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "NANOBOT_BUILD_TESTS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "host-release", "configurePreset": "host-release" },
+    { "name": "armv7-static", "configurePreset": "armv7-static" }
+  ]
+}

@@ -4,16 +4,16 @@
 This project is licensed under the **MIT License** — see [LICENSE](LICENSE).
 
 ## No affiliation
-**nanobot is not affiliated with, endorsed by, or sponsored by:**
-- xAI, Grok, or any Grok product
-- SpaceX or SpaceXAI
-- OpenAI, Anthropic, Google, Meta, or other AI vendors
-- Roborock, Xiaomi, or any robot vacuum vendor
-- LineageOS, Google Android, or Unihertz
+**nanobot is not affiliated with, endorsed by, or sponsored by** Grok or any
+other AI vendor.
 
-Names of third parties appear only to describe optional interoperability
-(e.g. browser device-code login with a Grok account, or an OpenAI-compatible
-local server such as llama.cpp).
+### Supported interoperability (optional)
+- **Grok account auth** — browser device-code login if *you* choose that backend.
+  Unofficial interoperability only (**not affiliated**).
+- **llama.cpp** / other **OpenAI-compatible** local servers — point
+  `--base-url` / `--offline` at your own runtime.
+
+Third-party names appear only to describe optional backends you configure yourself.
 
 ## User responsibilities
 - You must have the legal right to use any remote API or account you connect.
@@ -26,10 +26,8 @@ Do not commit session tokens, peer tokens, API keys, or device credentials.
 
 ## Privacy
 nanobot runs **on hardware you control**. Chat content is sent only to the
-backend you configure (Grok cloud session or local LLM). Authors do not operate
-a cloud that receives your prompts by default.
+backend you configure (optional Grok session or local llama.cpp / OpenAI-compatible).
+Authors do not operate a cloud that receives your prompts by default.
 
-## Export / use
-MIT permits commercial and private use. Publishing a fork that implies official
-xAI/Grok endorsement is not allowed under trademark norms — keep naming clearly
-independent (e.g. “nanobot”, not “official Grok agent”).
+## Naming
+Do not imply official Grok endorsement. Product name is **nanobot**.

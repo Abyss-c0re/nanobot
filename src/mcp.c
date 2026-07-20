@@ -1,4 +1,6 @@
 #include "mcp.h"
+#include "improve.h"
+#include "memory.h"
 #include "shell.h"
 #include "util.h"
 #include <stdio.h>
@@ -6,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <dirent.h>
 
 /* Read one MCP message: prefer Content-Length framing; fallback newline JSON */
 static char *mcp_read_message(void) {
@@ -14,12 +17,10 @@ static char *mcp_read_message(void) {
   int have_cl = 0;
   long content_length = -1;
 
-  /* peek first byte */
   int c = fgetc(stdin);
   if (c == EOF) return NULL;
   ungetc(c, stdin);
 
-  /* If starts with '{', treat as NDJSON line mode */
   if (c == '{') {
     size_t cap = 4096, len = 0;
     char *buf = malloc(cap);
@@ -39,7 +40,6 @@ static char *mcp_read_message(void) {
     return NULL;
   }
 
-  /* Content-Length framing */
   while (fgets(header + hlen, (int)(sizeof header - hlen), stdin)) {
     size_t line_len = strlen(header + hlen);
     if (line_len == 0) break;
@@ -67,13 +67,11 @@ static char *mcp_read_message(void) {
 
 static void mcp_write_message(const char *json) {
   size_t n = strlen(json);
-  /* Content-Length framing (MCP standard) */
   fprintf(stdout, "Content-Length: %zu\r\n\r\n%s", n, json);
   fflush(stdout);
 }
 
 static void mcp_reply_result(const char *id_json, const char *result_json) {
-  /* id_json is already JSON token (number or "string") */
   char *msg = NULL;
   asprintf(&msg, "{\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":%s}", id_json, result_json);
   if (msg) { mcp_write_message(msg); free(msg); }
@@ -121,79 +119,194 @@ static char *extract_method(const char *json) {
   return ng_json_get_string(json, "method");
 }
 
-/* tools/call params: name + arguments object */
-static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_result) {
-  char *name = ng_json_get_string(json, "name");
-  if (!name) {
-    /* nested under params */
-    const char *params = strstr(json, "\"params\"");
-    if (params) name = ng_json_get_string(params, "name");
+/* Get tool name from tools/call body */
+static char *tool_name(const char *json) {
+  const char *params = strstr(json, "\"params\"");
+  if (params) {
+    char *n = ng_json_get_string(params, "name");
+    if (n) return n;
   }
+  return ng_json_get_string(json, "name");
+}
+
+static char *tool_arg(const char *json, const char *key) {
   const char *params = strstr(json, "\"params\"");
   if (!params) params = json;
+  char *v = ng_json_get_string(params, key);
+  if (v) return v;
+  const char *args = strstr(params, "\"arguments\"");
+  if (args) return ng_json_get_string(args, key);
+  return NULL;
+}
 
+
+static int text_result(char **out, const char *text, int is_err) {
+  char *esc = ng_json_escape(text ? text : "");
+  int rc = asprintf(out,
+    "{\"content\":[{\"type\":\"text\",\"text\":\"%s\"}],\"isError\":%s}",
+    esc ? esc : "", is_err ? "true" : "false");
+  free(esc);
+  return rc < 0 ? -1 : 0;
+}
+
+static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_result) {
+  char *name = tool_name(json);
   if (!name) {
     *out_result = strdup("{\"content\":[{\"type\":\"text\",\"text\":\"missing tool name\"}],\"isError\":true}");
     return -1;
   }
 
   if (strcmp(name, "run_terminal_command") == 0 || strcmp(name, "shell") == 0) {
-    char *cmd = ng_json_get_string(params, "command");
-    if (!cmd) {
-      /* arguments.command */
-      const char *args = strstr(params, "\"arguments\"");
-      if (args) cmd = ng_json_get_string(args, "command");
-    }
+    char *cmd = tool_arg(json, "command");
     if (!cmd) {
       free(name);
-      *out_result = strdup("{\"content\":[{\"type\":\"text\",\"text\":\"missing command\"}],\"isError\":true}");
-      return -1;
+      return text_result(out_result, "missing command", 1);
     }
     ng_log("mcp tools/call shell: %.200s", cmd);
-    ng_cmd_result cr = ng_run_command(cmd, agent->timeout_sec);
+    ng_cmd_result cr = ng_run_command(cmd, agent->timeout_sec > 0 ? agent->timeout_sec : 60);
     char *text = NULL;
     asprintf(&text, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
-    char *esc = ng_json_escape(text);
-    asprintf(out_result,
-      "{\"content\":[{\"type\":\"text\",\"text\":\"%s\"}],\"isError\":%s}",
-      esc ? esc : "", cr.exit_code != 0 ? "true" : "false");
-    free(text); free(esc); free(cmd); free(name);
+    text_result(out_result, text, cr.exit_code != 0);
+    free(text); free(cmd); free(name);
     ng_cmd_result_free(&cr);
     return 0;
   }
 
   if (strcmp(name, "nanobot_ask") == 0) {
-    char *prompt = ng_json_get_string(params, "prompt");
-    if (!prompt) {
-      const char *args = strstr(params, "\"arguments\"");
-      if (args) prompt = ng_json_get_string(args, "prompt");
-    }
+    char *prompt = tool_arg(json, "prompt");
     if (!prompt) {
       free(name);
-      *out_result = strdup("{\"content\":[{\"type\":\"text\",\"text\":\"missing prompt\"}],\"isError\":true}");
-      return -1;
+      return text_result(out_result, "missing prompt", 1);
     }
     ng_log("mcp tools/call nanobot_ask: %.200s", prompt);
     char *reply = ng_agent_run(agent, prompt);
-    char *esc = ng_json_escape(reply ? reply : "");
-    asprintf(out_result,
-      "{\"content\":[{\"type\":\"text\",\"text\":\"%s\"}],\"isError\":false}",
-      esc ? esc : "");
-    free(reply); free(esc); free(prompt); free(name);
+    text_result(out_result, reply ? reply : "(no reply)", 0);
+    free(reply); free(prompt); free(name);
+    return 0;
+  }
+
+  if (strcmp(name, "memory_read") == 0) {
+    char *which = tool_arg(json, "name");
+    if (!which) which = strdup("core");
+    /* only allow safe basenames */
+    if (strchr(which, '/') || strchr(which, '\\') || strstr(which, "..")) {
+      free(which); free(name);
+      return text_result(out_result, "invalid memory name", 1);
+    }
+    char path[700];
+    snprintf(path, sizeof path, "%s/memory/%s", ng_workdir(), which);
+    /* allow with or without .txt */
+    if (access(path, R_OK) != 0) {
+      char path2[720];
+      snprintf(path2, sizeof path2, "%s.txt", path);
+      if (access(path2, R_OK) == 0) snprintf(path, sizeof path, "%s", path2);
+    }
+    size_t len = 0;
+    char *body = ng_read_file(path, &len);
+    if (!body) {
+      free(which); free(name);
+      return text_result(out_result, "(missing or empty)", 0);
+    }
+    text_result(out_result, body, 0);
+    free(body); free(which); free(name);
+    return 0;
+  }
+
+  if (strcmp(name, "memory_note") == 0) {
+    char *line = tool_arg(json, "line");
+    if (!line) line = tool_arg(json, "text");
+    if (!line) {
+      free(name);
+      return text_result(out_result, "missing line", 1);
+    }
+    ng_memory_note_profile(line);
+    text_result(out_result, "ok: profile note stored", 0);
+    free(line); free(name);
+    return 0;
+  }
+
+  if (strcmp(name, "home_info") == 0) {
+    char *info = NULL;
+    asprintf(&info,
+      "nanobot %s\nworkdir=%s\nbackend=%s\nmodel=%s\nbase=%s\nlean=%s\n"
+      "MCP: shell, ask, memory_*, self_improve_*, home_info\n",
+      NG_VERSION, ng_workdir(),
+      ng_agent_backend_kind(agent),
+      agent->model ? agent->model : "?",
+      agent->base_url ? agent->base_url : "?",
+      ng_is_lean() ? "yes" : "no");
+    text_result(out_result, info, 0);
+    free(info); free(name);
+    return 0;
+  }
+
+  if (strcmp(name, "self_improve_status") == 0) {
+    char *st = ng_improve_status_json();
+    text_result(out_result, st, 0);
+    free(st); free(name);
+    return 0;
+  }
+
+  if (strcmp(name, "self_improve_cycle") == 0) {
+    char *focus = tool_arg(json, "focus");
+    char *cycles_s = tool_arg(json, "cycles");
+    int n = 1;
+    if (cycles_s) { n = atoi(cycles_s); free(cycles_s); }
+    if (n < 1) n = 1;
+    if (n > 4) n = 4;
+    ng_log("mcp self_improve_cycle n=%d focus=%.120s", n, focus ? focus : "");
+    char *reply = n == 1
+      ? ng_improve_run_cycle(agent, focus)
+      : ng_improve_run_n(agent, n, focus);
+    text_result(out_result, reply ? reply : "(no reply)", 0);
+    free(reply); free(focus); free(name);
     return 0;
   }
 
   char *esc = ng_json_escape(name);
-  asprintf(out_result,
-    "{\"content\":[{\"type\":\"text\",\"text\":\"unknown tool: %s\"}],\"isError\":true}",
-    esc ? esc : "?");
-  free(esc); free(name);
+  char *msg = NULL;
+  asprintf(&msg, "unknown tool: %s", esc ? esc : "?");
+  text_result(out_result, msg, 1);
+  free(esc); free(msg); free(name);
   return -1;
 }
 
+static const char *TOOLS_JSON =
+  "{\"tools\":["
+  "{\"name\":\"run_terminal_command\","
+  "\"description\":\"Run a shell command on the nanobot host. Returns exit code and output.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}},"
+  "{\"name\":\"nanobot_ask\","
+  "\"description\":\"Run a full nanobot agent turn (LLM + tools) and return the answer.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"prompt\":{\"type\":\"string\"}},\"required\":[\"prompt\"]}},"
+  "{\"name\":\"memory_read\","
+  "\"description\":\"Read a file under NANOBOT_HOME/memory/ (core, profile, summary, self_improve, improve_log.jsonl).\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"name\":{\"type\":\"string\",\"description\":\"basename e.g. core or self_improve.txt\"}},"
+  "\"required\":[\"name\"]}},"
+  "{\"name\":\"memory_note\","
+  "\"description\":\"Append a short durable note to memory/profile.txt.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"line\":{\"type\":\"string\"}},\"required\":[\"line\"]}},"
+  "{\"name\":\"home_info\","
+  "\"description\":\"nanobot version, workdir, backend.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},"
+  "{\"name\":\"self_improve_status\","
+  "\"description\":\"Status of self-improvement mode (goals path, cycle count, last log).\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},"
+  "{\"name\":\"self_improve_cycle\","
+  "\"description\":\"Run 1–4 self-improvement agent cycles. Ships one small durable win per cycle.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"focus\":{\"type\":\"string\",\"description\":\"optional focus for this cycle\"},"
+  "\"cycles\":{\"type\":\"string\",\"description\":\"1-4, default 1\"}}"
+  "}}"
+  "]}";
+
 int ng_mcp_stdio_run(ng_agent_cfg *agent) {
   ng_log("mcp stdio server start version=%s", NG_VERSION);
-  /* disable buffering issues */
+  ng_improve_seed();
   setvbuf(stdin, NULL, _IONBF, 0);
   setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -214,46 +327,57 @@ int ng_mcp_stdio_run(ng_agent_cfg *agent) {
       char *result = NULL;
       asprintf(&result,
         "{\"protocolVersion\":\"2024-11-05\","
-        "\"capabilities\":{\"tools\":{}},"
+        "\"capabilities\":{\"tools\":{},\"prompts\":{}},"
         "\"serverInfo\":{\"name\":\"nanobot\",\"version\":\"%s\"}}",
         NG_VERSION);
       mcp_reply_result(id, result);
       free(result);
     } else if (strcmp(method, "notifications/initialized") == 0 ||
                strcmp(method, "initialized") == 0) {
-      /* no response for notifications (id null) */
-      if (id && strcmp(id, "null") != 0) {
-        mcp_reply_result(id, "{}");
-      }
+      if (id && strcmp(id, "null") != 0) mcp_reply_result(id, "{}");
     } else if (strcmp(method, "ping") == 0) {
       mcp_reply_result(id, "{}");
     } else if (strcmp(method, "tools/list") == 0) {
-      const char *tools =
-        "{\"tools\":["
-        "{\"name\":\"run_terminal_command\","
-        "\"description\":\"Run a shell command on the nanobot host machine. Returns exit code and output.\","
-        "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
-        "\"command\":{\"type\":\"string\",\"description\":\"Shell command to run\"}},"
-        "\"required\":[\"command\"]}},"
-        "{\"name\":\"nanobot_ask\","
-        "\"description\":\"Ask Grok via nanobot agent loop (CLI tool enabled) and return the final answer.\","
-        "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
-        "\"prompt\":{\"type\":\"string\",\"description\":\"User prompt\"}},"
-        "\"required\":[\"prompt\"]}}"
-        "]}";
-      mcp_reply_result(id, tools);
+      mcp_reply_result(id, TOOLS_JSON);
     } else if (strcmp(method, "tools/call") == 0) {
       char *result = NULL;
       handle_tools_call(agent, msg, &result);
       mcp_reply_result(id, result ? result : "{\"content\":[]}");
       free(result);
-    } else {
-      /* ignore unknown notifications */
-      if (strncmp(method, "notifications/", 14) == 0) {
-        /* no-op */
+    } else if (strcmp(method, "prompts/list") == 0) {
+      mcp_reply_result(id,
+        "{\"prompts\":["
+        "{\"name\":\"self_improve\",\"description\":\"Run a self-improvement cycle on this host\","
+        "\"arguments\":[{\"name\":\"focus\",\"description\":\"optional focus\",\"required\":false}]}"
+        "]}");
+    } else if (strcmp(method, "prompts/get") == 0) {
+      char *pname = tool_arg(msg, "name");
+      if (pname && strcmp(pname, "self_improve") == 0) {
+        char *focus = tool_arg(msg, "focus");
+        char *text = NULL;
+        asprintf(&text,
+          "Run self-improvement. Call tool self_improve_cycle with focus=%s",
+          focus && focus[0] ? focus : "general");
+        char *esc = ng_json_escape(text);
+        char *res = NULL;
+        asprintf(&res,
+          "{\"description\":\"self improve\",\"messages\":[{\"role\":\"user\","
+          "\"content\":{\"type\":\"text\",\"text\":\"%s\"}}]}",
+          esc ? esc : "");
+        mcp_reply_result(id, res ? res : "{}");
+        free(text); free(esc); free(res); free(focus);
       } else {
-        mcp_reply_error(id, -32601, "method not found");
+        mcp_reply_error(id, -32602, "unknown prompt");
       }
+      free(pname);
+    } else if (strcmp(method, "shutdown") == 0) {
+      if (id && strcmp(id, "null") != 0) mcp_reply_result(id, "{}");
+      free(method); free(id); free(msg);
+      break;
+    } else if (strncmp(method, "notifications/", 14) == 0) {
+      /* no-op */
+    } else {
+      mcp_reply_error(id, -32601, "method not found");
     }
     free(method); free(id); free(msg);
   }

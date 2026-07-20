@@ -1,0 +1,17 @@
+# Toolchain: static musl armv7 (tree-local under toolchain/)
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+
+get_filename_component(_NB_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(ARM_TRIPLE armv7l-linux-musleabihf)
+set(ARM_ROOT "${_NB_ROOT}/toolchain/${ARM_TRIPLE}-cross")
+
+set(CMAKE_C_COMPILER "${ARM_ROOT}/bin/${ARM_TRIPLE}-gcc")
+set(CMAKE_CXX_COMPILER "${ARM_ROOT}/bin/${ARM_TRIPLE}-g++")
+set(CMAKE_STRIP "${ARM_ROOT}/bin/${ARM_TRIPLE}-strip")
+set(CMAKE_FIND_ROOT_PATH "${ARM_ROOT}")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_C_FLAGS_INIT "-static")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-static")

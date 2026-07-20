@@ -1,8 +1,13 @@
 nanobot
 Copyright (c) 2026 nanobot contributors
 
-This product includes software developed independently of xAI, Grok, SpaceX,
-SpaceXAI, OpenAI, Meta (llama.cpp), and any robot vendor (e.g. Roborock).
+Independent open-source agent host. Not affiliated with Grok or other third parties.
 
-Third-party services and trademarks are the property of their respective owners
-and are referenced only for interoperability.
+Optional interoperability references:
+  - Grok account device-code login (unofficial; not affiliated)
+  - llama.cpp / OpenAI-compatible local LLM servers
+
+Third-party trademarks remain the property of their respective owners.
+
+Monocypher (libs/crypto/vendor/) — BSD-2-Clause OR CC0-1.0
+  https://monocypher.org/  Copyright (c) Loup Vaillant

@@ -2,7 +2,8 @@
 #include "auth.h"
 #include "shell.h"
 #include "util.h"
-#include "www_index.h"
+#include "hub_local.h"
+#include <nanobot/crypto.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <time.h>
 
 static void send_all(int fd, const char *data, size_t n) {
   while (n) {
@@ -43,6 +45,114 @@ static void http_response(int fd, int code, const char *ctype, const char *body,
     code, reason, ctype, blen);
   send_all(fd, hdr, (size_t)n);
   if (body && blen) send_all(fd, body, blen);
+}
+
+/* Prefer this for string literals — never hardcode Content-Length. */
+static void http_json(int fd, int code, const char *body) {
+  http_response(fd, code, "application/json", body, body ? strlen(body) : 0);
+}
+static void http_text(int fd, int code, const char *body) {
+  http_response(fd, code, "text/plain", body, body ? strlen(body) : 0);
+}
+
+static int client_is_loopback(int cfd) {
+  struct sockaddr_storage ss;
+  socklen_t sl = sizeof ss;
+  memset(&ss, 0, sizeof ss);
+  if (getpeername(cfd, (struct sockaddr *)&ss, &sl) != 0) return 0;
+  if (ss.ss_family == AF_INET) {
+    struct sockaddr_in *in = (struct sockaddr_in *)&ss;
+    return in->sin_addr.s_addr == htonl(INADDR_LOOPBACK);
+  }
+  return 0;
+}
+
+/* Load expected peer token (malloc'd) or NULL if none configured.
+ * Accepts KEY=val lines (token=…) or a single raw token line (legacy). */
+static char *peer_token_expected(void) {
+  char token_path[640];
+  snprintf(token_path, sizeof token_path, "%s/peer_token", ng_workdir());
+  char *need = ng_slurp_env_file(token_path, "token");
+  if (!need) {
+    size_t blen = 0;
+    char *raw = ng_read_file(token_path, &blen);
+    if (raw && raw[0]) {
+      /* first non-comment line, trim */
+      char *p = raw;
+      while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+      if (*p != '#') {
+        size_t n = strcspn(p, "\r\n");
+        while (n && (p[n - 1] == ' ' || p[n - 1] == '\t')) n--;
+        if (n > 0) {
+          need = malloc(n + 1);
+          if (need) { memcpy(need, p, n); need[n] = 0; }
+        }
+      }
+    }
+    free(raw);
+  }
+  if (!need) need = ng_getenv_dup("NANOBOT_PEER_TOKEN");
+  if (!need) need = ng_getenv_dup("NANOBOT_PEER_TOKEN"); /* legacy */
+  return need;
+}
+
+/*
+ * Authorize sensitive HTTP routes.
+ * Returns 1 if OK, 0 if 401 already sent (caller must free req and return).
+ * allow_loopback: /api/* from 127.0.0.1 may skip token (local CLI only).
+ */
+static int require_peer_auth(int cfd, const char *req, int allow_loopback) {
+  if (allow_loopback && client_is_loopback(cfd)) return 1;
+  char *need = peer_token_expected();
+  if (!need || !need[0]) {
+    free(need);
+    /* Fail closed on mutating routes if token missing */
+    http_json(cfd, 503,
+      "{\"error\":\"peer_token not configured\",\"need_peer_token\":true}");
+    return 0;
+  }
+  int ok = 0;
+  const char *h = strstr(req, "X-Nanobot-Peer-Token:");
+  if (!h) h = strstr(req, "x-nanobot-peer-token:");
+  if (!h) h = strstr(req, "X-Nanobot-Peer-Token:");
+  if (!h) h = strstr(req, "x-nanobot-peer-token:");
+  if (h) {
+    h = strchr(h, ':');
+    if (h) {
+      h++;
+      while (*h == ' ' || *h == '\t') h++;
+      size_t nl = strcspn(h, "\r\n");
+      if (nb_ct_eq(h, nl, need, strlen(need))) ok = 1;
+    }
+  }
+  if (!ok) {
+    char *body0 = strstr(req, "\r\n\r\n");
+    body0 = body0 ? body0 + 4 : "";
+    char *bt = ng_json_get_string(body0, "peer_token");
+    if (bt && nb_ct_eq(bt, strlen(bt), need, strlen(need))) ok = 1;
+    free(bt);
+  }
+  free(need);
+  if (!ok) {
+    http_json(cfd, 401,
+      "{\"error\":\"invalid or missing peer token\",\"need_peer_token\":true,"
+      "\"hint\":\"Header X-Nanobot-Peer-Token or body peer_token\"}");
+    return 0;
+  }
+  return 1;
+}
+
+/* Safe static path under www_root: only relative path with no .. or weird bytes. */
+static int static_path_ok(const char *rel) {
+  if (!rel || rel[0] != '/') return 0;
+  if (strstr(rel, "..")) return 0;
+  for (const char *p = rel; *p; p++) {
+    unsigned char c = (unsigned char)*p;
+    if (c < 0x20 || c == 0x7f) return 0;
+    if (!(isalnum(c) || c == '/' || c == '.' || c == '-' || c == '_' || c == '~'))
+      return 0;
+  }
+  return 1;
 }
 
 static char *read_request(int fd, size_t *out_len) {
@@ -108,7 +218,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   path[i] = 0;
 
   if (is_opts) {
-    http_response(cfd, 200, "text/plain", "", 0);
+    http_text(cfd, 200, "");
     free(req); close(cfd); return;
   }
 
@@ -118,8 +228,65 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (pr == 1) ng_log("auth: browser approved session");
   }
 
+  /*
+   * Optional static files from cfg->www_root (--www DIR / NANOBOT_WWW).
+   * Without www_root: JSON/peer API only.
+   */
+  if (is_get && cfg->www_root && cfg->www_root[0]) {
+    const char *rel = path;
+    if (!strcmp(path, "/") || !strcmp(path, "/index.html"))
+      rel = "/index.html";
+    /* only serve plain static under www; API paths fall through */
+    int is_static = 1;
+    if (!strncmp(path, "/api/", 5) || !strncmp(path, "/peer/", 6) ||
+        !strcmp(path, "/activate") || !strcmp(path, "/openapi.yaml"))
+      is_static = 0;
+    if (is_static && static_path_ok(rel)) {
+      char fpath[768];
+      snprintf(fpath, sizeof fpath, "%s%s", cfg->www_root, rel);
+      size_t blen = 0;
+      char *body = ng_read_file(fpath, &blen);
+      if (body) {
+        const char *ct = "application/octet-stream";
+        if (strstr(rel, ".html")) ct = "text/html; charset=utf-8";
+        else if (strstr(rel, ".js")) ct = "application/javascript; charset=utf-8";
+        else if (strstr(rel, ".css")) ct = "text/css; charset=utf-8";
+        else if (strstr(rel, ".json")) ct = "application/json";
+        else if (strstr(rel, ".svg")) ct = "image/svg+xml";
+        else if (strstr(rel, ".png")) ct = "image/png";
+        else if (strstr(rel, ".ico")) ct = "image/x-icon";
+        http_response(cfd, 200, ct, body, blen);
+        free(body);
+        free(req); close(cfd); return;
+      }
+      if (!strcmp(rel, "/index.html")) {
+        /* missing assets: fall through to JSON notice */
+      } else {
+        http_text(cfd, 404, "not found\n");
+        free(req); close(cfd); return;
+      }
+    }
+  }
+
   if (is_get && (strcmp(path, "/") == 0 || strcmp(path, "/index.html") == 0)) {
-    http_response(cfd, 200, "text/html; charset=utf-8", WWW_INDEX_HTML, strlen(WWW_INDEX_HTML));
+    const char *dash = getenv("NANOBOT_WRAPPER_URL");
+    if (!dash || !dash[0]) dash = getenv("NANOBOT_DASH_URL");
+    if (dash && dash[0] && strncmp(dash, "http", 4) == 0) {
+      char hdr[768];
+      int n = snprintf(hdr, sizeof hdr,
+        "HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Length: 0\r\n"
+        "Connection: close\r\nCache-Control: no-store\r\n\r\n", dash);
+      if (n > 0 && n < (int)sizeof hdr) {
+        send_all(cfd, hdr, (size_t)n);
+        free(req); close(cfd); return;
+      }
+    }
+    const char *body =
+      "{\"ok\":true,\"service\":\"nanobot\",\"role\":\"cli-api\","
+      "\"hint\":\"CLI + peer/JSON API + optional MCP; optional --www for static files\","
+      "\"endpoints\":[\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
+      "\"/api/chat\",\"/api/auth\",\"/api/settings\"]}";
+    http_response(cfd, 200, "application/json", body, strlen(body));
     free(req); close(cfd); return;
   }
 
@@ -137,7 +304,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", u);
       send_all(cfd, hdr, (size_t)n);
     } else {
-      http_response(cfd, 503, "text/plain", "login not ready\n", 16);
+      http_text(cfd, 503, "login not ready\n");
     }
     free(req); close(cfd); return;
   }
@@ -180,8 +347,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   if (is_post && strcmp(path, "/api/auth/start") == 0) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!session || !agent) {
-      http_response(cfd, 500, "application/json", "{\"error\":\"no session\"}", 21);
+      http_json(cfd, 500, "{\"error\":\"no session\"}");
       free(req); close(cfd); return;
     }
     /* Connect Grok: ensure Grok backend, then device-code login link. */
@@ -195,11 +363,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       ng_log("settings: switched backend to grok for Connect");
     }
     if (force || !ng_session_valid(session)) {
-      if (force) ng_session_clear(session);
+      if (force) {
+        ng_session_clear(session); /* also clears device_login secret file */
+      } else {
+        /* Resume pending device login from secure file (fork-safe). */
+        ng_session_load_pending(session);
+      }
       if (!session->login_pending || force) {
         if (ng_session_start_device_login(session) != 0) {
-          http_response(cfd, 500, "application/json",
-            "{\"error\":\"device login failed (network/DNS?)\"}", 48);
+          http_json(cfd, 500, "{\"error\":\"device login failed (network/DNS?)\"}");
           free(req); close(cfd); return;
         }
       }
@@ -232,10 +404,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* UI settings: select backend (grok | local) + optional base/model */
+  /* Settings: select backend (grok | local) + optional base/model */
   if ((is_post || is_put) && strcmp(path, "/api/settings") == 0) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!agent) {
-      http_response(cfd, 500, "application/json", "{\"error\":\"no agent\"}", 20);
+      http_json(cfd, 500, "{\"error\":\"no agent\"}");
       free(req); close(cfd); return;
     }
     char *body = strstr(req, "\r\n\r\n");
@@ -246,8 +419,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *model = ng_json_get_string(body, "model");
     if (!backend && !base) {
       free(backend); free(base); free(model);
-      http_response(cfd, 400, "application/json",
-        "{\"error\":\"need backend (grok|local) or base_url\"}", 52);
+      http_json(cfd, 400, "{\"error\":\"need backend (grok|local) or base_url\"}");
       free(req); close(cfd); return;
     }
     if (backend && (strcmp(backend, "grok") == 0 || strcmp(backend, "cloud") == 0)) {
@@ -288,9 +460,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
 
   if (is_post && strcmp(path, "/api/backend") == 0) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     /* alias: switch backend; same as /api/settings */
     if (!agent) {
-      http_response(cfd, 500, "application/json", "{\"error\":\"no agent\"}", 20);
+      http_json(cfd, 500, "{\"error\":\"no agent\"}");
       free(req); close(cfd); return;
     }
     char *jsonp = strstr(req, "\r\n\r\n");
@@ -331,13 +504,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   if (is_post && strcmp(path, "/api/chat") == 0) {
+    /* LAN: require peer token; localhost may skip (local tools). */
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";
     char *prompt = ng_json_get_string(body, "prompt");
     if (!prompt) prompt = ng_json_get_string(body, "q");
     if (!prompt) prompt = ng_json_get_string(body, "message");
     if (!prompt) {
-      http_response(cfd, 400, "application/json", "{\"error\":\"missing prompt\"}", 27);
+      http_json(cfd, 400, "{\"error\":\"missing prompt\"}");
       free(req); close(cfd); return;
     }
     /* Outer shell always: @! shell. Local/llama backend: no browser session. */
@@ -347,8 +522,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (session && session->login_pending) ng_session_poll_login(session);
       if (!session || !ng_session_valid(session)) {
         free(prompt);
-        http_response(cfd, 401, "application/json",
-          "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}", 88);
+        http_json(cfd, 401, "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}");
         free(req); close(cfd); return;
       }
     }
@@ -362,7 +536,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
 
-  /* ---- Peer bus for other Grok sessions (lab) ---- */
+  if (is_get && (strcmp(path, "/api/v1/resources") == 0 || strcmp(path, "/peer/v1/resources") == 0)) {
+    char *body = ng_resources_json();
+    http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
+    free(body);
+    free(req); close(cfd); return;
+  }
+
+  /* ---- Peer bus for other agents / sessions ---- */
   if (is_get && strcmp(path, "/peer/v1/health") == 0) {
     char body[256];
     int n = snprintf(body, sizeof body,
@@ -393,45 +574,247 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_post && strcmp(path, "/peer/v1/prompt") == 0) {
-    /* Optional peer token: NANOBOT_PEER_TOKEN / home/peer_token */
-    char token_path[640];
-    snprintf(token_path, sizeof token_path, "%s/peer_token", ng_workdir());
-    char *need = ng_slurp_env_file(token_path, "token");
-    if (!need) need = ng_getenv_dup("NANOBOT_PEER_TOKEN");
-    if (need && need[0]) {
-      const char *h = strstr(req, "X-Nanobot-Peer-Token:");
-      if (!h) h = strstr(req, "x-nanobot-peer-token:");
-      int ok = 0;
-      if (h) {
-        h = strchr(h, ':');
-        if (h) {
-          h++;
-          while (*h == ' ' || *h == '\t') h++;
-          size_t nl = strcspn(h, "\r\n");
-          if (nl == strlen(need) && strncmp(h, need, nl) == 0) ok = 1;
+  /* Control plane: shell / watcher / ui — persisted in $HOME/settings */
+  if (is_get && strcmp(path, "/peer/v1/control") == 0) {
+    char sp[640], wp[640];
+    snprintf(sp, sizeof sp, "%s/shell_enabled", ng_workdir());
+    snprintf(wp, sizeof wp, "%s/watcher_enabled", ng_workdir());
+    int shell_on = 1, watch_on = 0, ui_on = 0;
+    {
+      FILE *f = fopen(sp, "r");
+      if (f) {
+        char b[16] = {0};
+        if (fgets(b, sizeof b, f) && (b[0] == '0' || !strncasecmp(b, "off", 3))) shell_on = 0;
+        fclose(f);
+      }
+    }
+    {
+      FILE *f = fopen(wp, "r");
+      if (f) {
+        char b[16] = {0};
+        if (fgets(b, sizeof b, f) && (b[0] == '1' || !strncasecmp(b, "on", 2))) watch_on = 1;
+        fclose(f);
+      }
+    }
+    {
+      char *u = ng_settings_get("UI");
+      if (u && (!strcasecmp(u, "on") || !strcmp(u, "1") || !strcasecmp(u, "true"))) ui_on = 1;
+      free(u);
+      if (!ui_on && cfg->www_root && cfg->www_root[0]) ui_on = 1;
+    }
+    char *www = ng_settings_get("WWW");
+    char body[512];
+    int n = snprintf(body, sizeof body,
+      "{\"ok\":true,\"shell_enabled\":%s,\"watcher_enabled\":%s,\"ui_enabled\":%s,"
+      "\"www\":\"%s\",\"settings\":\"%s\",\"status\":\"%s\","
+      "\"persist\":true,\"note\":\"settings survive reboot under NANOBOT_HOME/settings\"}",
+      shell_on ? "true" : "false", watch_on ? "true" : "false", ui_on ? "true" : "false",
+      www ? www : (cfg->www_root ? cfg->www_root : ""),
+      ng_settings_path(),
+      (session && ng_session_valid(session)) ? "online" : "offline");
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(www);
+    free(req); close(cfd); return;
+  }
+
+  if (is_post && strcmp(path, "/peer/v1/control") == 0) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    char *svc = ng_json_get_string(body, "service");
+    if (!svc) svc = ng_json_get_string(body, "name");
+    char *act = ng_json_get_string(body, "action");
+    int en = -1;
+    {
+      const char *e = strstr(body, "\"enabled\"");
+      if (e) {
+        e = strchr(e, ':');
+        if (e) {
+          while (*e && (*e == ':' || *e == ' ')) e++;
+          if (!strncmp(e, "true", 4) || *e == '1') en = 1;
+          else if (!strncmp(e, "false", 5) || *e == '0') en = 0;
         }
       }
-      /* also allow token in JSON body */
-      char *body0 = strstr(req, "\r\n\r\n");
-      body0 = body0 ? body0 + 4 : "";
-      char *bt = ng_json_get_string(body0, "peer_token");
-      if (bt && strcmp(bt, need) == 0) ok = 1;
-      free(bt);
-      if (!ok) {
-        free(need);
-        http_response(cfd, 401, "application/json",
-          "{\"error\":\"invalid or missing peer token\",\"need_peer_token\":true}", 62);
+    }
+    if (!act && en >= 0) act = strdup(en ? "on" : "off");
+    if (!svc || !act) {
+      free(svc); free(act);
+      http_json(cfd, 400, "{\"error\":\"need service shell|watcher|ui and action on|off\"}");
+      free(req); close(cfd); return;
+    }
+    char pathf[640];
+    int ok = 0;
+    int on = (!strcmp(act, "on") || !strcmp(act, "enable"));
+    if (!strcmp(svc, "shell")) {
+      snprintf(pathf, sizeof pathf, "%s/shell_enabled", ng_workdir());
+      const char *v = on ? "1" : "0";
+      ok = ng_write_file(pathf, v, strlen(v)) == 0;
+      ng_settings_set("SHELL", on ? "on" : "off");
+    } else if (!strcmp(svc, "watcher")) {
+      snprintf(pathf, sizeof pathf, "%s/watcher_enabled", ng_workdir());
+      const char *v = on ? "1" : "0";
+      ok = ng_write_file(pathf, v, strlen(v)) == 0;
+      ng_settings_set("WATCHER", on ? "on" : "off");
+    } else if (!strcmp(svc, "ui") || !strcmp(svc, "www") || !strcmp(svc, "web")) {
+      /* Persist optional static-root preference; applies on next start if --www not set. */
+      ok = ng_settings_set("UI", on ? "on" : "off") == 0;
+      if (on) {
+        char *w = ng_settings_get("WWW");
+        if (!w || !w[0]) {
+          if (cfg->www_root && cfg->www_root[0]) {
+            ng_settings_set("WWW", cfg->www_root);
+          } else {
+            char defw[700];
+            snprintf(defw, sizeof defw, "%s/www", ng_workdir());
+            ng_settings_set("WWW", defw);
+          }
+        }
+        free(w);
+      }
+    } else {
+      free(svc); free(act);
+      http_json(cfd, 400, "{\"error\":\"unknown service (shell|watcher|ui)\"}");
+      free(req); close(cfd); return;
+    }
+    char *jb = NULL;
+    asprintf(&jb,
+      "{\"ok\":%s,\"service\":\"%s\",\"action\":\"%s\",\"persist\":true,"
+      "\"settings\":\"%s\",\"note\":\"reboot uses run.sh + settings file\"}",
+      ok ? "true" : "false", svc, act, ng_settings_path());
+    http_response(cfd, ok ? 200 : 400, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+    free(svc); free(act); free(jb);
+    free(req); close(cfd); return;
+  }
+
+  /* Async jobs: accept work immediately, poll result — keeps peer responsive */
+  if (is_post && (strcmp(path, "/peer/v1/jobs") == 0 || strcmp(path, "/peer/v1/job") == 0)) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    char *prompt = ng_json_get_string(body, "prompt");
+    char *cmd = ng_json_get_string(body, "command");
+    if (!cmd) cmd = ng_json_get_string(body, "cmd");
+    char *kind = ng_json_get_string(body, "kind"); /* prompt|shell|watcher */
+    if (!kind) {
+      if (prompt) kind = strdup("prompt");
+      else if (cmd) kind = strdup("shell");
+      else kind = strdup("prompt");
+    }
+    if ((!prompt || !prompt[0]) && (!cmd || !cmd[0])) {
+      free(prompt); free(cmd); free(kind);
+      http_json(cfd, 400, "{\"error\":\"need prompt or command\"}");
+      free(req); close(cfd); return;
+    }
+    char jdir[640];
+    snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
+    mkdir(jdir, 0755);
+    char id[32];
+    snprintf(id, sizeof id, "%ld%04d", (long)time(NULL), (int)(getpid() % 10000));
+    char meta[768];
+    int mn = snprintf(meta, sizeof meta,
+      "{\"id\":\"%s\",\"status\":\"queued\",\"kind\":\"%s\"}\n", id, kind);
+    char mpath[700], rpath[700], pp[700];
+    snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, id);
+    snprintf(rpath, sizeof rpath, "%s/%s.out", jdir, id);
+    snprintf(pp, sizeof pp, "%s/%s.in", jdir, id);
+    ng_write_file(mpath, meta, (size_t)mn);
+    if (prompt && prompt[0]) ng_write_file(pp, prompt, strlen(prompt));
+    else if (cmd) ng_write_file(pp, cmd, strlen(cmd));
+    ng_hub_event("job.queued", "id", id, "kind", kind);
+
+    /* fork worker: do not block peer HTTP */
+    pid_t w = fork();
+    if (w == 0) {
+      close(cfd);
+      /* mark running */
+      char runm[256];
+      int rn = snprintf(runm, sizeof runm,
+        "{\"id\":\"%s\",\"status\":\"running\",\"kind\":\"%s\"}\n", id, kind);
+      ng_write_file(mpath, runm, (size_t)rn);
+      ng_hub_event("job.running", "id", id, "kind", kind);
+      char *payload = ng_read_file(pp, NULL);
+      if (!strcmp(kind, "shell") || (cmd && cmd[0] && !prompt)) {
+        ng_cmd_result cr = ng_run_command(payload ? payload : "",
+          agent->timeout_sec > 0 ? agent->timeout_sec : 60);
+        char *esc = ng_json_escape(cr.output ? cr.output : "");
+        char *jb = NULL;
+        asprintf(&jb,
+          "{\"id\":\"%s\",\"status\":\"done\",\"kind\":\"shell\",\"exit\":%d,\"output\":\"%s\"}",
+          id, cr.exit_code, esc ? esc : "");
+        if (jb) { ng_write_file(mpath, jb, strlen(jb)); free(jb); }
+        free(esc);
+        ng_cmd_result_free(&cr);
+        free(payload);
+        ng_hub_event("job.done", "id", id, "kind", "shell");
+      } else if (!strcmp(kind, "watcher")) {
+        char wp[640];
+        snprintf(wp, sizeof wp, "%s/watcher_enabled", ng_workdir());
+        ng_write_file(wp, "1", 1);
+        char *esc = ng_json_escape(payload ? payload : "");
+        char *jb = NULL;
+        asprintf(&jb,
+          "{\"id\":\"%s\",\"status\":\"done\",\"kind\":\"watcher\",\"enabled\":true,\"prompt\":\"%s\"}",
+          id, esc ? esc : "");
+        if (jb) { ng_write_file(mpath, jb, strlen(jb)); free(jb); }
+        free(esc);
+        free(payload);
+        ng_hub_event("job.done", "id", id, "kind", "watcher");
+      } else {
+        char *reply = ng_agent_run(agent, payload ? payload : "");
+        char *esc = ng_json_escape(reply ? reply : "");
+        char *jb = NULL;
+        asprintf(&jb,
+          "{\"id\":\"%s\",\"status\":\"done\",\"kind\":\"prompt\",\"reply\":\"%s\"}",
+          id, esc ? esc : "");
+        if (jb) { ng_write_file(mpath, jb, strlen(jb)); free(jb); }
+        free(esc); free(reply); free(payload);
+        ng_hub_event("job.done", "id", id, "kind", "prompt");
+      }
+      _exit(0);
+    }
+    char *ack = NULL;
+    asprintf(&ack,
+      "{\"ok\":true,\"id\":\"%s\",\"status\":\"queued\",\"poll\":\"/peer/v1/jobs/%s\"}",
+      id, id);
+    http_response(cfd, 202, "application/json", ack ? ack : "{}", ack ? strlen(ack) : 2);
+    free(prompt); free(cmd); free(kind); free(ack);
+    free(req); close(cfd); return;
+  }
+
+  if (is_get && strncmp(path, "/peer/v1/jobs/", 14) == 0) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    const char *id = path + 14;
+    /* job ids are digits only (time+pid) */
+    if (!id[0] || strchr(id, '/') || strstr(id, "..")) {
+      http_json(cfd, 400, "{\"error\":\"bad id\"}");
+      free(req); close(cfd); return;
+    }
+    for (const char *p = id; *p; p++) {
+      if (!isdigit((unsigned char)*p)) {
+        http_json(cfd, 400, "{\"error\":\"bad id\"}");
         free(req); close(cfd); return;
       }
     }
-    free(need);
+    char mpath[700];
+    snprintf(mpath, sizeof mpath, "%s/jobs/%s.json", ng_workdir(), id);
+    size_t blen = 0;
+    char *body = ng_read_file(mpath, &blen);
+    if (!body) {
+      http_json(cfd, 404, "{\"error\":\"job not found\"}");
+      free(req); close(cfd); return;
+    }
+    http_response(cfd, 200, "application/json", body, blen);
+    free(body);
+    free(req); close(cfd); return;
+  }
+
+  if (is_post && strcmp(path, "/peer/v1/prompt") == 0) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
 
     {
       int need_browser = agent && ng_agent_needs_browser_session(agent);
       if (need_browser && (!session || !ng_session_valid(session))) {
-        http_response(cfd, 401, "application/json",
-          "{\"error\":\"Grok session not active; use --offline for llama or open /activate\",\"need_login\":true}", 94);
+        http_json(cfd, 401, "{\"error\":\"Grok session not active; use --offline for llama or open /activate\",\"need_login\":true}");
         free(req); close(cfd); return;
       }
     }
@@ -441,7 +824,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (!prompt) prompt = ng_json_get_string(body, "message");
     if (!prompt) prompt = ng_json_get_string(body, "q");
     if (!prompt) {
-      http_response(cfd, 400, "application/json", "{\"error\":\"missing prompt\"}", 27);
+      http_json(cfd, 400, "{\"error\":\"missing prompt\"}");
       free(req); close(cfd); return;
     }
     ng_log("peer: prompt from remote session: %.200s", prompt);
@@ -455,46 +838,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   if (is_post && strcmp(path, "/peer/v1/shell") == 0) {
-    char token_path[640];
-    snprintf(token_path, sizeof token_path, "%s/peer_token", ng_workdir());
-    char *need = ng_slurp_env_file(token_path, "token");
-    if (!need) need = ng_getenv_dup("NANOBOT_PEER_TOKEN");
-    if (need && need[0]) {
-      const char *h = strstr(req, "X-Nanobot-Peer-Token:");
-      if (!h) h = strstr(req, "x-nanobot-peer-token:");
-      int ok = 0;
-      if (h) {
-        h = strchr(h, ':');
-        if (h) {
-          h++;
-          while (*h == ' ' || *h == '\t') h++;
-          size_t nl = strcspn(h, "\r\n");
-          if (nl == strlen(need) && strncmp(h, need, nl) == 0) ok = 1;
-        }
-      }
-      char *body0 = strstr(req, "\r\n\r\n");
-      body0 = body0 ? body0 + 4 : "";
-      char *bt = ng_json_get_string(body0, "peer_token");
-      if (bt && strcmp(bt, need) == 0) ok = 1;
-      free(bt);
-      if (!ok) {
-        free(need);
-        http_response(cfd, 401, "application/json",
-          "{\"error\":\"invalid or missing peer token\",\"need_peer_token\":true}", 62);
-        free(req); close(cfd); return;
-      }
-    }
-    free(need);
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
 
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";
     char *cmd = ng_json_get_string(body, "command");
     if (!cmd) cmd = ng_json_get_string(body, "cmd");
     if (!cmd) {
-      http_response(cfd, 400, "application/json", "{\"error\":\"missing command\"}", 28);
+      http_json(cfd, 400, "{\"error\":\"missing command\"}");
       free(req); close(cfd); return;
     }
-    ng_log("peer: shell from remote session: %.200s", cmd);
+    ng_log("peer: shell from remote session: %.80s", cmd);
     ng_cmd_result cr = ng_run_command(cmd, agent->timeout_sec > 0 ? agent->timeout_sec : 60);
     char *esc = ng_json_escape(cr.output ? cr.output : "");
     char *jb = NULL;
@@ -508,7 +862,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
 
-  http_response(cfd, 404, "text/plain", "not found\n", 10);
+  http_text(cfd, 404, "not found\n");
   free(req);
   close(cfd);
 }
@@ -551,12 +905,12 @@ int ng_http_serve(ng_http_cfg *cfg) {
     return -1;
   }
   ng_log("http listening on 0.0.0.0:%d (concurrent fork, max %d)",
-         cfg->port, NG_HTTP_MAX_CHILDREN);
+         cfg->port, ng_http_max_children());
 
   g_live_children = 0;
   while (!cfg->stop) {
     reap_children();
-    while (g_live_children >= NG_HTTP_MAX_CHILDREN) {
+    while (g_live_children >= ng_http_max_children()) {
       int st = 0;
       pid_t d = waitpid(-1, &st, 0);
       if (d > 0) {
@@ -577,11 +931,14 @@ int ng_http_serve(ng_http_cfg *cfg) {
       break;
     }
 
-    /* Refresh session from disk so each child sees latest tokens / login. */
+    /* Refresh tokens + pending device login from secure files (fork-safe). */
     if (cfg->session) {
       ng_session_load(cfg->session);
-      if (cfg->session->login_pending)
-        ng_session_poll_login(cfg->session);
+      if (cfg->session->login_pending) {
+        int pr = ng_session_poll_login(cfg->session);
+        if (pr == 1)
+          ng_log("auth: browser approved session (parent poll)");
+      }
     }
 
     pid_t pid = fork();

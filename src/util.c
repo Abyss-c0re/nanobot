@@ -1,4 +1,6 @@
 #include "util.h"
+#include <nanobot/os.h>
+#include <nanobot/json.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,18 +9,17 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 
-static char g_workdir[512] = "/tmp/nanobot";
 static char g_logpath[576] = "/tmp/nanobot/nanobot.log";
 static FILE *g_logf;
 
 void ng_set_workdir(const char *dir) {
-  if (!dir || !*dir) return;
-  snprintf(g_workdir, sizeof g_workdir, "%s", dir);
-  snprintf(g_logpath, sizeof g_logpath, "%s/nanobot.log", g_workdir);
+  nb_set_workdir(dir);
+  snprintf(g_logpath, sizeof g_logpath, "%s/nanobot.log", nb_workdir());
 }
 
-const char *ng_workdir(void) { return g_workdir; }
+const char *ng_workdir(void) { return nb_workdir(); }
 const char *ng_log_path(void) { return g_logpath; }
 
 /* ---- Runtime CLI version (auto-bump on proxy "outdated") ---- */
@@ -32,7 +33,7 @@ static void cli_refresh_ua(void) {
 
 static void cli_save(void) {
   char path[640];
-  snprintf(path, sizeof path, "%s/cli_version", g_workdir);
+  snprintf(path, sizeof path, "%s/cli_version", nb_workdir());
   char line[64];
   int n = snprintf(line, sizeof line, "%s\n", g_cli_ver);
   if (n > 0) ng_write_file(path, line, (size_t)n);
@@ -56,7 +57,7 @@ static int ver_cmp(const char *x, const char *y) {
 
 void ng_cli_version_init(void) {
   char path[640];
-  snprintf(path, sizeof path, "%s/cli_version", g_workdir);
+  snprintf(path, sizeof path, "%s/cli_version", nb_workdir());
   size_t len = 0;
   char *raw = ng_read_file(path, &len);
   if (raw && raw[0]) {
@@ -142,9 +143,25 @@ int ng_cli_version_handle_error(const char *resp) {
   return 1;
 }
 
+/* lean accessors implemented below */
+extern size_t ng_log_max(void);
+
 void ng_log_init(const char *path) {
   if (path && *path) snprintf(g_logpath, sizeof g_logpath, "%s", path);
-  mkdir(g_workdir, 0755);
+  mkdir(nb_workdir(), 0755);
+  g_logf = fopen(g_logpath, "a");
+}
+
+static void ng_log_maybe_rotate(void) {
+  if (!g_logpath[0]) return;
+  struct stat st;
+  if (stat(g_logpath, &st) != 0) return;
+  size_t maxb = ng_log_max();
+  if ((size_t)st.st_size < maxb) return;
+  char bak[600];
+  snprintf(bak, sizeof bak, "%s.1", g_logpath);
+  if (g_logf) { fclose(g_logf); g_logf = NULL; }
+  rename(g_logpath, bak);
   g_logf = fopen(g_logpath, "a");
 }
 
@@ -160,6 +177,7 @@ void ng_log(const char *fmt, ...) {
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   va_end(ap);
+  if (!g_logf) g_logf = fopen(g_logpath, "a");
   if (g_logf) {
     va_start(ap, fmt);
     fprintf(g_logf, "[%s] ", ts);
@@ -167,158 +185,36 @@ void ng_log(const char *fmt, ...) {
     fprintf(g_logf, "\n");
     fflush(g_logf);
     va_end(ap);
+    ng_log_maybe_rotate();
   }
 }
 
+
+/* ---- os / json wrappers (implementations in libnanobot_*) ---- */
 char *ng_read_file(const char *path, size_t *out_len) {
-  FILE *f = fopen(path, "rb");
-  if (!f) return NULL;
-  if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
-  long n = ftell(f);
-  if (n < 0) { fclose(f); return NULL; }
-  rewind(f);
-  char *buf = malloc((size_t)n + 1);
-  if (!buf) { fclose(f); return NULL; }
-  size_t rd = fread(buf, 1, (size_t)n, f);
-  fclose(f);
-  buf[rd] = 0;
-  if (out_len) *out_len = rd;
-  return buf;
+  return nb_read_file(path, out_len);
 }
-
 int ng_write_file(const char *path, const char *data, size_t len) {
-  FILE *f = fopen(path, "wb");
-  if (!f) return -1;
-  size_t w = fwrite(data, 1, len, f);
-  fclose(f);
-  return w == len ? 0 : -1;
+  return nb_write_file(path, data, len);
 }
-
-char *ng_getenv_dup(const char *k) {
-  const char *v = getenv(k);
-  return v ? strdup(v) : NULL;
-}
-
+char *ng_getenv_dup(const char *k) { return nb_getenv_dup(k); }
 char *ng_slurp_env_file(const char *path, const char *key) {
-  char *body = ng_read_file(path, NULL);
-  if (!body) return NULL;
-  char linekey[128];
-  snprintf(linekey, sizeof linekey, "%s=", key);
-  char *p = body;
-  char *found = NULL;
-  while (p && *p) {
-    char *nl = strchr(p, '\n');
-    if (nl) *nl = 0;
-    while (*p == ' ' || *p == '\t') p++;
-    if (*p != '#' && strncmp(p, linekey, strlen(linekey)) == 0) {
-      char *v = p + strlen(linekey);
-      while (*v == ' ' || *v == '"' || *v == '\'') v++;
-      size_t L = strlen(v);
-      while (L && (v[L-1] == ' ' || v[L-1] == '"' || v[L-1] == '\'' || v[L-1] == '\r'))
-        v[--L] = 0;
-      found = strdup(v);
-      break;
-    }
-    if (!nl) break;
-    p = nl + 1;
-  }
-  free(body);
-  return found;
+  return nb_slurp_env_file(path, key);
 }
-
-char *ng_json_escape(const char *s) {
-  if (!s) s = "";
-  size_t n = 0;
-  for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
-    if (*p == '"' || *p == '\\' || *p == '\n' || *p == '\r' || *p == '\t') n += 2;
-    else if (*p < 0x20) n += 6; /* \u00XX */
-    else n++;
-  }
-  char *o = malloc(n + 1);
-  if (!o) return NULL;
-  char *d = o;
-  for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
-    if (*p == '"') { *d++ = '\\'; *d++ = '"'; }
-    else if (*p == '\\') { *d++ = '\\'; *d++ = '\\'; }
-    else if (*p == '\n') { *d++ = '\\'; *d++ = 'n'; }
-    else if (*p == '\r') { *d++ = '\\'; *d++ = 'r'; }
-    else if (*p == '\t') { *d++ = '\\'; *d++ = 't'; }
-    else if (*p < 0x20) {
-      d += sprintf(d, "\\u%04x", (unsigned)*p);
-    } else {
-      *d++ = (char)*p;
-    }
-  }
-  *d = 0;
-  return o;
+const char *ng_settings_path(void) { return nb_settings_path(); }
+char *ng_settings_get(const char *key) { return nb_settings_get(key); }
+int ng_settings_set(const char *key, const char *value) {
+  return nb_settings_set(key, value);
 }
-
-/* Find "key" then skip to next " and read string (handles simple escapes) */
-static const char *find_key(const char *json, const char *key) {
-  char pat[128];
-  snprintf(pat, sizeof pat, "\"%s\"", key);
-  const char *p = json;
-  while ((p = strstr(p, pat)) != NULL) {
-    /* ensure not mid-string: crude check of preceding char */
-    if (p > json && (p[-1] == '\\')) { p++; continue; }
-    p += strlen(pat);
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
-    if (*p == ':') return p + 1;
-    p++;
-  }
-  return NULL;
-}
-
+char *ng_json_escape(const char *s) { return nb_json_escape(s); }
 char *ng_json_get_string(const char *json, const char *key) {
-  const char *p = find_key(json, key);
-  if (!p) return NULL;
-  while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
-  if (*p != '"') return NULL;
-  p++;
-  char *out = malloc(strlen(p) + 1);
-  if (!out) return NULL;
-  char *d = out;
-  while (*p && *p != '"') {
-    if (*p == '\\' && p[1]) {
-      p++;
-      if (*p == 'n') *d++ = '\n';
-      else if (*p == 'r') *d++ = '\r';
-      else if (*p == 't') *d++ = '\t';
-      else *d++ = *p;
-      p++;
-    } else {
-      *d++ = *p++;
-    }
-  }
-  *d = 0;
-  return out;
+  return nb_json_get_string(json, key);
 }
-
-/* Chat completions assistant message content */
 char *ng_json_message_content(const char *json) {
-  /* Prefer choices[0].message.content */
-  const char *msg = strstr(json, "\"message\"");
-  if (msg) {
-    char *c = ng_json_get_string(msg, "content");
-    if (c && c[0]) return c;
-    free(c);
-  }
-  return ng_json_get_string(json, "content");
+  return nb_json_message_content(json);
 }
-
 int ng_json_first_tool_call(const char *json, char **name, char **args, char **id) {
-  *name = *args = *id = NULL;
-  const char *tc = strstr(json, "\"tool_calls\"");
-  if (!tc) return 0;
-  const char *fn = strstr(tc, "\"function\"");
-  if (!fn) return 0;
-  *name = ng_json_get_string(fn, "name");
-  *args = ng_json_get_string(fn, "arguments");
-  *id = ng_json_get_string(tc, "id");
-  if (!*name) return 0;
-  if (!*args) *args = strdup("{}");
-  if (!*id) *id = strdup("call_0");
-  return 1;
+  return nb_json_first_tool_call(json, name, args, id);
 }
 
 char *ng_read_log_tail(size_t max_bytes) {
@@ -345,4 +241,96 @@ char *ng_read_log_tail(size_t max_bytes) {
     }
   }
   return buf;
+}
+
+
+/* ---- lean limits (lean hosts ~256MB RAM) ---- */
+static int g_lean = -1; /* -1 unset */
+
+void ng_limits_init(void) {
+  const char *e = getenv("NANOBOT_LEAN");
+  if (e && e[0]) {
+    g_lean = (e[0] == '1' || e[0] == 'y' || e[0] == 'Y' || e[0] == 't' || e[0] == 'T') ? 1 : 0;
+    return;
+  }
+  FILE *f = fopen("/proc/meminfo", "r");
+  long total_kb = 0;
+  if (f) {
+    char line[128];
+    while (fgets(line, sizeof line, f)) {
+      if (sscanf(line, "MemTotal: %ld", &total_kb) == 1) break;
+    }
+    fclose(f);
+  }
+  g_lean = (total_kb > 0 && total_kb < 400 * 1024) ? 1 : 0;
+}
+
+int ng_is_lean(void) {
+  if (g_lean < 0) ng_limits_init();
+  return g_lean;
+}
+
+int ng_max_turns(void) {
+  return ng_is_lean() ? NG_LEAN_MAX_TURNS : NG_MAX_TURNS;
+}
+
+int ng_http_max_children(void) {
+  return ng_is_lean() ? NG_LEAN_HTTP_MAX_CHILDREN : NG_HTTP_MAX_CHILDREN;
+}
+
+size_t ng_out_max(void) {
+  return ng_is_lean() ? (size_t)NG_LEAN_OUT_MAX : (size_t)NG_OUT_MAX;
+}
+
+size_t ng_log_max(void) {
+  return ng_is_lean() ? (size_t)NG_LEAN_LOG_MAX : (size_t)NG_HOST_LOG_MAX;
+}
+
+char *ng_resources_json(void) {
+  long mem_total = 0, mem_free = 0, buffers = 0, cached = 0;
+  FILE *f = fopen("/proc/meminfo", "r");
+  if (f) {
+    char line[160];
+    while (fgets(line, sizeof line, f)) {
+      long v;
+      if (sscanf(line, "MemTotal: %ld", &v) == 1) mem_total = v;
+      else if (sscanf(line, "MemFree: %ld", &v) == 1) mem_free = v;
+      else if (sscanf(line, "Buffers: %ld", &v) == 1) buffers = v;
+      else if (sscanf(line, "Cached: %ld", &v) == 1) cached = v;
+    }
+    fclose(f);
+  }
+  double load1 = 0, load5 = 0, load15 = 0;
+  f = fopen("/proc/loadavg", "r");
+  if (f) {
+    if (fscanf(f, "%lf %lf %lf", &load1, &load5, &load15) < 1) {}
+    fclose(f);
+  }
+  long data_total_kb = 0, data_free_kb = 0;
+  const char *dp = nb_workdir();
+  struct statvfs sv;
+  memset(&sv, 0, sizeof sv);
+  if (!dp || !dp[0] || statvfs(dp, &sv) != 0) {
+    dp = "/";
+    memset(&sv, 0, sizeof sv);
+    statvfs(dp, &sv);
+  }
+  if (sv.f_frsize) {
+    data_total_kb = (long)((sv.f_blocks * (unsigned long long)sv.f_frsize) / 1024ULL);
+    data_free_kb = (long)((sv.f_bavail * (unsigned long long)sv.f_frsize) / 1024ULL);
+  }
+  long avail = mem_free + buffers + cached;
+  char *out = NULL;
+  asprintf(&out,
+    "{\"ok\":true,\"lean\":%s,\"mem_total_kb\":%ld,\"mem_free_kb\":%ld,"
+    "\"mem_avail_kb\":%ld,\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,"
+    "\"disk_path\":\"%s\",\"disk_total_kb\":%ld,\"disk_free_kb\":%ld,"
+    "\"limits\":{\"max_turns\":%d,\"http_children\":%d,\"out_max\":%zu,\"log_max\":%zu},"
+    "\"version\":\"%s\"}",
+    ng_is_lean() ? "true" : "false",
+    mem_total, mem_free, avail, load1, load5, load15,
+    dp, data_total_kb, data_free_kb,
+    ng_max_turns(), ng_http_max_children(), ng_out_max(), ng_log_max(),
+    NG_VERSION);
+  return out ? out : strdup("{\"ok\":false}");
 }

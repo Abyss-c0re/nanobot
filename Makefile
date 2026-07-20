@@ -1,62 +1,47 @@
-# nanobot — host (native) + optional armv7 static cross
+# nanobot — portable build (any POSIX host with C11 + cmake/make)
 ROOT := $(abspath .)
-SRC := src/util.c src/shell.c src/auth.c src/memory.c src/agent.c src/http.c src/mcp.c src/main.c
-HDR := src/*.h
+.PHONY: all host native arm clean clean-all maintain test test-mcp install-remote
 
-CFLAGS_COMMON := -O2 -Wall -Wextra -Wno-unused-parameter -D_GNU_SOURCE
-LDFLAGS_COMMON :=
-
-HOST_CC ?= gcc
-HOST_CFLAGS := $(CFLAGS_COMMON)
-HOST_OUT := $(ROOT)/build/host
-HOST_BIN := $(HOST_OUT)/nanobot
-
-# musl armv7 cross (downloaded into toolchain/)
-ARM_TRIPLE := armv7l-linux-musleabihf
-ARM_ROOT := $(ROOT)/toolchain/$(ARM_TRIPLE)-cross
-ARM_CC := $(ARM_ROOT)/bin/$(ARM_TRIPLE)-gcc
-ARM_CFLAGS := $(CFLAGS_COMMON) -static
-ARM_OUT := $(ROOT)/build/armv7
-ARM_BIN := $(ARM_OUT)/nanobot
-
-.PHONY: all host arm install-remote clean test-mcp
-
+# default: native toolchain on this machine (linux/mac/*bsd/arm/x86/…)
 all: host
-	@if [ -x "$(ARM_CC)" ]; then $(MAKE) arm; else echo "skip arm (no $(ARM_CC))"; fi
 
-host: $(HOST_BIN)
-	@ln -sfn nanobot $(HOST_OUT)/nanobot-mcp
-	@echo "host: $(HOST_BIN) ($$(wc -c < $(HOST_BIN)) bytes)"
+host native:
+	cmake -S "$(ROOT)" -B "$(ROOT)/build/host" -DCMAKE_BUILD_TYPE=Release
+	cmake --build "$(ROOT)/build/host" -j
+	@ln -sfn nanobot "$(ROOT)/build/host/nanobot-mcp" 2>/dev/null || \
+	  ln -sf nanobot "$(ROOT)/build/host/nanobot-mcp" 2>/dev/null || true
+	@echo "host: $(ROOT)/build/host/nanobot ($$(wc -c < $(ROOT)/build/host/nanobot)) bytes)"
 
-$(HOST_BIN): $(SRC) $(HDR)
-	@mkdir -p $(HOST_OUT)
-	$(HOST_CC) $(HOST_CFLAGS) -o $@ $(SRC) $(LDFLAGS_COMMON)
+# optional static armv7 (Linux cross toolchain in-tree only)
+arm:
+	cmake -S "$(ROOT)" -B "$(ROOT)/build/armv7" \
+	  -DCMAKE_TOOLCHAIN_FILE="$(ROOT)/cmake/NanobotArmv7.cmake" \
+	  -DCMAKE_BUILD_TYPE=Release -DNANOBOT_BUILD_TESTS=OFF
+	cmake --build "$(ROOT)/build/armv7" -j
+	@STRIP="$(ROOT)/toolchain/armv7l-linux-musleabihf-cross/bin/armv7l-linux-musleabihf-strip"; \
+	  if [ -x "$$STRIP" ]; then "$$STRIP" "$(ROOT)/build/armv7/nanobot" || true; fi
+	@ln -sfn nanobot "$(ROOT)/build/armv7/nanobot-mcp" 2>/dev/null || true
+	@echo "armv7: $(ROOT)/build/armv7/nanobot ($$(wc -c < $(ROOT)/build/armv7/nanobot)) bytes)"
 
-arm: $(ARM_BIN)
-	@ln -sfn nanobot $(ARM_OUT)/nanobot-mcp
-	@echo "armv7: $(ARM_BIN) ($$(wc -c < $(ARM_BIN)) bytes)"
-	@$(ARM_ROOT)/bin/$(ARM_TRIPLE)-strip $(ARM_BIN) || true
-	@echo "armv7 stripped: $$(wc -c < $(ARM_BIN)) bytes"
+test: host
+	ctest --test-dir "$(ROOT)/build/host" --output-on-failure
+	"$(ROOT)/build/host/nanobot" --version
+	"$(ROOT)/build/host/nanobot" --help >/dev/null
+	@echo "test OK host"
 
-$(ARM_BIN): $(SRC) $(HDR)
-	@test -x "$(ARM_CC)" || (echo "missing arm toolchain; see README"; exit 1)
-	@mkdir -p $(ARM_OUT)
-	$(ARM_CC) $(ARM_CFLAGS) -o $@ $(SRC) $(LDFLAGS_COMMON)
+test-mcp: host
+	@printf '%s' 'Content-Length: 120\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+	| NANOBOT_HOME=/tmp/nanobot-test "$(ROOT)/build/host/nanobot" --mcp | head -c 400; echo
 
 install-remote: arm
 	./scripts/install_remote.sh
 
 clean:
-	rm -rf build
+	@./scripts/clean.sh
 
-# quick MCP handshake smoke (host)
-test-mcp: host
-	@printf '%s' 'Content-Length: 120\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
-	| NANOBOT_HOME=/tmp/nanobot-test $(HOST_BIN) --mcp | head -c 400; echo
+clean-all: clean
+	@CLEAN_TOOLCHAIN=1 ./scripts/clean.sh
 
-.PHONY: test
-test: host
-	$(HOST_BIN) --version
-	$(HOST_BIN) --help >/dev/null
-	@echo "test OK host"
-	@if [ -x "$(ARM_BIN)" ]; then file $(ARM_BIN); else echo "arm binary optional"; fi
+maintain:
+	@./scripts/repo_maintain.sh
+

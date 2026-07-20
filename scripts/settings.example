@@ -1,0 +1,8 @@
+# Example $NANOBOT_HOME/settings (KEY=val, one per line)
+# PORT=8787
+# LEAN=1
+# SHELL=on
+# WATCHER=off
+# Optional static files (operator path only; nothing required for core product)
+# UI=off
+# WWW=

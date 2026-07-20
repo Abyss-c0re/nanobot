@@ -27,9 +27,18 @@ void ng_session_init(ng_session *s);
 void ng_session_free(ng_session *s);
 void ng_session_clear(ng_session *s);
 
-/* Load/save session from NANOBOT_HOME/session */
+/* Load/save session from NANOBOT_HOME/session.
+ * Provider tokens (access/refresh) AEAD-encrypted at rest under key derived
+ * from peer_token (preferred) or legacy session.key. */
 int ng_session_load(ng_session *s);
 int ng_session_save(const ng_session *s);
+
+/* Persist in-flight device login so fork-per-request workers can poll.
+ * Stored under NANOBOT_HOME/device_login (AEAD-sealed, mode 0600).
+ * Contains device_code — treat as secret; never log full value. */
+int ng_session_save_pending(const ng_session *s);
+int ng_session_load_pending(ng_session *s);
+void ng_session_clear_pending(void);
 
 /* True if access_token present and not expired (with 60s skew) */
 int ng_session_valid(const ng_session *s);

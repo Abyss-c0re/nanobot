@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -15,12 +16,20 @@
 int ng_command_denied(const char *command) {
   if (!command) return 1;
   static const char *bad[] = {
-    "mkfs", "dd if=", "ddof=", ":(){", "reboot", "poweroff", "halt",
-    "rm -rf /", "rm -rf /*", "nandwrite", "flash_erase", NULL
+    "mkfs", "dd if=", "dd of=", "ddof=", ":(){", "reboot", "poweroff", "halt",
+    "shutdown", "init 0", "init 6", "telinit",
+    "rm -rf /", "rm -rf /*", "rm -fr /", "rm -fr /*",
+    "nandwrite", "flash_erase", "wget http", "wget -", "curl |", "curl|",
+    "bash -i", "/dev/tcp/", "nc -l", "ncat -l",
+    "chmod 777 /", "chown -R", ">/dev/sda", "of=/dev/",
+    NULL
   };
   for (int i = 0; bad[i]; i++) {
     if (strstr(command, bad[i])) return 1;
   }
+  /* block shell metachar bombs and obvious credential dumpers */
+  if (strstr(command, "`") && (strstr(command, "rm ") || strstr(command, "dd "))) return 1;
+  if (strlen(command) > 8000) return 1;
   return 0;
 }
 
@@ -30,8 +39,31 @@ void ng_cmd_result_free(ng_cmd_result *r) {
   r->output = NULL;
 }
 
+static int ng_shell_is_enabled(void) {
+  char path[640];
+  snprintf(path, sizeof path, "%s/shell_enabled", ng_workdir());
+  FILE *f = fopen(path, "r");
+  if (!f) return 1; /* default on */
+  char b[16] = {0};
+  if (fgets(b, sizeof b, f)) {
+    /* trim */
+    size_t n = strlen(b);
+    while (n && (b[n-1] == '\n' || b[n-1] == '\r' || b[n-1] == ' ')) b[--n] = 0;
+  }
+  fclose(f);
+  if (!b[0]) return 1;
+  if (b[0] == '0' || !strcasecmp(b, "off") || !strcasecmp(b, "false") || !strcasecmp(b, "disabled"))
+    return 0;
+  return 1;
+}
+
 ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
   ng_cmd_result r = { .exit_code = -1, .output = NULL };
+  if (!ng_shell_is_enabled()) {
+    r.exit_code = 403;
+    r.output = strdup("shell disabled (shell_enabled=0 under NANOBOT_HOME)\n");
+    return r;
+  }
   if (ng_command_denied(command)) {
     r.exit_code = 126;
     r.output = strdup("nanobot: command blocked by allowlist policy\n");
@@ -56,8 +88,21 @@ ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
     dup2(pipefd[1], STDOUT_FILENO);
     dup2(pipefd[1], STDERR_FILENO);
     close(pipefd[1]);
-    /* soft env */
     setenv("NANOBOT", "1", 1);
+    {
+      const char *old = getenv("PATH");
+      const char *home = ng_workdir();
+      char npath[1280];
+      if (home && home[0])
+        snprintf(npath, sizeof npath,
+                 "%s/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin%s%s",
+                 home, old && old[0] ? ":" : "", old && old[0] ? old : "");
+      else
+        snprintf(npath, sizeof npath,
+                 "/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin%s%s",
+                 old && old[0] ? ":" : "", old && old[0] ? old : "");
+      setenv("PATH", npath, 1);
+    }
     execl("/bin/sh", "sh", "-c", command, (char *)NULL);
     _exit(127);
   }
@@ -81,7 +126,7 @@ ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
       if (n > 0) {
         if (len + (size_t)n + 1 > cap) {
           size_t ncap = cap * 2;
-          if (ncap > NG_OUT_MAX) ncap = NG_OUT_MAX + 1;
+          if (ncap > ng_out_max()) ncap = ng_out_max() + 1;
           if (len + (size_t)n + 1 > ncap) {
             /* truncate */
             size_t room = ncap - len - 1;
@@ -111,7 +156,7 @@ ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
         char tmp[1024];
         ssize_t n = read(pipefd[0], tmp, sizeof tmp);
         if (n <= 0) break;
-        if (len + (size_t)n + 1 < cap || (cap < NG_OUT_MAX && (buf = realloc(buf, cap = (cap*2 < NG_OUT_MAX ? cap*2 : NG_OUT_MAX+1))))) {
+        if (len + (size_t)n + 1 < cap || (cap < ng_out_max() && (buf = realloc(buf, cap = (cap*2 < ng_out_max() ? cap*2 : ng_out_max()+1))))) {
           if (len + (size_t)n + 1 <= cap) {
             memcpy(buf + len, tmp, (size_t)n);
             len += (size_t)n;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Optional: copy arm (or host) binary to a remote Linux box via SSH.
-# nanobot itself is not a robot product — this is just remote deploy.
+# nanobot itself is standalone tool — this is just remote deploy.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${NANOBOT_REMOTE_BIN:-$ROOT/build/armv7/nanobot}"

@@ -1,9 +1,10 @@
 # Contributing
 
-Pre-release private project. Keep nanobot:
+Pre-release private project. Keep **nanobot**:
 
-1. **Simple and standalone** (one C binary + curl)
-2. **Separate** from robot/ROM products
-3. **Legally clear** (no false affiliation; no secrets in commits)
+- Small, readable C; no heavy frameworks
+- Standalone product — no coupling to other lab products in docs or defaults
+- No affiliation claims with Grok or other vendors
+- Security: peer token on sensitive routes; no secrets in git
 
-Run `make test` before proposing changes.
+Before handoff: `make host && make test` and optional `make arm`.

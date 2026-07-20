@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NG_VERSION "0.3.0"
+#define NG_VERSION "0.4.0"
 /* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*). */
 #define NG_CLI_VERSION_DEFAULT "0.1.220"
 #define NG_DEFAULT_PORT 8787
@@ -16,10 +16,31 @@
 #define NG_CMD_TIMEOUT_SEC 60
 #define NG_HTTP_MAX_CHILDREN 24
 #define NG_OUT_MAX (64 * 1024)
+/* Prefer lean caps on small hosts */
+/* Lean: enough room for 1–2 tools + forced final text turn */
+#define NG_LEAN_MAX_TURNS 6
+#define NG_LEAN_HTTP_MAX_CHILDREN 2
+#define NG_LEAN_OUT_MAX (12 * 1024)
+#define NG_LEAN_LOG_MAX (24 * 1024)
+#define NG_HOST_LOG_MAX (256 * 1024)
+
+/* Runtime limits (auto-lean on MemTotal < 400MB or NANOBOT_LEAN=1) */
+void ng_limits_init(void);
+int ng_is_lean(void);
+int ng_max_turns(void);
+int ng_http_max_children(void);
+size_t ng_out_max(void);
+size_t ng_log_max(void);
+/* Compact JSON resource snapshot for monitors (malloc'd) */
+char *ng_resources_json(void);
 
 char *ng_read_file(const char *path, size_t *out_len);
 int ng_write_file(const char *path, const char *data, size_t len);
 char *ng_slurp_env_file(const char *path, const char *key); /* KEY=val lines */
+/* Persist KEY=val in $NANOBOT_HOME/settings. */
+char *ng_settings_get(const char *key); /* malloc'd or NULL */
+int ng_settings_set(const char *key, const char *value);
+const char *ng_settings_path(void);
 char *ng_getenv_dup(const char *k);
 void ng_set_workdir(const char *dir);
 const char *ng_workdir(void);

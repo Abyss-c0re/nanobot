@@ -23,7 +23,7 @@ void ng_memory_init(void) {
   mem_path(core, sizeof core, "core.txt");
   if (access(core, R_OK) != 0) {
     const char *seed =
-      "nanobot is a small standalone agent host (UI, shell, memory, MCP).\n"
+      "nanobot is a small standalone agent host (CLI, shell, memory, MCP, peer API).\n"
       "Prefer short answers. Do not destroy the host. Write under NANOBOT_HOME when needed.\n"
       "User may run offline shell with @! <command>.\n";
     ng_write_file(core, seed, strlen(seed));

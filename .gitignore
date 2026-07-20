@@ -1,34 +1,71 @@
-# Builds & optional toolchains (do not ship in releases as source deps)
+# --- build outputs ---
 /build/
-/toolchain/
+/out/
+/dist/
+/cmake-build-*/
+compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.cmake
 *.o
 *.a
 *.so
 *.dylib
+*.dll
 *.exe
+*.out
 
-# Runtime / secrets (never commit)
+# optional cross toolchain (large; not source)
+/toolchain/
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- runtime / secrets (never commit) ---
 **/session
+**/device_login
 **/peer_token
 **/cli_version
+**/*.pid
+**/*.log
+**/*.out
+**/nanobot.log
+**/nanobot.out
+**/nanobot.pid
 **/nanobot.log
 **/nanobot.out
 **/nanobot.pid
 **/memory/
 .env
+**/.env
 **/env
 !env.example
+!scripts/settings.example
 *.pem
 *.key
+!docs/**/*.md
 *.p12
+*.tok
+master.key*
+*.enrolled
 
-# Editor / OS
+# --- editor / OS ---
 .DS_Store
 .idea/
 .vscode/
 *.swp
 *~
 .cache/
+.clangd/
+.cache/clangd/
 
-# Test scratch
+# --- test / install scratch ---
 /tmp-nanobot-*/
+/tmp-nanobot-*/
+*.tmp
+*.bak

@@ -1,28 +1,35 @@
-# Peer bus — other agents → this nanobot host
+# Peer bus
 
-Optional LAN/API surface for another process to talk to a running nanobot instance.
+Optional LAN API for other processes to talk to a running nanobot.
 
-## Endpoints
-
-| Method | Path | Notes |
-|--------|------|-------|
-| GET | `/peer/v1/health` | Liveness |
-| GET | `/peer/v1/info` | capabilities + `signed_in` / backend |
-| POST | `/peer/v1/prompt` | `{"prompt":"..."}` |
-| POST | `/peer/v1/shell` | `{"command":"..."}` |
-
-Optional peer token: `$NANOBOT_HOME/peer_token` (`token=...`) or header `X-Nanobot-Peer-Token`.
-
-## Example
-
+## start
 ```bash
 nanobot --port 8787
-curl -s http://127.0.0.1:8787/peer/v1/info
-curl -s -X POST http://127.0.0.1:8787/peer/v1/shell \
-  -H 'Content-Type: application/json' \
-  -d '{"command":"uname -a"}'
+# peer_token auto-created under $NANOBOT_HOME/peer_token (0600)
 ```
 
-## MCP bridge
+## auth
+Mutating routes need:
+```http
+X-Nanobot-Peer-Token: <token>
+```
+or JSON `peer_token`.  
+GET `/peer/v1/health` and `/peer/v1/info` are open.
 
-`scripts/peer_mcp_bridge.py` exposes peer tools to an MCP client. Point `NANOBOT_PEER_URL` at your host (not product-specific).
+## endpoints
+| method | path | auth |
+|--------|------|------|
+| GET | /peer/v1/health | no |
+| GET | /peer/v1/info | no |
+| GET | /activate | no (device login) |
+| POST | /peer/v1/prompt | token |
+| POST | /peer/v1/shell | token |
+| POST | /peer/v1/jobs | token |
+| GET | /peer/v1/jobs/{id} | token |
+| POST | /peer/v1/control | token |
+
+## MCP bridge
+`scripts/peer_mcp_bridge.py` — tools `nanobot_prompt|shell|job_status|info|control`.  
+Legacy names `*` still accepted.
+
+See SECURITY.md.

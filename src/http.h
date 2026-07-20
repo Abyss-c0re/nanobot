@@ -8,6 +8,8 @@ typedef struct {
   ng_agent_cfg *agent;
   ng_session *session;
   volatile int stop;
+  /* Optional static file root (--www). NULL = peer/CLI only. */
+  const char *www_root;
 } ng_http_cfg;
 
 int ng_http_serve(ng_http_cfg *cfg);
