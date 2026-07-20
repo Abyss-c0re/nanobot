@@ -5,7 +5,7 @@ set -eu
 export HOME="${HOME:-/home/nanobot}"
 export NANOBOT_HOME="${NANOBOT_HOME:-$HOME/.nanobot}"
 export WORKSPACE="${WORKSPACE:-$HOME/workspace}"
-export HOME_AGENT="$HOME"
+export HOME_AGENT="${HOME_AGENT:-$HOME}"
 export NANOBOT_PORT="${NANOBOT_PORT:-8787}"
 export PATH="/opt/nanobot/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 

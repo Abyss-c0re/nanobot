@@ -18,7 +18,7 @@ option(NANOBOT_ENABLE_AUTH "device-code provider auth + sealed session" ON)
 option(NANOBOT_ENABLE_PEER "HTTP peer/API server" ON)
 option(NANOBOT_ENABLE_HUB "hub dual-port OUT" ON)
 option(NANOBOT_ENABLE_SHELL "shell / @! execution" ON)
-option(NANOBOT_ENABLE_PROVIDERS "LLM backends (Grok + OpenAI-compatible)" ON)
+option(NANOBOT_ENABLE_PROVIDERS "LLM backends (optional cloud + OpenAI-compatible)" ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")

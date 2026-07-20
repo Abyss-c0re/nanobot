@@ -16,7 +16,7 @@ Working on **nanobot** source. Parent lab rules may exist outside this repo.
 - never commit `peer_token`, `session`, `.env`, real keys
 - `make clean` / `make maintain` for hygiene
 - deploy binaries without wiping `NANOBOT_HOME` secrets
-- no product hardcodes (vacuum paths) in core C
+- no product hardcodes in core C
 
 ## build quick
 ```bash

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """stdio MCP bridge → any nanobot peer HTTP bus (product-agnostic).
 
-NDJSON (also Content-Length). No vacuum/ dependency.
-URL: NANOBOT_PEER_URL | ~/.nanobot/peer_url | http://127.0.0.1:8787
+NDJSON (also Content-Length). URL: NANOBOT_PEER_URL | ~/.nanobot/peer_url | http://127.0.0.1:8787
 token: NANOBOT_PEER_TOKEN | ~/.nanobot/peer_token (reread each call)
-Tools: nanobot_* (* accepted as legacy aliases).
+Tools: nanobot_* / host_*.
 """
 from __future__ import annotations
 
@@ -218,25 +217,25 @@ def main() -> None:
             name = params.get("name")
             args = params.get("arguments") or {}
             sync = os.environ.get("NANOBOT_PEER_SYNC", "").lower() in ("1", "true", "yes")
-            if name in ("nanobot_info", "host_info", "info"):
+            if name in ("nanobot_info", "host_info"):
                 out = http_json("GET", "/peer/v1/info", timeout=8)
-            elif name in ("nanobot_job_status", "job_status"):
+            elif name in ("nanobot_job_status",):
                 out = http_json("GET", f"/peer/v1/jobs/{args.get('id', '')}", timeout=8)
-            elif name in ("nanobot_control", "control"):
+            elif name in ("nanobot_control",):
                 out = http_json(
                     "POST",
                     "/peer/v1/control",
                     {"service": args.get("service", ""), "action": args.get("action", "")},
                     timeout=8,
                 )
-            elif name in ("nanobot_prompt", "host_prompt", "prompt"):
+            elif name in ("nanobot_prompt", "host_prompt"):
                 if sync:
                     out = http_json(
                         "POST", "/peer/v1/prompt", {"prompt": args.get("prompt", "")}, timeout=180
                     )
                 else:
                     out = start_job("prompt", prompt=args.get("prompt", ""))
-            elif name in ("nanobot_shell", "host_shell", "shell"):
+            elif name in ("nanobot_shell", "host_shell"):
                 if sync:
                     out = http_json(
                         "POST",

@@ -356,7 +356,7 @@ int main(int argc, char **argv) {
   }
 
   /* Auth is self-contained: device-code via --login or GET /activate (if PEER).
-   * Never depends on any vacuum/ product. */
+   * Standalone agent host; no external product required. */
   if (force_login && need_browser) {
 #if !NANOBOT_ENABLE_AUTH
     fprintf(stderr, "  --login: AUTH disabled in this build\n");
@@ -407,6 +407,7 @@ int main(int argc, char **argv) {
   {
     int master_present = 0;
     const char *env_m = getenv("NANOBOT_MASTER_KEY");
+    if (!env_m || !env_m[0]) env_m = getenv("NANOBOT_MASTER_KEY"); /* legacy env */
     if (env_m && env_m[0] && access(env_m, R_OK) == 0)
       master_present = 1;
     if (!master_present) {
@@ -415,9 +416,10 @@ int main(int argc, char **argv) {
       if (access(alt, R_OK) == 0) master_present = 1;
     }
     if (master_present) {
-      fprintf(stderr, "  optional master key present (NANOBOT_MASTER_KEY or $HOME/labauth/)\n");
+      fprintf(stderr, "  optional master key present (NANOBOT_MASTER_KEY or $NANOBOT_HOME/)\n");
     }
     const char *req_la = getenv("NANOBOT_REQUIRE_MASTER");
+    if (!req_la || !req_la[0]) req_la = getenv("NANOBOT_REQUIRE_MASTER");
     if (req_la && (!strcmp(req_la, "1") || !strcasecmp(req_la, "true") ||
                    !strcasecmp(req_la, "yes"))) {
       if (!master_present) {

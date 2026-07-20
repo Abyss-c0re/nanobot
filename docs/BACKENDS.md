@@ -9,15 +9,15 @@ nanobot splits into two layers:
           │ OpenAI-compatible chat completions
           ▼
 ┌────────────────────┐     ┌──────────────────────┐
-│ Grok cloud (opt.)  │ or  │ llama.cpp / OpenAI    │
+│ Cloud (opt.)  │ or  │ llama.cpp / OpenAI    │
 │ device-code auth   │     │ compatible local      │
 └────────────────────┘     └──────────────────────┘
 ```
 
-## Grok cloud (optional)
+## Cloud device-code (optional)
 
-Default base URL points at a Grok CLI proxy when not overridden. Needs browser
-device-code once. **Not affiliated** with Grok — interoperability only.
+Override `NANOBOT_BASE_URL` for a remote OpenAI-compatible or device-code backend. Needs browser
+device-code once. Third-party backends are optional; see LEGAL.md.
 
 ```bash
 nanobot --port 8787
