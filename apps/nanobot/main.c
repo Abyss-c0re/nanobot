@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
 #else
     if (need_browser) {
 #if !NANOBOT_ENABLE_AUTH
-      fprintf(stderr, "nanobot: Grok backend needs AUTH; rebuild with NANOBOT_ENABLE_AUTH=ON\n"
+      fprintf(stderr, "nanobot: cloud backend needs AUTH; rebuild with NANOBOT_ENABLE_AUTH=ON\n"
                       "  or use --offline / --base-url\n");
       ng_session_free(&session);
       ng_agent_cfg_free(&agent);
@@ -333,7 +333,7 @@ int main(int argc, char **argv) {
     int is_shell = oneshot[0] == '@' && oneshot[1] == '!';
     if (need_browser && !is_shell) {
       if (!ng_session_valid(&session)) {
-        fprintf(stderr, "No Grok session. Use nanobot --login, or --offline for llama.cpp,\n"
+        fprintf(stderr, "No cloud session. Use nanobot --login, or --offline for llama.cpp,\n"
                         "or @! <cmd> for shell without a model.\n");
         ng_session_free(&session);
         ng_agent_cfg_free(&agent);

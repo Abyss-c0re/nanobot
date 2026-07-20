@@ -248,7 +248,7 @@ int main(int argc, char **argv) {
   if (mode_mcp) {
     if (need_browser) {
       if (!ng_session_valid(&session)) {
-        fprintf(stderr, "nanobot --mcp (Grok backend) needs a browser session.\n"
+        fprintf(stderr, "nanobot --mcp (cloud backend) needs a browser session.\n"
                         "Run: nanobot --login   or use --offline / --base-url for llama.cpp\n");
         if (ng_session_login_blocking(&session) != 0) {
           ng_session_free(&session);
@@ -269,7 +269,7 @@ int main(int argc, char **argv) {
     int is_shell = oneshot[0] == '@' && oneshot[1] == '!';
     if (need_browser && !is_shell) {
       if (!ng_session_valid(&session)) {
-        fprintf(stderr, "No Grok session. Use nanobot --login, or --offline for llama.cpp,\n"
+        fprintf(stderr, "No cloud session. Use nanobot --login, or --offline for llama.cpp,\n"
                         "or @! <cmd> for shell without a model.\n");
         ng_session_free(&session);
         ng_agent_cfg_free(&agent);
@@ -285,7 +285,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  /* Peer listener always up. Browser login only for Grok cloud backend. */
+  /* Peer listener always up. Browser login only for optional cloud backend. */
   if (force_login && need_browser) {
     ng_session_clear(&session);
     fprintf(stderr, "  --login: open /activate after server starts\n");
@@ -294,13 +294,13 @@ int main(int argc, char **argv) {
       fprintf(stderr, "  Session refresh failed; use /activate when ready\n");
   } else if (need_browser) {
     fprintf(stderr,
-            "  No Grok session yet — peer up; activate via /activate\n"
+            "  No cloud session yet — peer up; activate via /activate\n"
             "  Or restart with --offline for llama.cpp (no browser)\n");
   } else {
     fprintf(stderr, "  Local/OpenAI-compatible backend — no browser session required\n");
   }
 
-  /* lab peer token (optional shared secret for other Grok sessions) */
+  /* lab peer token (optional shared secret for other cloud sessions) */
   {
     char pt[640];
     snprintf(pt, sizeof pt, "%s/peer_token", home);

@@ -92,7 +92,7 @@ int ng_agent_save_env(const ng_agent_cfg *c) {
   return ng_write_file(path, buf, (size_t)n);
 }
 
-/* OpenAI-compatible POST. Grok cloud headers when needed; plain Bearer for llama.cpp. */
+/* OpenAI-compatible POST. optional cloud headers when needed; plain Bearer for llama.cpp. */
 static char *curl_post_json(const char *url, const char *bearer, const char *body) {
   char tmpl[] = "/tmp/ng_req_XXXXXX";
   int fd = mkstemp(tmpl);
@@ -378,12 +378,12 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
   if (grok) {
     if (!c->session || ng_session_ensure(c->session) != 0) {
       return strdup("Not signed in. Open the activation link nanobot printed "
-                    "(open Connect Grok / activation link in a browser) to attach a session. "
+                    "(open Connect cloud / activation link in a browser) to attach a session. "
                     "Or use --offline / @! <cmd> without Grok.");
     }
     bearer = ng_session_bearer(c->session);
     if (!bearer) {
-      return strdup("No Grok session. Re-run nanobot and open the browser activation link.");
+      return strdup("No cloud session. Re-run nanobot and open the browser activation link.");
     }
   } else {
     /* llama.cpp / OpenAI: optional API key from env file or env */
@@ -496,7 +496,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     if (grok) {
       if (ng_session_ensure(c->session) != 0) {
         free(messages); free(last_tool_out);
-        return strdup("Grok session expired. Restart nanobot and re-activate in the browser.");
+        return strdup("cloud session expired. Restart nanobot and re-activate in the browser.");
       }
       bearer = ng_session_bearer(c->session);
     }

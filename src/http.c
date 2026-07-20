@@ -349,7 +349,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_json(cfd, 500, "{\"error\":\"no session\"}");
       free(req); close(cfd); return;
     }
-    /* Connect Grok: ensure Grok backend, then device-code login link. */
+    /* Connect cloud: ensure cloud backend, then device-code login link. */
     char *body0 = strstr(req, "\r\n\r\n");
     body0 = body0 ? body0 + 4 : "";
     int force = 0;
@@ -392,7 +392,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"verification_uri\":\"%s\","
       "\"verification_uri_complete\":\"%s\","
       "\"activate_path\":\"/activate\","
-      "\"message\":\"Open the link to authorize Grok in your browser\"}",
+      "\"message\":\"Open the link to authorize in your browser\"}",
       uc ? uc : "",
       vu ? vu : "",
       vuc ? vuc : "");
@@ -519,7 +519,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (session && session->login_pending) ng_session_poll_login(session);
       if (!session || !ng_session_valid(session)) {
         free(prompt);
-        http_json(cfd, 401, "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}");
+        http_json(cfd, 401, "{\"error\":\"cloud backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}");
         free(req); close(cfd); return;
       }
     }
@@ -811,7 +811,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     {
       int need_browser = agent && ng_agent_needs_browser_session(agent);
       if (need_browser && (!session || !ng_session_valid(session))) {
-        http_json(cfd, 401, "{\"error\":\"Grok session not active; use --offline for llama or open /activate\",\"need_login\":true}");
+        http_json(cfd, 401, "{\"error\":\"cloud session not active; use --offline for llama or open /activate\",\"need_login\":true}");
         free(req); close(cfd); return;
       }
     }

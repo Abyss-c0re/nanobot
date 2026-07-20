@@ -46,7 +46,7 @@ void ng_set_workdir(const char *dir);
 const char *ng_workdir(void);
 char *ng_json_escape(const char *s);
 
-/* Runtime Grok CLI version header (auto-bumps when proxy says outdated). */
+/* Runtime provider CLI version header (auto-bumps when proxy says outdated). */
 void ng_cli_version_init(void);
 const char *ng_cli_version(void);          /* e.g. "0.1.220" */
 const char *ng_cli_user_agent(void);       /* e.g. "grok-cli/0.1.220" */
