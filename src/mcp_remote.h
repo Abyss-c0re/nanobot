@@ -1,15 +1,15 @@
 #ifndef NANOBOT_MCP_REMOTE_H
 #define NANOBOT_MCP_REMOTE_H
 
-/* Outbound MCP client: phone/agent connects TO remote MCP servers.
+/* Outbound MCP client: this process connects TO remote MCP servers.
  * Config: $NANOBOT_HOME/mcp_servers.json
  * Transports: HTTP JSON-RPC (POST) + optional SSE body.
  */
 
-/* Full servers array JSON for UI (malloc'd). */
+/* Full servers array JSON for clients (malloc'd). */
 char *ng_mcp_servers_list_json(void);
 
-/* Replace entire config from app JSON body. Returns 0 ok. */
+/* Replace entire config from JSON body. Returns 0 ok. */
 int ng_mcp_servers_save_raw(const char *json_body);
 
 /* Probe one server (by id) or ad-hoc url. Returns JSON status (malloc'd). */

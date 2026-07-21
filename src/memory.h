@@ -19,7 +19,7 @@
 
 void ng_memory_init(void); /* mkdir memory/ */
 
-/* Runtime prefs from memory/prefs (app UI). Defaults = NG_MEM_* defines. */
+/* Runtime prefs from memory/prefs (or client UI). Defaults = NG_MEM_* defines. */
 int ng_memory_recent_turns(void);
 
 /* Build system content: core identity + profile + profile + summary. malloc'd */

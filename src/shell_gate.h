@@ -1,7 +1,7 @@
 #ifndef NANOBOT_SHELL_GATE_H
 #define NANOBOT_SHELL_GATE_H
 
-/* Command policy: allow | deny (hard) | dangerous (needs password/biometric approve). */
+/* Command policy: allow | deny (hard) | dangerous (needs password approval). */
 
 typedef enum {
   NG_SHELL_ALLOW = 0,

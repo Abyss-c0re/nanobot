@@ -151,7 +151,7 @@ static int dangerous_allowed(void) {
  * Roots: $NANOBOT_HOME/files_acl_roots (one path/prefix per line)
  *        or env NANOBOT_PERSONAL_ROOTS (colon-separated). No built-in OS paths.
  * Allow: $NANOBOT_HOME/files_acl_allow (exact path lines) — read exception under deny.
- * Hosts (apps/wrappers) plant roots and dual-path aliases; this binary never hardcodes them.
+ * Hosts (wrappers/init) plant roots and dual-path aliases; this binary never hardcodes them.
  */
 static char *read_files_acl(void) {
   char home_path[640];

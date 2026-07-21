@@ -16,7 +16,9 @@ Working on **nanobot** source. Parent lab rules may exist outside this repo.
 - never commit `peer_token`, `session`, `.env`, real keys
 - `make clean` / `make maintain` for hygiene
 - deploy binaries without wiping `NANOBOT_HOME` secrets
-- no product hardcodes in core C
+- no product hardcodes in core C **or** in comments / docs / text files
+- no Android/phone/OEM path names or brand strings in portable sources
+- host-only knobs via env/settings (`env.example`); see `docs/PLATFORM.md`
 
 ## build quick
 ```bash

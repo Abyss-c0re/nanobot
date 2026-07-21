@@ -219,7 +219,7 @@ fi
 
 # smoke: binary must run --version on this platform
 if ! "$BIN_DIR/nanobot" --version >/dev/null 2>&1; then
-  die "installed binary does not run on this platform (wrong arch?). Use --from-source on-device."
+  die "installed binary does not run on this platform (wrong arch?). Use --from-source on the target host."
 fi
 log "version: $($BIN_DIR/nanobot --version 2>/dev/null | head -1)"
 

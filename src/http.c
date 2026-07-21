@@ -357,7 +357,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (agent && agent->base_url) base_esc = ng_json_escape(agent->base_url);
     char body[2560];
     /* needs_browser = backend TYPE uses browser OAuth (always true for Grok).
-     * login_required = user must open Connect NOW (not signed in). Apps must
+     * login_required = user must complete Connect (not signed in). Clients must
      * use login_required / signed_in — not needs_browser — or they thrash Connect. */
     int login_required = need_browser && !signed_in;
     int n = snprintf(body, sizeof body,

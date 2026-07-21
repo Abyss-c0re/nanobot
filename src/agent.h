@@ -62,7 +62,7 @@ char *ng_agent_run_vision(ng_agent_cfg *c, const char *user_prompt,
 /**
  * Same as vision, plus optional images_json array:
  * [{"base64":"...","mime":"image/jpeg"}, ...] (up to 4). Document text should
- * already be folded into user_prompt by the app.
+ * already be folded into user_prompt by the caller.
  */
 char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                                const char *image_b64, const char *image_mime,

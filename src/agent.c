@@ -387,7 +387,7 @@ void ng_agent_select_model(ng_agent_cfg *c, const char *model) {
   ng_agent_save_env(c);
 }
 
-/* Emit structured SSE event for app (tool / thinking). Prefix 0x1e for http layer. */
+/* Emit structured SSE event for clients (tool / thinking). Prefix 0x1e for http layer. */
 static void stream_evt(ng_stream_fn on_delta, void *ud, const char *json) {
   if (!on_delta || !json || !json[0]) return;
   size_t n = strlen(json);
@@ -865,7 +865,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                                     images_json);
     if (va == -2) {
       free(inner);
-      return strdup("image too large (max ~2MB). Resize in app and retry.");
+      return strdup("image too large (max ~2MB). Resize and retry.");
     }
     if (va != 0) {
       free(inner);

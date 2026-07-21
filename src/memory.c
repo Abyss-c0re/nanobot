@@ -106,7 +106,7 @@ static void truncate_store(char *s, size_t max_chars) {
   utf8_truncate(s, max_chars);
 }
 
-/* Runtime prefs from memory/prefs (app-written). Fall back to compile defaults. */
+/* Runtime prefs from memory/prefs (client-written). Fall back to compile defaults. */
 static int pref_int(const char *key, int defv, int lo, int hi) {
   char path[640];
   mem_path(path, sizeof path, "prefs");
@@ -155,7 +155,7 @@ char *ng_memory_system_prompt(void) {
 
   char *out = NULL;
   asprintf(&out,
-    "You are nanobot, a small on-device agent.\n"
+    "You are nanobot, a small local agent.\n"
     "Answer in plain text. Prefer short replies — especially on local tiny models.\n"
     "Tools: call run_terminal_command for live work. Never invent tool output. Never prefix answers with @!.\n"
     "Context discipline: do NOT load full logs or long histories into the model.\n"
