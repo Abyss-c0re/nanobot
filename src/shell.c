@@ -443,8 +443,7 @@ void ng_shell_ensure_policy_files(void) {
       fprintf(f,
         "# Patterns listed here are allowed even if present in shell_denylist.\n"
         "# Example (uncomment to allow agent reboot):\n"
-        "# reboot\n"
-        "# svc power reboot\n");
+        "# reboot\n");
       fclose(f);
     }
   }
@@ -490,8 +489,7 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
       asprintf(&msg,
         "nanobot: dangerous command — approval required\n"
         "approval_id=%s\n"
-        "Open ClankerCommander → Shell → Pending approvals (password or biometric).\n"
-        "Or POST /api/shell/approve {\"id\":\"%s\",\"password\":\"…\"}\n",
+        "Approve via UI or POST /api/shell/approve {\"id\":\"%s\",\"password\":\"…\"}\n",
         aid ? aid : "?", aid ? aid : "?");
       r.output = msg ? msg : strdup("dangerous: approval required\n");
       free(aid);
@@ -519,24 +517,31 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
     close(pipefd[1]);
     setenv("NANOBOT", "1", 1);
     {
+      /* Unix-first PATH: $NANOBOT_HOME/bin, standard bins, then inherited PATH.
+       * Hosts that need extra dirs set PATH before launch (no product OS prefixes). */
       const char *old = getenv("PATH");
       const char *home = ng_workdir();
       char npath[1280];
       if (home && home[0])
         snprintf(npath, sizeof npath,
-                 "%s/bin:/system/bin:/system/xbin:/vendor/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin%s%s",
+                 "%s/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin%s%s",
                  home, old && old[0] ? ":" : "", old && old[0] ? old : "");
       else
         snprintf(npath, sizeof npath,
-                 "/system/bin:/system/xbin:/vendor/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin%s%s",
+                 "/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin%s%s",
                  old && old[0] ? ":" : "", old && old[0] ? old : "");
       setenv("PATH", npath, 1);
     }
-    /* Android: prefer /system/bin/sh when /bin/sh missing */
+    /* Resolve sh by existence: /bin/sh, /usr/bin/sh, then $SHELL if it is a path. */
     if (access("/bin/sh", X_OK) == 0)
       execl("/bin/sh", "sh", "-c", command, (char *)NULL);
-    else
-      execl("/system/bin/sh", "sh", "-c", command, (char *)NULL);
+    if (access("/usr/bin/sh", X_OK) == 0)
+      execl("/usr/bin/sh", "sh", "-c", command, (char *)NULL);
+    {
+      const char *sh = getenv("SHELL");
+      if (sh && sh[0] == '/' && access(sh, X_OK) == 0)
+        execl(sh, "sh", "-c", command, (char *)NULL);
+    }
     _exit(127);
   }
   close(pipefd[1]);

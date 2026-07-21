@@ -23,8 +23,8 @@ int ng_shell_approval_approve(const char *id, const char *password, char **out_c
 /* Reject/cancel pending. */
 int ng_shell_approval_reject(const char *id);
 
-/* Set/verify web-compatible gate password (same secret as ClankerDash UI).
- * Stored under NANOBOT_HOME/gate.blake2b and mirrored to /mnt/data/labauth/gate.blake2b when possible.
+/* Set/verify web-compatible gate password.
+ * Stored under NANOBOT_HOME/gate.blake2b; optional mirror via NANOBOT_GATE_MIRROR.
  * Format: v1:<salt_hex>:<hash_hex>  hash=BLAKE2b-256(salt||password)
  */
 int ng_shell_gate_set_password(const char *password);

@@ -36,7 +36,7 @@ char *ng_resources_json(void);
 
 char *ng_read_file(const char *path, size_t *out_len);
 int ng_write_file(const char *path, const char *data, size_t len);
-/* mkstemp under $NANOBOT_HOME/tmp (Android apps often cannot write /tmp).
+/* mkstemp under $TMPDIR, then $NANOBOT_HOME/tmp, then /tmp.
  * path must be writable buffer >= 640. Returns fd or -1. */
 int ng_mkstemp_home(char *path, size_t path_sz, const char *prefix);
 char *ng_slurp_env_file(const char *path, const char *key); /* KEY=val lines */

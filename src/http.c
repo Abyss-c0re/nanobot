@@ -33,9 +33,9 @@ static void send_all(int fd, const char *data, size_t n) {
   }
 }
 
-/* SSE chat stream helper — must not be a nested fn (clang/NDK).
+/* SSE chat stream helper — top-level (not nested) for portable C compilers.
  * Normal chunks → {"delta":"..."}.
- * Chunks starting with 0x1e (RS) → raw JSON event (tool / thinking) for the app. */
+ * Chunks starting with 0x1e (RS) → raw JSON event (tool / thinking) for the client. */
 typedef struct { int fd; } chat_sse_ud;
 static void chat_sse_delta(void *p, const char *chunk, size_t n) {
   chat_sse_ud *u = (chat_sse_ud *)p;
@@ -1115,7 +1115,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* Shell security: gate password + pending approvals (ClankerCommander) */
+  /* Shell security: gate password + pending approvals */
   if (is_get && (strcmp(path, "/api/shell/approvals") == 0
                  || strcmp(path, "/peer/v1/shell/approvals") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }

@@ -28,9 +28,14 @@ static void approvals_dir(char *out, size_t n) {
   mkdir(out, 0700);
 }
 
+/* Primary: $NANOBOT_HOME/gate.blake2b.
+ * Optional mirror: $NANOBOT_GATE_MIRROR (absolute path) for host UIs that share a gate file. */
 static void gate_paths(char *p1, size_t n1, char *p2, size_t n2) {
   snprintf(p1, n1, "%s/gate.blake2b", ng_workdir());
-  snprintf(p2, n2, "/mnt/data/labauth/gate.blake2b");
+  p2[0] = 0;
+  const char *m = getenv("NANOBOT_GATE_MIRROR");
+  if (m && m[0] == '/' && strlen(m) + 1 < n2)
+    snprintf(p2, n2, "%s", m);
 }
 
 void ng_shell_ensure_dangerous_file(void) {
@@ -40,7 +45,7 @@ void ng_shell_ensure_dangerous_file(void) {
   FILE *f = fopen(path, "w");
   if (!f) return;
   fprintf(f,
-    "# Dangerous patterns — blocked until approved via password/biometric in ClankerCommander.\n"
+    "# Dangerous patterns — blocked until approved via password (POST /api/shell/approve).\n"
     "# One substring per line. Hard denylist still applies first.\n");
   for (int i = 0; default_dangerous[i]; i++)
     fprintf(f, "%s\n", default_dangerous[i]);
@@ -134,9 +139,17 @@ int ng_shell_gate_set_password(const char *password) {
   gate_paths(a, sizeof a, b, sizeof b);
   if (ng_write_file(a, line, strlen(line)) != 0) return -1;
   chmod(a, 0600);
-  /* best-effort mirror for ClankerDash shared gate */
-  mkdir("/mnt/data/labauth", 0700);
-  if (ng_write_file(b, line, strlen(line)) == 0) chmod(b, 0600);
+  /* best-effort optional mirror (NANOBOT_GATE_MIRROR) for shared host UIs */
+  if (b[0]) {
+    char dir[640];
+    snprintf(dir, sizeof dir, "%s", b);
+    char *slash = strrchr(dir, '/');
+    if (slash && slash != dir) {
+      *slash = 0;
+      mkdir(dir, 0700);
+    }
+    if (ng_write_file(b, line, strlen(line)) == 0) chmod(b, 0600);
+  }
   return 0;
 }
 

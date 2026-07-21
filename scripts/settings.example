@@ -6,3 +6,5 @@
 # Optional static files (operator path only; nothing required for core product)
 # UI=off
 # WWW=
+# Optional absolute path to mirror shell gate password (host UI only)
+# GATE_MIRROR=

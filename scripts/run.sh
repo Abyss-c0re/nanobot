@@ -22,6 +22,7 @@ PORT=8787
 LEAN=1
 SHELL=on
 WATCHER=off
+GATE_MIRROR="${NANOBOT_GATE_MIRROR:-}"
 
 [ -n "${NANOBOT_WWW:-}" ] && WWW="$NANOBOT_WWW" && UI=on
 [ -n "${NANOBOT_PORT:-}" ] && PORT="$NANOBOT_PORT"
@@ -42,8 +43,14 @@ if [ -f "$SETTINGS" ]; then
       LEAN|lean|NANOBOT_LEAN) LEAN=$val ;;
       SHELL|shell) SHELL=$val ;;
       WATCHER|watcher) WATCHER=$val ;;
+      GATE_MIRROR|gate_mirror|NANOBOT_GATE_MIRROR) GATE_MIRROR=$val ;;
     esac
   done < "$SETTINGS"
+fi
+
+# Optional shared gate file for host UIs (absolute path only; never invent product paths)
+if [ -n "$GATE_MIRROR" ] && [ "${GATE_MIRROR#/}" != "$GATE_MIRROR" ]; then
+  export NANOBOT_GATE_MIRROR="$GATE_MIRROR"
 fi
 
 case "$UI" in 1|true|TRUE|yes|YES|on|ON) UI=on ;; *) UI=off ;; esac
