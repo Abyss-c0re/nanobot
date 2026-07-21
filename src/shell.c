@@ -1,5 +1,6 @@
 #include <time.h>
 #include "shell.h"
+#include "shell_gate.h"
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,13 +17,12 @@
 
 /* Built-in defaults — used only when $NANOBOT_HOME/shell_denylist is missing.
  * User can replace the file entirely or add exceptions via shell_allow / SHELL_ALLOW. */
+/* Hard deny only — never runnable even with password.
+ * reboot/poweroff/mkfs/dd live in shell_dangerous (approval-gated). */
 static const char *default_deny[] = {
-  "mkfs", "dd if=", "dd of=", "ddof=", ":(){", "reboot", "poweroff", "halt",
-  "shutdown", "init 0", "init 6", "telinit",
-  "rm -rf /", "rm -rf /*", "rm -fr /", "rm -fr /*",
-  "nandwrite", "flash_erase", "wget http", "wget -", "curl |", "curl|",
+  ":(){", "rm -rf /", "rm -rf /*", "rm -fr /", "rm -fr /*",
+  "wget http", "wget -", "curl |", "curl|",
   "bash -i", "/dev/tcp/", "nc -l", "ncat -l",
-  "chmod 777 /", "chown -R", ">/dev/sda", "of=/dev/",
   NULL
 };
 
@@ -242,21 +242,39 @@ void ng_shell_ensure_policy_files(void) {
   }
 }
 
-ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
+static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int skip_dangerous) {
   ng_cmd_result r = { .exit_code = -1, .output = NULL };
   ng_shell_ensure_policy_files();
+  ng_shell_ensure_dangerous_file();
   if (!ng_shell_is_enabled()) {
     r.exit_code = 403;
     r.output = strdup("shell disabled (shell_enabled=0 under NANOBOT_HOME)\n");
     return r;
   }
+  /* hard denylist always */
   if (ng_command_denied(command)) {
     r.exit_code = 126;
     r.output = strdup(
-      "nanobot: command blocked by denylist policy\n"
-      "hint: edit $NANOBOT_HOME/shell_denylist or add an exception to shell_allow\n"
-      "      (e.g. put 'reboot' in shell_allow, or SHELL_ALLOW=reboot)\n");
+      "nanobot: command blocked by denylist policy (hard deny)\n"
+      "hint: edit $NANOBOT_HOME/shell_denylist or shell_allow exception\n");
     return r;
+  }
+  if (!skip_dangerous) {
+    ng_shell_class cls = ng_shell_classify(command);
+    if (cls == NG_SHELL_DANGEROUS) {
+      char *aid = ng_shell_approval_create(command, "shell");
+      r.exit_code = 425;
+      char *msg = NULL;
+      asprintf(&msg,
+        "nanobot: dangerous command — approval required\n"
+        "approval_id=%s\n"
+        "Open ClankerCommander → Shell → Pending approvals (password or biometric).\n"
+        "Or POST /api/shell/approve {\"id\":\"%s\",\"password\":\"…\"}\n",
+        aid ? aid : "?", aid ? aid : "?");
+      r.output = msg ? msg : strdup("dangerous: approval required\n");
+      free(aid);
+      return r;
+    }
   }
   if (timeout_sec <= 0) timeout_sec = NG_CMD_TIMEOUT_SEC;
 
@@ -368,4 +386,12 @@ ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
   }
   r.output = buf ? buf : strdup("");
   return r;
+}
+
+ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
+  return ng_run_command_ex(command, timeout_sec, 0);
+}
+
+ng_cmd_result ng_run_command_approved(const char *command, int timeout_sec) {
+  return ng_run_command_ex(command, timeout_sec, 1);
 }

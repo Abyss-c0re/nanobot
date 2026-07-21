@@ -1,6 +1,7 @@
 #include "http.h"
 #include "auth.h"
 #include "shell.h"
+#include "shell_gate.h"
 #include "util.h"
 #include "hub_local.h"
 #include <nanobot/crypto.h>
@@ -961,12 +962,107 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     ng_cmd_result cr = ng_run_command(cmd, agent->timeout_sec > 0 ? agent->timeout_sec : 60);
     char *esc = ng_json_escape(cr.output ? cr.output : "");
     char *jb = NULL;
-    asprintf(&jb,
-      "{\"ok\":%s,\"exit\":%d,\"output\":\"%s\",\"source\":\"nanobot-peer\"}",
-      cr.exit_code == 0 ? "true" : "false", cr.exit_code, esc ? esc : "");
+    int need_appr = (cr.exit_code == 425);
+    char *aid = NULL;
+    if (need_appr && cr.output) {
+      const char *p = strstr(cr.output, "approval_id=");
+      if (p) {
+        p += 12;
+        size_t n = 0;
+        while (p[n] && p[n] != '\n' && p[n] != '\r' && n < 32) n++;
+        aid = malloc(n+1); if(aid){memcpy(aid,p,n);aid[n]=0;}
+      }
+    }
+    if (need_appr) {
+      asprintf(&jb,
+        "{\"ok\":false,\"exit\":425,\"need_approval\":true,\"approval_id\":\"%s\","
+        "\"output\":\"%s\",\"source\":\"nanobot-peer\"}",
+        aid ? aid : "", esc ? esc : "");
+    } else {
+      asprintf(&jb,
+        "{\"ok\":%s,\"exit\":%d,\"output\":\"%s\",\"source\":\"nanobot-peer\"}",
+        cr.exit_code == 0 ? "true" : "false", cr.exit_code, esc ? esc : "");
+    }
     http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
-    free(cmd); free(esc); free(jb);
+    free(cmd); free(esc); free(jb); free(aid);
     ng_cmd_result_free(&cr);
+    free(req); close(cfd); return;
+  }
+
+  /* Shell security: gate password + pending approvals (ClankerCommander) */
+  if (is_get && (strcmp(path, "/api/shell/approvals") == 0
+                 || strcmp(path, "/peer/v1/shell/approvals") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    char *list = ng_shell_approval_list_json();
+    char *out = NULL;
+    asprintf(&out, "{\"ok\":true,\"gate_configured\":%s,\"pending\":%s}",
+             ng_shell_gate_configured() ? "true" : "false",
+             list ? list : "[]");
+    http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
+    free(list); free(out);
+    free(req); close(cfd); return;
+  }
+  if (is_post && (strcmp(path, "/api/shell/gate") == 0
+                  || strcmp(path, "/peer/v1/shell/gate") == 0)) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    char *action = ng_json_get_string(body, "action");
+    char *pw = ng_json_get_string(body, "password");
+    if (action && !strcmp(action, "set") && pw) {
+      int rc = ng_shell_gate_set_password(pw);
+      http_json(cfd, rc == 0 ? 200 : 400,
+                rc == 0 ? "{\"ok\":true,\"gate\":\"set\"}"
+                        : "{\"ok\":false,\"error\":\"set failed (min 4 chars)\"}");
+    } else if (action && !strcmp(action, "verify") && pw) {
+      int ok = ng_shell_gate_verify_password(pw);
+      http_json(cfd, 200, ok ? "{\"ok\":true,\"valid\":true}" : "{\"ok\":true,\"valid\":false}");
+    } else {
+      http_json(cfd, 400, "{\"error\":\"need action set|verify + password\"}");
+    }
+    free(action); free(pw);
+    free(req); close(cfd); return;
+  }
+  if (is_post && (strcmp(path, "/api/shell/approve") == 0
+                  || strcmp(path, "/peer/v1/shell/approve") == 0)) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    char *id = ng_json_get_string(body, "id");
+    if (!id) id = ng_json_get_string(body, "approval_id");
+    char *pw = ng_json_get_string(body, "password");
+    char *action = ng_json_get_string(body, "action");
+    if (action && !strcmp(action, "reject") && id) {
+      ng_shell_approval_reject(id);
+      http_json(cfd, 200, "{\"ok\":true,\"status\":\"rejected\"}");
+      free(id); free(pw); free(action);
+      free(req); close(cfd); return;
+    }
+    char *cmd = NULL;
+    int rc = ng_shell_approval_approve(id, pw, &cmd);
+    if (rc == 0 && cmd) {
+      ng_cmd_result cr = ng_run_command_approved(cmd,
+          agent && agent->timeout_sec > 0 ? agent->timeout_sec : 60);
+      char *esc = ng_json_escape(cr.output ? cr.output : "");
+      char *jb = NULL;
+      asprintf(&jb,
+        "{\"ok\":%s,\"exit\":%d,\"output\":\"%s\",\"approved\":true,\"command\":\"%s\"}",
+        cr.exit_code == 0 ? "true" : "false", cr.exit_code,
+        esc ? esc : "", cmd);
+      http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+      free(esc); free(jb);
+      ng_cmd_result_free(&cr);
+    } else {
+      const char *err = rc == -3 ? "gate password not configured"
+                       : rc == -4 ? "invalid password"
+                       : rc == -2 ? "not pending"
+                       : "approval failed";
+      char *jb = NULL;
+      asprintf(&jb, "{\"ok\":false,\"error\":\"%s\"}", err);
+      http_response(cfd, 403, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+      free(jb);
+    }
+    free(id); free(pw); free(action); free(cmd);
     free(req); close(cfd); return;
   }
 

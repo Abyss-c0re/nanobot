@@ -149,3 +149,12 @@ char *nb_secret_open(const unsigned char key[32], const char *envelope, size_t *
   if (out_len) *out_len = ct_len;
   return (char *)plain;
 }
+
+void nb_blake2b_256_2(const void *a, size_t al, const void *b, size_t bl,
+                      unsigned char out[32]) {
+  crypto_blake2b_ctx ctx;
+  crypto_blake2b_init(&ctx, 32);
+  if (a && al) crypto_blake2b_update(&ctx, (const uint8_t *)a, al);
+  if (b && bl) crypto_blake2b_update(&ctx, (const uint8_t *)b, bl);
+  crypto_blake2b_final(&ctx, out);
+}

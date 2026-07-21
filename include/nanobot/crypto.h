@@ -61,6 +61,10 @@ char *nb_secret_open(const unsigned char key[32], const char *envelope, size_t *
 /** True if s looks like nbenc1:… envelope. */
 int nb_secret_is_sealed(const char *s);
 
+/** BLAKE2b-256(a || b) — for gate password hashing. */
+void nb_blake2b_256_2(const void *a, size_t al, const void *b, size_t bl,
+                      unsigned char out[32]);
+
 #ifdef __cplusplus
 }
 #endif

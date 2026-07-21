@@ -31,6 +31,7 @@ add_subdirectory(libs/json)
 add_library(nanobot_legacy STATIC
   src/util.c
   src/shell.c
+  src/shell_gate.c
   src/auth.c
   src/memory.c
   src/agent.c
