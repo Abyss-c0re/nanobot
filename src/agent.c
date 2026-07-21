@@ -628,14 +628,25 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
   free(inner);
   if (!messages) return strdup("oom messages");
 
-  /* Tools: OpenAI-style. Disable with NANOBOT_TOOLS=0.
+  /* Tools: OpenAI-style. Disable with NANOBOT_TOOLS=0 (env or $NANOBOT_HOME/env).
    * Concurrent HTTP forks are fine; we always reserve a final no-tools turn. */
   int use_tools = 1;
   {
     const char *t = getenv("NANOBOT_TOOLS");
+    char *from_file = NULL;
+    if (!t || !t[0]) {
+      char ep[640];
+      snprintf(ep, sizeof ep, "%s/env", ng_workdir());
+      from_file = ng_slurp_env_file(ep, "NANOBOT_TOOLS");
+      t = from_file;
+    }
     if (t && (t[0] == '0' || t[0] == 'n' || t[0] == 'N' || t[0] == 'f' || t[0] == 'F'))
       use_tools = 0;
+    free(from_file);
   }
+  /* Offline local backends: tools often thrash tiny models; prefer pure chat. */
+  if (c && c->base_url && (strstr(c->base_url, "127.0.0.1") || strstr(c->base_url, "localhost")))
+    use_tools = 0;
   /* Short social prompts: answer in text, no tool thrash */
   {
     const char *p = user_prompt;
