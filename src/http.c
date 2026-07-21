@@ -1049,6 +1049,13 @@ int ng_http_serve(ng_http_cfg *cfg) {
           ng_log("auth: browser approved session (parent poll)");
       }
     }
+    /* Reload backend from env each accept (settings writes env in a child;
+     * without this, fork COW keeps parent stuck on the old base_url forever). */
+    if (cfg->agent) {
+      char envpath[640];
+      snprintf(envpath, sizeof envpath, "%s/env", ng_workdir());
+      ng_agent_load_env(cfg->agent, envpath);
+    }
 
     pid_t pid = fork();
     if (pid < 0) {
