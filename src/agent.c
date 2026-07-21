@@ -395,14 +395,17 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
       const char *d = strstr(s, "\"delta\"");
       piece = d ? ng_json_get_string(d, "content") : NULL;
     }
-    if (piece && piece[0]) {
+    /* Keep space-only deltas (" ") — piece[0]==0 would skip them and glue words. */
+    if (piece) {
       size_t pl = strlen(piece);
-      if (on_delta) on_delta(ud, piece, pl);
-      size_t al = strlen(acc);
-      char *n = realloc(acc, al + pl + 1);
-      if (!n) { free(piece); return acc; }
-      memcpy(n + al, piece, pl + 1);
-      acc = n;
+      if (pl > 0) {
+        if (on_delta) on_delta(ud, piece, pl);
+        size_t al = strlen(acc);
+        char *n = realloc(acc, al + pl + 1);
+        if (!n) { free(piece); return acc; }
+        memcpy(n + al, piece, pl + 1);
+        acc = n;
+      }
     }
     free(piece);
   }
@@ -628,10 +631,10 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
   free(inner);
   if (!messages) return strdup("oom messages");
 
-  /* Tools: OpenAI-style. Default ON for all models/backends.
-   * Disable only with NANOBOT_TOOLS=0 (env file wins over process getenv so the
-   * app can re-enable tools after an older process env of 0).
-   * If the backend rejects tools, the loop below retries without them. */
+  /* Tools: OpenAI-style. Default ON for cloud backends.
+   * Disable with NANOBOT_TOOLS=0 (env file wins over process getenv).
+   * Localhost llama: tools thrash tiny models and mangle short prompts
+   * (e.g. "a a a" → junk / single token). Prefer pure chat offline. */
   int use_tools = 1;
   {
     char ep[640];
@@ -642,6 +645,30 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     if (t && (t[0] == '0' || t[0] == 'n' || t[0] == 'N' || t[0] == 'f' || t[0] == 'F'))
       use_tools = 0;
     free(from_file);
+  }
+  if (c && c->base_url && (strstr(c->base_url, "127.0.0.1") || strstr(c->base_url, "localhost")))
+    use_tools = 0;
+  /* Short social / trivial prompts: no tool thrash */
+  {
+    const char *p = user_prompt;
+    while (*p == ' ' || *p == '\t') p++;
+    size_t pl = strlen(p);
+    if (pl > 0 && pl < 48 && p[0] != '@' && !strchr(p, '\n')) {
+      char low[64];
+      size_t i;
+      for (i = 0; i < pl && i < sizeof low - 1; i++) {
+        char ch = p[i];
+        low[i] = (ch >= 'A' && ch <= 'Z') ? (char)(ch + 32) : ch;
+      }
+      low[i] = 0;
+      if (!strcmp(low, "hello") || !strcmp(low, "hi") || !strcmp(low, "hey") ||
+          !strcmp(low, "thanks") || !strcmp(low, "thank you") || !strcmp(low, "ping") ||
+          !strcmp(low, "ok") || !strcmp(low, "yes") || !strcmp(low, "no") ||
+          !strncmp(low, "hello ", 6) || !strncmp(low, "hi ", 3) ||
+          /* single letters / spaced letters: pure chat, preserve spaces */
+          (pl <= 16 && strspn(p, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ") == pl))
+        use_tools = 0;
+    }
   }
 
   const char *tools =

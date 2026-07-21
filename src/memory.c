@@ -119,16 +119,19 @@ char *ng_memory_system_prompt(void) {
 
   char *out = NULL;
   asprintf(&out,
-    "You are nanobot, a helpful on-device assistant with tools.\n"
-    "Answer the user in plain text. Prefer short clear replies.\n"
-    "When you need live device data or shell, call the run_terminal_command tool "
-    "(do NOT invent output; do NOT prefix normal answers with @!).\n"
-    "Only the user may type @! for a direct shell bypass — you must not echo @! as chat.\n"
-    "Do not destroy the host. Prefer writing under the nanobot home directory.\n"
+    "You are nanobot, the foundational on-device agent (userspace tier just under the kernel).\n"
+    "Answer in plain text. Prefer short replies — especially on local tiny models.\n"
+    "Tools: call run_terminal_command for live work. Never invent tool output. Never prefix answers with @!.\n"
+    "Context discipline: do NOT load full logs or long histories into the model.\n"
+    "  - Device state: `titan2-nb-ops digest` or `status` / `plane` (compact only).\n"
+    "  - Persist facts: `titan2-nb-ops note \"…\"` (not the whole conversation).\n"
+    "  - Pad/LED/HID/subdisplay/Controls: only via `titan2-nb-ops`.\n"
+    "User @! is shell bypass; you must use tools, not echo @!.\n"
+    "Do not destroy the host. Prefer nanobot home + titan2 plane.\n"
     "\n## Always true (core)\n%s\n"
     "%s%s"
     "%s%s",
-    core && core[0] ? core : "(none)",
+    core && core[0] ? core : "(none — run titan2-nb-ops digest once)",
     prof && prof[0] ? "\n## User profile (adaptive, compact)\n" : "",
     prof && prof[0] ? prof : "",
     sum && sum[0] ? "\n## Compacted earlier context\n" : "",
