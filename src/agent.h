@@ -50,4 +50,23 @@ char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt);
 char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
                       int stream_final, ng_stream_fn on_delta, void *userdata);
 
+/**
+ * Multimodal: optional base64 image (no data: prefix) + mime (image/jpeg|png|webp).
+ * OpenAI/Grok vision content array. image_b64 may be NULL (text-only).
+ * Caps ~2.5MB base64. Memory stores text only ("[image] …").
+ */
+char *ng_agent_run_vision(ng_agent_cfg *c, const char *user_prompt,
+                          const char *image_b64, const char *image_mime,
+                          int stream_final, ng_stream_fn on_delta, void *userdata);
+
+/**
+ * Same as vision, plus optional images_json array:
+ * [{"base64":"...","mime":"image/jpeg"}, ...] (up to 4). Document text should
+ * already be folded into user_prompt by the app.
+ */
+char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
+                               const char *image_b64, const char *image_mime,
+                               const char *images_json,
+                               int stream_final, ng_stream_fn on_delta, void *userdata);
+
 #endif

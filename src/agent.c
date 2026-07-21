@@ -588,6 +588,162 @@ static int msg_append(char **msgs, const char *role, const char *content) {
   return *msgs ? 0 : -1;
 }
 
+/* Strip whitespace from base64 into malloc'd buffer; NULL on OOM. */
+static char *b64_clean(const char *b64, size_t *out_len) {
+  if (!b64) return NULL;
+  size_t blen = strlen(b64);
+  char *clean = malloc(blen + 1);
+  if (!clean) return NULL;
+  size_t j = 0;
+  for (size_t i = 0; i < blen; i++) {
+    char c = b64[i];
+    if (c == ' ' || c == '\n' || c == '\r' || c == '\t') continue;
+    clean[j++] = c;
+  }
+  clean[j] = 0;
+  if (out_len) *out_len = j;
+  return clean;
+}
+
+/* OpenAI/Grok vision: content array = text + N image_url parts.
+ * images_json: [{"base64":"...","mime":"image/jpeg"}, ...] optional.
+ * Falls back to single b64/mime when images_json is NULL. */
+static int msg_append_user_vision(char **msgs, const char *text,
+                                  const char *b64, const char *mime,
+                                  const char *images_json) {
+  /* Collect up to 4 images */
+  char *cleans[4] = {0};
+  char mimes[4][40];
+  int nimg = 0;
+  size_t total_b64 = 0;
+
+  if (images_json && images_json[0] == '[') {
+    const char *p = images_json;
+    while (*p && nimg < 4) {
+      const char *bkey = strstr(p, "\"base64\"");
+      if (!bkey) break;
+      char *one = ng_json_get_string(bkey - 1 > images_json ? bkey : images_json, "base64");
+      /* search near bkey */
+      free(one);
+      one = NULL;
+      {
+        const char *q = strchr(bkey, ':');
+        if (q) {
+          while (*q && *q != '"') q++;
+          if (*q == '"') {
+            q++;
+            const char *e = q;
+            while (*e && *e != '"') {
+              if (*e == '\\' && e[1]) e += 2;
+              else e++;
+            }
+            size_t n = (size_t)(e - q);
+            one = malloc(n + 1);
+            if (one) {
+              memcpy(one, q, n);
+              one[n] = 0;
+            }
+            p = e;
+          }
+        }
+      }
+      char *mm = NULL;
+      const char *mkey = strstr(bkey > images_json + 20 ? bkey - 80 : images_json, "\"mime\"");
+      if (mkey && mkey < bkey + 200) mm = ng_json_get_string(mkey, "mime");
+      if (!mm) {
+        /* try after base64 */
+        mkey = strstr(bkey, "\"mime\"");
+        if (mkey) mm = ng_json_get_string(mkey, "mime");
+      }
+      if (one && one[0]) {
+        size_t cl = 0;
+        char *c = b64_clean(one, &cl);
+        free(one);
+        if (c && cl > 0 && total_b64 + cl < 3500000) {
+          cleans[nimg] = c;
+          snprintf(mimes[nimg], sizeof mimes[nimg], "%s",
+                   (mm && !strncmp(mm, "image/", 6)) ? mm : "image/jpeg");
+          total_b64 += cl;
+          nimg++;
+        } else {
+          free(c);
+        }
+      } else {
+        free(one);
+      }
+      free(mm);
+      if (p && *p) p++;
+      else break;
+    }
+  }
+
+  if (nimg == 0 && b64 && b64[0]) {
+    size_t cl = 0;
+    char *c = b64_clean(b64, &cl);
+    if (c && cl > 0) {
+      if (cl > 2500000) {
+        free(c);
+        return -2;
+      }
+      cleans[0] = c;
+      snprintf(mimes[0], sizeof mimes[0], "%s",
+               (mime && !strncmp(mime, "image/", 6)) ? mime : "image/jpeg");
+      nimg = 1;
+    } else {
+      free(c);
+    }
+  }
+
+  if (nimg == 0) return msg_append(msgs, "user", text);
+
+  char *esc = ng_json_escape(text && text[0] ? text : "What is in the attached image(s)/file(s)?");
+  if (!esc) {
+    for (int i = 0; i < nimg; i++) free(cleans[i]);
+    return -1;
+  }
+
+  /* Build content array JSON */
+  char *content = NULL;
+  asprintf(&content, "[{\"type\":\"text\",\"text\":\"%s\"}", esc);
+  free(esc);
+  if (!content) {
+    for (int i = 0; i < nimg; i++) free(cleans[i]);
+    return -1;
+  }
+  for (int i = 0; i < nimg; i++) {
+    char *next = NULL;
+    asprintf(&next,
+      "%s,{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:%s;base64,%s\"}}",
+      content, mimes[i], cleans[i]);
+    free(content);
+    free(cleans[i]);
+    cleans[i] = NULL;
+    content = next;
+    if (!content) {
+      for (int k = i + 1; k < nimg; k++) free(cleans[k]);
+      return -1;
+    }
+  }
+  {
+    char *closed = NULL;
+    asprintf(&closed, "%s]", content);
+    free(content);
+    content = closed;
+  }
+  if (!content) return -1;
+
+  char *piece = NULL;
+  if (!*msgs) {
+    asprintf(msgs, "{\"role\":\"user\",\"content\":%s}", content);
+  } else {
+    asprintf(&piece, "%s,{\"role\":\"user\",\"content\":%s}", *msgs, content);
+    free(*msgs);
+    *msgs = piece;
+  }
+  free(content);
+  return *msgs ? 0 : -1;
+}
+
 static char *run_shell_direct(ng_agent_cfg *c, const char *cmd) {
   while (*cmd == ' ' || *cmd == '\t') cmd++;
   if (!cmd[0]) return strdup("usage: @! <shell command>");
@@ -605,10 +761,29 @@ char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt) {
 
 char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
                      int stream_final, ng_stream_fn on_delta, void *userdata) {
-  if (!user_prompt || !user_prompt[0]) return strdup("(empty prompt)");
+  return ng_agent_run_attachments(c, user_prompt, NULL, NULL, NULL,
+                                  stream_final, on_delta, userdata);
+}
+
+char *ng_agent_run_vision(ng_agent_cfg *c, const char *user_prompt,
+                          const char *image_b64, const char *image_mime,
+                          int stream_final, ng_stream_fn on_delta, void *userdata) {
+  return ng_agent_run_attachments(c, user_prompt, image_b64, image_mime, NULL,
+                                  stream_final, on_delta, userdata);
+}
+
+char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
+                               const char *image_b64, const char *image_mime,
+                               const char *images_json,
+                               int stream_final, ng_stream_fn on_delta, void *userdata) {
+  int has_image = (image_b64 && image_b64[0])
+               || (images_json && images_json[0] == '[' && strstr(images_json, "base64"));
+  if ((!user_prompt || !user_prompt[0]) && !has_image)
+    return strdup("(empty prompt)");
+  if (!user_prompt) user_prompt = "";
 
   /* Direct shell: @! command  (offline, no LLM, works without an LLM) */
-  if (user_prompt[0] == '@' && user_prompt[1] == '!') {
+  if (user_prompt[0] == '@' && user_prompt[1] == '!' && !has_image) {
     char *r = run_shell_direct(c, user_prompt + 2);
     /* lightweight memory of shell for context */
     if (r) ng_memory_record_exchange(user_prompt, r);
@@ -640,7 +815,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     (void)key;
   }
 
-  ng_log("agent: user: %.200s", user_prompt);
+  ng_log("agent: user: %.200s%s", user_prompt, has_image ? " [+image]" : "");
 
   /* Compact memory: always-on core identity + recent turns (pruned). */
   char *sys = ng_memory_system_prompt();
@@ -684,12 +859,31 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     free(raw);
   }
 
-  msg_append(&inner, "user", user_prompt);
+  {
+    int va = msg_append_user_vision(&inner, user_prompt,
+                                    has_image ? image_b64 : NULL, image_mime,
+                                    images_json);
+    if (va == -2) {
+      free(inner);
+      return strdup("image too large (max ~2MB). Resize in app and retry.");
+    }
+    if (va != 0) {
+      free(inner);
+      return strdup("oom building vision message");
+    }
+  }
 
   char *messages = NULL;
   asprintf(&messages, "[%s]", inner ? inner : "");
   free(inner);
   if (!messages) return strdup("oom messages");
+
+  /* Memory: never store raw base64 — caption only */
+  char *mem_user = NULL;
+  if (has_image)
+    asprintf(&mem_user, "[image attached] %s", user_prompt[0] ? user_prompt : "(no caption)");
+  else
+    mem_user = strdup(user_prompt);
 
   /* Tools: OpenAI-style. Default ON for cloud backends.
    * Disable with NANOBOT_TOOLS=0 (env file wins over process getenv).
@@ -708,6 +902,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
   }
   if (c && c->base_url && (strstr(c->base_url, "127.0.0.1") || strstr(c->base_url, "localhost")))
     use_tools = 0;
+  if (has_image) use_tools = 0; /* vision turn: answer image first, no tool thrash */
   /* Short social / trivial prompts: no tool thrash */
   {
     const char *p = user_prompt;
@@ -769,7 +964,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
   for (int turn = 0; turn < max_turns; turn++) {
     if (grok) {
       if (ng_session_ensure(c->session) != 0) {
-        free(messages); free(last_tool_out); free(tools);
+        free(messages); free(last_tool_out); free(tools); free(mem_user);
         return strdup("Grok session expired. Restart nanobot and re-activate in the browser.");
       }
       bearer = ng_session_bearer(c->session);
@@ -849,9 +1044,10 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
         free(last_tool_out);
         free(tools);
         if (final && strncmp(final, "API error:", 10) != 0) {
-          ng_memory_record_exchange(user_prompt, final);
+          ng_memory_record_exchange(mem_user ? mem_user : user_prompt, final);
         }
         ng_log("agent: final (streamed): %.300s", final);
+        free(mem_user);
         return final;
       }
       free(streamed);
@@ -869,7 +1065,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     }
 
     if (!resp) {
-      free(messages); free(last_tool_out); free(tools);
+      free(messages); free(last_tool_out); free(tools); free(mem_user);
       return strdup("no response from API");
     }
     if (!resp[0]) {
@@ -884,7 +1080,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
          strstr(resp, "mkstemp") || strstr(resp, "waitpid"))) {
       char *out = NULL;
       asprintf(&out, "API transport error: %.400s", resp);
-      free(resp); free(messages); free(last_tool_out); free(tools);
+      free(resp); free(messages); free(last_tool_out); free(tools); free(mem_user);
       return out ? out : strdup("API transport error");
     }
 
@@ -907,7 +1103,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
       if (!em) em = ng_json_get_string(resp, "error");
       char *out = NULL;
       asprintf(&out, "API error: %s\n%.600s", em ? em : "?", resp);
-      free(em); free(resp); free(messages); free(last_tool_out); free(tools);
+      free(em); free(resp); free(messages); free(last_tool_out); free(tools); free(mem_user);
       return out;
     }
 
@@ -1066,8 +1262,9 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
       strncmp(final, "(no content)", 12) != 0 &&
       strncmp(final, "curl failed", 11) != 0 &&
       strncmp(final, "(no reply", 9) != 0) {
-    ng_memory_record_exchange(user_prompt, final);
+    ng_memory_record_exchange(mem_user ? mem_user : user_prompt, final);
   }
   ng_log("agent: final: %.300s", final);
+  free(mem_user);
   return final;
 }

@@ -680,19 +680,56 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (!image_b64) image_b64 = ng_json_get_string(body, "image");
     char *image_mime = ng_json_get_string(body, "image_mime");
     if (!image_mime) image_mime = ng_json_get_string(body, "mime");
-    if ((!prompt || !prompt[0]) && (!image_b64 || !image_b64[0])) {
-      free(prompt); free(image_b64); free(image_mime);
-      http_json(cfd, 400, "{\"error\":\"missing prompt or image_base64\"}");
+    /* Optional multi-image array: "images":[{base64,mime},...] — extract raw slice */
+    char *images_json = NULL;
+    {
+      const char *ik = strstr(body, "\"images\"");
+      if (ik) {
+        const char *lb = strchr(ik, '[');
+        if (lb) {
+          int depth = 0;
+          const char *p = lb;
+          for (; *p; p++) {
+            if (*p == '[') depth++;
+            else if (*p == ']') {
+              depth--;
+              if (depth == 0) {
+                size_t n = (size_t)(p - lb + 1);
+                if (n < 4 * 1024 * 1024) {
+                  images_json = malloc(n + 1);
+                  if (images_json) {
+                    memcpy(images_json, lb, n);
+                    images_json[n] = 0;
+                  }
+                }
+                break;
+              }
+            } else if (*p == '"') {
+              p++;
+              while (*p && *p != '"') {
+                if (*p == '\\' && p[1]) p += 2;
+                else p++;
+              }
+            }
+          }
+        }
+      }
+    }
+    int has_img = (image_b64 && image_b64[0])
+               || (images_json && strstr(images_json, "base64"));
+    if ((!prompt || !prompt[0]) && !has_img) {
+      free(prompt); free(image_b64); free(image_mime); free(images_json);
+      http_json(cfd, 400, "{\"error\":\"missing prompt or image/attachments\"}");
       free(req); close(cfd); return;
     }
     if (!prompt) prompt = strdup("");
     /* Outer shell always: @! shell. Local/llama backend: no browser session. */
-    int shell_only = (prompt[0] == '@' && prompt[1] == '!' && !(image_b64 && image_b64[0]));
+    int shell_only = (prompt[0] == '@' && prompt[1] == '!' && !has_img);
     int need_browser = agent && ng_agent_needs_browser_session(agent);
     if (!shell_only && need_browser && (!session || !ng_session_valid(session))) {
       if (session && session->login_pending) ng_session_poll_login(session);
       if (!session || !ng_session_valid(session)) {
-        free(prompt); free(image_b64); free(image_mime);
+        free(prompt); free(image_b64); free(image_mime); free(images_json);
         http_json(cfd, 401, "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}");
         free(req); close(cfd); return;
       }
@@ -711,24 +748,26 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\r\n");
       send_all(cfd, hdr, (size_t)hn);
       chat_sse_ud ud = { .fd = cfd };
-      char *reply = ng_agent_run_vision(agent, prompt, image_b64, image_mime,
-                                        1, chat_sse_delta, &ud);
+      char *reply = ng_agent_run_attachments(agent, prompt, image_b64, image_mime,
+                                             images_json, 1, chat_sse_delta, &ud);
       char *esc = ng_json_escape(reply ? reply : "");
       char *fin = NULL;
       if (asprintf(&fin, "data: {\"done\":true,\"reply\":\"%s\"}\n\n", esc ? esc : "") > 0 && fin) {
         send_all(cfd, fin, strlen(fin));
         free(fin);
       }
-      free(prompt); free(image_b64); free(image_mime); free(reply); free(esc);
+      free(prompt); free(image_b64); free(image_mime); free(images_json);
+      free(reply); free(esc);
       free(req); close(cfd); return;
     }
-    char *reply = ng_agent_run_vision(agent, prompt, image_b64, image_mime,
-                                      0, NULL, NULL);
+    char *reply = ng_agent_run_attachments(agent, prompt, image_b64, image_mime,
+                                           images_json, 0, NULL, NULL);
     char *esc = ng_json_escape(reply ? reply : "");
     char *jb = NULL;
     asprintf(&jb, "{\"reply\":\"%s\"}", esc ? esc : "");
     http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
-    free(prompt); free(image_b64); free(image_mime); free(reply); free(esc); free(jb);
+    free(prompt); free(image_b64); free(image_mime); free(images_json);
+    free(reply); free(esc); free(jb);
     free(req); close(cfd); return;
   }
 
