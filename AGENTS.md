@@ -25,3 +25,8 @@ Working on **nanobot** source. Parent lab rules may exist outside this repo.
 make host && make test
 ./build/host/nanobot --port 8787 --offline
 ```
+
+## Station placement
+
+Canonical tree: `ProjectNexus/products/nanobot` (not under `products/clanker`).  
+Clanker (and other hosts) may **run** this peer; nanobot is **not** Clanker-affiliated product code.
