@@ -1,106 +1,118 @@
 # nanobot
 
-A small program in **C** that runs a chat agent on **your machine**.
+Small **C** agent that runs on **your** machine: chat, optional shell (`@! …`), HTTP peer (default port **8787**), optional MCP.
 
-- Talk to a **local model** (llama.cpp or any OpenAI-style HTTP API), or
-- Log in to a **cloud** backend with a one-time browser code, or
-- Run **shell commands** and optional tools without any model (`@! …`)
+**Not affiliated with, endorsed by, or sponsored by xAI, Grok, or any other vendor.**  
+Grok login is **optional unofficial interop** only — see [LEGAL.md](LEGAL.md).
 
-Also optional: a small **HTTP peer** on a port (default 8787) so other programs can talk to it, and **MCP** for editor integrations.
+---
 
-Works on Linux, macOS, and *BSD — whatever your C compiler targets (armv7, arm64, x86_64, …).
+## Quick start — Grok (browser login)
 
-## 1. Install
+You need a normal Grok account in a browser. nanobot never ships official Grok software.
+
+### 1. Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Abyss-c0re/nanobot/main/scripts/install.sh | bash
-```
-
-Needs: `curl` or `wget`. If no prebuilt binary exists for your machine, also `git`, `cmake`, `make`, and a C compiler (`cc` / `gcc` / `clang`).
-
-Then in **this** shell:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"   # root install: /opt/nanobot/bin
+export PATH="$HOME/.local/bin:$PATH"   # if needed; root install: /opt/nanobot/bin
 nanobot --version
 ```
 
-Full options: [INSTALL.md](INSTALL.md).
+Or from source: `git clone https://github.com/Abyss-c0re/nanobot.git && cd nanobot && make host`
 
-## 2. First run (pick one)
-
-**A — Cloud provider + web auth** (device code in the browser; default backend):
+### 2. Start the peer
 
 ```bash
 nanobot --port 8787
-# then open the activation link (/activate) or:
+```
+
+### 3. Activate in the browser
+
+Either:
+
+```bash
 nanobot --login
 ```
 
-Session is sealed under `$NANOBOT_HOME`. Provider interop is optional and unaffiliated — see [LEGAL.md](LEGAL.md).
+or open:
 
-**B — Local model** (no browser; start your OpenAI-compatible server first):
+```text
+http://127.0.0.1:8787/activate
+```
+
+Log in with **your** Grok account when the page asks. When it succeeds, nanobot stores an **encrypted** session under `~/.nanobot` (override with `NANOBOT_HOME`).
+
+### 4. Chat
+
+```bash
+nanobot -p 'hello'
+```
+
+Keep the peer running in another terminal if you use the HTTP API.  
+Default model is `grok-4.5` (override with `--model NAME` or `NANOBOT_MODEL`).
+
+That’s it for Grok.
+
+---
+
+## Without Grok (local llama.cpp / OpenAI-compatible)
+
+No browser. Start your local server first (e.g. llama.cpp OpenAI server on `:8080`), then:
 
 ```bash
 nanobot --port 8787 --offline
-# or: --base-url http://127.0.0.1:8080/v1 --model local
+# or: nanobot --base-url http://127.0.0.1:8080/v1 --model local -p 'hello'
 ```
 
-## 3. Everyday use
+---
+
+## Everyday commands
 
 ```bash
-nanobot -p 'hello'                 # stream one reply
-nanobot --mcp                      # stdio MCP for tools that speak MCP
+nanobot -p 'hello'          # one-shot reply (streams tokens)
+nanobot --mcp               # stdio MCP
+nanobot --login             # (re)start Grok device-code login
+nanobot --offline -p 'hi'   # local backend only
 ```
 
-Your data dir (`$NANOBOT_HOME`, default `~/.nanobot`):
+### Data dir (`~/.nanobot` by default)
 
-| file | meaning |
+| File | Purpose |
 |------|---------|
-| `peer_token` | secret for LAN peer API (created once; keep private) |
-| `session` | encrypted cloud login (if you use cloud) |
-| `settings` | port / shell flags |
-| `nanobot.out` | log if started in background |
+| `peer_token` | LAN peer API secret (auto-created; keep private) |
+| `session` | encrypted cloud login after browser activate |
+| `settings` / `env` | port, backend URL, model |
+| `nanobot.out` | log if run in background |
 
-Backends detail: [docs/BACKENDS.md](docs/BACKENDS.md).  
-Peer API: [docs/PEER_BUS.md](docs/PEER_BUS.md).  
-Security: [SECURITY.md](SECURITY.md).
+---
 
-## Deploy
-
-Three equal targets:
+## Deploy (optional)
 
 ```bash
-./scripts/deploy.sh local                          # this machine
-./scripts/deploy.sh ssh --host root@host --arch armv7
-./Docker/wizard default                            # docker fast path
-./scripts/deploy.sh docker --build --input ./ws    # docker low-level
+./scripts/deploy.sh local
+./scripts/deploy.sh ssh --host user@host --arch armv7
+./Docker/wizard default
 ```
 
-Docker wizard: [Docker/README.md](Docker/README.md).
+Docker: [Docker/README.md](Docker/README.md) · full install: [INSTALL.md](INSTALL.md)
 
+---
 
-## Build from source
+## Docs
 
-```bash
-git clone https://github.com/Abyss-c0re/nanobot.git && cd nanobot
-make host && make test
-./build/host/nanobot --version
-```
+| Doc | Topic |
+|-----|--------|
+| [docs/BACKENDS.md](docs/BACKENDS.md) | Grok web auth vs local models |
+| [docs/PEER_BUS.md](docs/PEER_BUS.md) | HTTP peer API |
+| [docs/BUILD.md](docs/BUILD.md) | Feature flags / CMake |
+| [SECURITY.md](SECURITY.md) | Threat model & secrets |
+| [LEGAL.md](LEGAL.md) | License, non-affiliation |
 
-Feature flags (MCP, auth, hub, …): [docs/BUILD.md](docs/BUILD.md).  
-Doc index: [docs/README.md](docs/README.md).
-
-## Layout
-
-```
-apps/nanobot/   program
-libs/           crypto, os, json
-src/            peer HTTP, agent, auth, mcp, hub
-scripts/        install, clean, maintain
-docs/           technical reference
-```
+---
 
 ## License
 
-MIT — [LICENSE](LICENSE), [LEGAL.md](LEGAL.md). Not affiliated with third-party AI vendors.
+MIT — [LICENSE](LICENSE).  
+**Not affiliated with xAI, Grok, SpaceX, SpaceXAI, or any third-party AI vendor.**  
+Optional cloud login is interoperability only; you are responsible for account terms.
