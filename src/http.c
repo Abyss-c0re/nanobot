@@ -341,6 +341,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/status") == 0)) {
     int need_browser = agent && ng_agent_needs_browser_session(agent);
+    /* Soft-expired access_token still counts as signed-in after a successful refresh. */
+    if (need_browser && session && !ng_session_valid(session))
+      (void)ng_session_ensure(session);
     int signed_in = need_browser ? (session && ng_session_valid(session)) : 1;
     const char *backend = agent ? ng_agent_backend_kind(agent) : "unknown";
     const char *auth_mode = need_browser ? "browser_device_code" : "local_openai_compatible";
@@ -673,17 +676,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *prompt = ng_json_get_string(body, "prompt");
     if (!prompt) prompt = ng_json_get_string(body, "q");
     if (!prompt) prompt = ng_json_get_string(body, "message");
-    if (!prompt) {
-      http_json(cfd, 400, "{\"error\":\"missing prompt\"}");
+    char *image_b64 = ng_json_get_string(body, "image_base64");
+    if (!image_b64) image_b64 = ng_json_get_string(body, "image");
+    char *image_mime = ng_json_get_string(body, "image_mime");
+    if (!image_mime) image_mime = ng_json_get_string(body, "mime");
+    if ((!prompt || !prompt[0]) && (!image_b64 || !image_b64[0])) {
+      free(prompt); free(image_b64); free(image_mime);
+      http_json(cfd, 400, "{\"error\":\"missing prompt or image_base64\"}");
       free(req); close(cfd); return;
     }
+    if (!prompt) prompt = strdup("");
     /* Outer shell always: @! shell. Local/llama backend: no browser session. */
-    int shell_only = (prompt[0] == '@' && prompt[1] == '!');
+    int shell_only = (prompt[0] == '@' && prompt[1] == '!' && !(image_b64 && image_b64[0]));
     int need_browser = agent && ng_agent_needs_browser_session(agent);
     if (!shell_only && need_browser && (!session || !ng_session_valid(session))) {
       if (session && session->login_pending) ng_session_poll_login(session);
       if (!session || !ng_session_valid(session)) {
-        free(prompt);
+        free(prompt); free(image_b64); free(image_mime);
         http_json(cfd, 401, "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}");
         free(req); close(cfd); return;
       }
@@ -702,22 +711,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\r\n");
       send_all(cfd, hdr, (size_t)hn);
       chat_sse_ud ud = { .fd = cfd };
-      char *reply = ng_agent_run_ex(agent, prompt, 1, chat_sse_delta, &ud);
+      char *reply = ng_agent_run_vision(agent, prompt, image_b64, image_mime,
+                                        1, chat_sse_delta, &ud);
       char *esc = ng_json_escape(reply ? reply : "");
       char *fin = NULL;
       if (asprintf(&fin, "data: {\"done\":true,\"reply\":\"%s\"}\n\n", esc ? esc : "") > 0 && fin) {
         send_all(cfd, fin, strlen(fin));
         free(fin);
       }
-      free(prompt); free(reply); free(esc);
+      free(prompt); free(image_b64); free(image_mime); free(reply); free(esc);
       free(req); close(cfd); return;
     }
-    char *reply = ng_agent_run(agent, prompt);
+    char *reply = ng_agent_run_vision(agent, prompt, image_b64, image_mime,
+                                      0, NULL, NULL);
     char *esc = ng_json_escape(reply ? reply : "");
     char *jb = NULL;
     asprintf(&jb, "{\"reply\":\"%s\"}", esc ? esc : "");
     http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
-    free(prompt); free(reply); free(esc); free(jb);
+    free(prompt); free(image_b64); free(image_mime); free(reply); free(esc); free(jb);
     free(req); close(cfd); return;
   }
 

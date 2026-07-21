@@ -139,8 +139,10 @@ static int provider_seal_key(unsigned char key[32], int *from_peer) {
   return nb_master_key_load_or_create(p, key);
 }
 
-/** Try open with peer-derived key then legacy session.key. */
-static char *open_with_provider_keys(const char *envelope) {
+/** Try open with peer-derived key then legacy session.key.
+ *  If opened_legacy is non-NULL, set *opened_legacy=1 when session.key was used. */
+static char *open_with_provider_keys(const char *envelope, int *opened_legacy) {
+  if (opened_legacy) *opened_legacy = 0;
   unsigned char key[32];
   int from_peer = 0;
   if (provider_seal_key(key, &from_peer) != 0) return NULL;
@@ -156,6 +158,7 @@ static char *open_with_provider_keys(const char *envelope) {
       nb_secure_wipe(key, 32);
       if (plain) {
         ng_log("auth: opened session with legacy session.key — will re-seal under peer token");
+        if (opened_legacy) *opened_legacy = 1;
         return plain;
       }
     }
@@ -177,13 +180,19 @@ static int write_sealed_secret(const char *path, const char *plain) {
   return rc;
 }
 
-/** Read file; decrypt if nbenc1 envelope; else return raw (legacy plaintext). */
-static char *read_maybe_sealed(const char *path) {
+/** Read file; decrypt if nbenc1 envelope; else return raw (legacy plaintext).
+ *  was_clear / opened_legacy report migration needs (do not re-seal on every load). */
+static char *read_maybe_sealed(const char *path, int *was_clear, int *opened_legacy) {
+  if (was_clear) *was_clear = 0;
+  if (opened_legacy) *opened_legacy = 0;
   size_t len = 0;
   char *raw = ng_read_file(path, &len);
   if (!raw) return NULL;
-  if (!nb_secret_is_sealed(raw)) return raw; /* legacy cleartext */
-  char *plain = open_with_provider_keys(raw);
+  if (!nb_secret_is_sealed(raw)) {
+    if (was_clear) *was_clear = 1;
+    return raw; /* legacy cleartext */
+  }
+  char *plain = open_with_provider_keys(raw, opened_legacy);
   free(raw);
   return plain;
 }
@@ -288,7 +297,7 @@ int ng_session_save_pending(const ng_session *s) {
 int ng_session_load_pending(ng_session *s) {
   if (!s) return -1;
   const char *path = device_login_path();
-  char *body = read_maybe_sealed(path);
+  char *body = read_maybe_sealed(path, NULL, NULL);
   if (!body) return -1;
   char *pending = slurp_body(body, "login_pending");
   if (!pending || pending[0] != '1') {
@@ -334,7 +343,8 @@ int ng_session_load_pending(ng_session *s) {
 
 int ng_session_load(ng_session *s) {
   /* Keep tokens and/or pending device login across fork workers. */
-  char *body = read_maybe_sealed(session_path());
+  int was_clear = 0, opened_legacy = 0;
+  char *body = read_maybe_sealed(session_path(), &was_clear, &opened_legacy);
   char *at = body ? slurp_body(body, "access_token") : NULL;
   char *rt = body ? slurp_body(body, "refresh_token") : NULL;
   char *ex = body ? slurp_body(body, "expires_at") : NULL;
@@ -342,36 +352,24 @@ int ng_session_load(ng_session *s) {
   int have_tok = (at && at[0]);
   int have_rt = (rt && rt[0]);
 
-  /* Migrate legacy plaintext session → sealed on next successful load. */
-  if (body && !nb_secret_is_sealed(body) && (have_tok || have_rt)) {
-    /* body was cleartext from disk; re-save encrypted if we have tokens */
-  }
-
   free(s->access_token); free(s->refresh_token); free(s->email);
   s->access_token = at;
   s->refresh_token = rt;
   s->email = em;
   s->expires_at = 0;
   if (ex) { s->expires_at = (time_t)strtol(ex, NULL, 10); free(ex); }
-
-  int was_clear = 0;
-  if (body) {
-    size_t fl = 0;
-    char *raw = ng_read_file(session_path(), &fl);
-    was_clear = raw && !nb_secret_is_sealed(raw);
-    free(raw);
-  }
   free(body);
 
-  /* Re-seal under peer_token KDF when: cleartext, or peer token now present */
-  if ((have_tok || have_rt)) {
-    char *pt = load_peer_token_secret();
-    if (was_clear || (pt && pt[0])) {
-      ng_log("auth: re-sealing provider session under %s",
-             (pt && pt[0]) ? "peer_token KDF" : "session.key");
-      ng_session_save(s);
-    }
-    free(pt);
+  /*
+   * Re-seal ONLY on migration (cleartext → AEAD, or session.key → peer_token KDF).
+   * Previously we re-sealed whenever peer_token existed — every HTTP fork rewrote
+   * session on every request, racing other workers and wiping valid auth.
+   */
+  if ((have_tok || have_rt) && (was_clear || opened_legacy)) {
+    ng_log("auth: migrating provider session seal (cleartext=%d legacy_key=%d)",
+           was_clear, opened_legacy);
+    if (ng_session_save(s) != 0)
+      ng_log("auth: warning — migrate re-seal failed (session kept in memory)");
   }
 
   /* Always try pending file (device login survives worker exit). */
