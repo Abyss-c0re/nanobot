@@ -1030,6 +1030,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     snprintf(url, sizeof url, "%s/chat/completions", c->base_url);
 
     int want_stream = stream_final && !tools_now && on_delta;
+    int live_streamed = 0; /* set if SSE tokens already went to on_delta this turn */
     ng_log("agent: turn %d/%d POST %s tools=%d stream=%d",
            turn + 1, max_turns, url, tools_now, want_stream);
 
@@ -1040,6 +1041,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       body = NULL;
       if (streamed && streamed[0]) {
         final = streamed;
+        live_streamed = 1;
         free(messages);
         free(last_tool_out);
         free(tools);
@@ -1220,6 +1222,25 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         free(resp);
         if (max_turns < hard_max) max_turns = hard_max;
         continue;
+      }
+      /* Non-stream completion still feeds SSE clients (tools turns, or empty
+       * upstream stream fallback) so the UI can type/render progressively. */
+      if (stream_final && on_delta && !live_streamed) {
+        const char *p = final;
+        size_t total = 0;
+        while (*p) {
+          size_t n = 0;
+          while (p[n] && n < 24) n++;
+          if (n == 24) {
+            size_t b = n;
+            while (b > 8 && p[b] && p[b] != ' ' && p[b] != '\n') b--;
+            if (b > 8) n = b + 1;
+          }
+          on_delta(userdata, p, n);
+          total += n;
+          p += n;
+        }
+        ng_log("agent: synthetic stream %zu bytes to client", total);
       }
       free(resp);
       break;

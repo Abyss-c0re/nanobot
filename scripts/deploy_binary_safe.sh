@@ -25,6 +25,10 @@ echo "  (will NOT modify peer_token|session|settings|www)"
   if [ -f '$DEST/nanobot.pid' ]; then kill \$(cat '$DEST/nanobot.pid') 2>/dev/null || true; fi
   killall nanobot 2>/dev/null || true
   sleep 1
+  # Stale listeners leave :8787 busy so the new binary never serves (bind: Address in use).
+  killall -9 nanobot 2>/dev/null || true
+  fuser -k 8787/tcp 2>/dev/null || true
+  sleep 1
   export NANOBOT_HOME='$DEST'
   if [ -x '$DEST/run.sh' ]; then
     nohup '$DEST/run.sh' >>'$DEST/nanobot.out' 2>&1 &
