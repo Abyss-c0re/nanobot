@@ -30,6 +30,53 @@ void ng_memory_init(void) {
   }
 }
 
+/* Drop incomplete/invalid UTF-8 so provider JSON never sees broken code points. */
+static void utf8_sanitize_inplace(char *s) {
+  if (!s) return;
+  unsigned char *p = (unsigned char *)s;
+  unsigned char *w = p;
+  while (*p) {
+    unsigned char c = *p;
+    if (c < 0x80) {
+      *w++ = *p++;
+      continue;
+    }
+    int need = 0;
+    if ((c & 0xE0) == 0xC0) need = 2;
+    else if ((c & 0xF0) == 0xE0) need = 3;
+    else if ((c & 0xF8) == 0xF0) need = 4;
+    else { p++; continue; } /* lone continuation / illegal */
+    int ok = 1;
+    for (int i = 1; i < need; i++) {
+      if ((p[i] & 0xC0) != 0x80) { ok = 0; break; }
+    }
+    if (!ok) { p++; continue; }
+    for (int i = 0; i < need; i++) *w++ = *p++;
+  }
+  *w = 0;
+}
+
+/* Cap at max_bytes without splitting a UTF-8 codepoint. */
+static void utf8_truncate(char *s, size_t max_bytes) {
+  if (!s) return;
+  size_t n = strlen(s);
+  if (n <= max_bytes) {
+    utf8_sanitize_inplace(s);
+    return;
+  }
+  size_t cut = max_bytes;
+  while (cut > 0 && (s[cut] & 0xC0) == 0x80) cut--; /* back off continuations */
+  if (cut > 3) {
+    s[cut - 3] = '.';
+    s[cut - 2] = '.';
+    s[cut - 1] = '.';
+    s[cut] = 0;
+  } else {
+    s[cut] = 0;
+  }
+  utf8_sanitize_inplace(s);
+}
+
 static char *read_capped(const char *path, size_t max_bytes) {
   size_t len = 0;
   char *b = ng_read_file(path, &len);
@@ -39,6 +86,8 @@ static char *read_capped(const char *path, size_t max_bytes) {
     size_t start = len - max_bytes;
     while (start < len && b[start] != '\n') start++;
     if (start < len) start++;
+    /* align to UTF-8 character start */
+    while (start < len && (b[start] & 0xC0) == 0x80) start++;
     char *t = malloc(max_bytes + 1);
     if (!t) { free(b); return NULL; }
     size_t n = len - start;
@@ -46,22 +95,15 @@ static char *read_capped(const char *path, size_t max_bytes) {
     memcpy(t, b + start, n);
     t[n] = 0;
     free(b);
+    utf8_sanitize_inplace(t);
     return t;
   }
+  utf8_sanitize_inplace(b);
   return b;
 }
 
 static void truncate_store(char *s, size_t max_chars) {
-  if (!s) return;
-  size_t n = strlen(s);
-  if (n <= max_chars) return;
-  s[max_chars] = 0;
-  /* avoid cutting mid-utf8 mid-word messily */
-  if (max_chars > 3) {
-    s[max_chars - 1] = '.';
-    s[max_chars - 2] = '.';
-    s[max_chars - 3] = '.';
-  }
+  utf8_truncate(s, max_chars);
 }
 
 char *ng_memory_system_prompt(void) {
@@ -230,12 +272,35 @@ static void compact_drop(mem_msg *msgs, int from, int to) {
   for (int i = from; i < to && o + 40 < sizeof buf; i++) {
     const char *c = msgs[i].content ? msgs[i].content : "";
     char snippet[48];
-    snprintf(snippet, sizeof snippet, "%.40s", c);
-    /* strip newlines */
-    for (char *p = snippet; *p; p++) if (*p == '\n' || *p == '\r') *p = ' ';
+    /* UTF-8-safe ~40-byte prefix (%.40s can cut mid multi-byte → Grok 400) */
+    size_t j = 0;
+    const unsigned char *cp = (const unsigned char *)c;
+    while (*cp && j + 4 < sizeof snippet - 1) {
+      unsigned char ch = *cp;
+      int need = 1;
+      if (ch >= 0x80) {
+        if ((ch & 0xE0) == 0xC0) need = 2;
+        else if ((ch & 0xF0) == 0xE0) need = 3;
+        else if ((ch & 0xF8) == 0xF0) need = 4;
+        else { cp++; continue; }
+        int ok = 1;
+        for (int k = 1; k < need; k++)
+          if ((cp[k] & 0xC0) != 0x80) { ok = 0; break; }
+        if (!ok || j + (size_t)need >= sizeof snippet - 1 || j + (size_t)need > 40)
+          break;
+        for (int k = 0; k < need; k++) snippet[j++] = (char)cp[k];
+        cp += need;
+      } else {
+        if (j >= 40) break;
+        snippet[j++] = (ch == '\n' || ch == '\r') ? ' ' : (char)ch;
+        cp++;
+      }
+    }
+    snippet[j] = 0;
     o += (size_t)snprintf(buf + o, sizeof buf - o, " [%s] %s",
                           msgs[i].role, snippet);
   }
+  utf8_sanitize_inplace(buf);
   append_summary_line(buf);
   ng_log("memory: compacted %d messages into summary", to - from);
 }

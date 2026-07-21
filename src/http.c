@@ -31,6 +31,26 @@ static void send_all(int fd, const char *data, size_t n) {
   }
 }
 
+/* SSE chat stream helper — must not be a nested fn (clang/NDK). */
+typedef struct { int fd; } chat_sse_ud;
+static void chat_sse_delta(void *p, const char *chunk, size_t n) {
+  chat_sse_ud *u = (chat_sse_ud *)p;
+  if (!chunk || !n || !u || u->fd < 0) return;
+  char *tmp = (char *)malloc(n + 1);
+  if (!tmp) return;
+  memcpy(tmp, chunk, n);
+  tmp[n] = 0;
+  char *esc = ng_json_escape(tmp);
+  free(tmp);
+  if (!esc) return;
+  char *line = NULL;
+  if (asprintf(&line, "data: {\"delta\":\"%s\"}\n\n", esc) > 0 && line) {
+    send_all(u->fd, line, strlen(line));
+    free(line);
+  }
+  free(esc);
+}
+
 static void http_response(int fd, int code, const char *ctype, const char *body, size_t blen) {
   char hdr[256];
   const char *reason = code == 200 ? "OK" : code == 400 ? "Bad Request" : code == 404 ? "Not Found" : "Error";
@@ -590,6 +610,30 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         http_json(cfd, 401, "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}");
         free(req); close(cfd); return;
       }
+    }
+    /* Real-time typing: stream=true → SSE deltas (final free-text only). */
+    int want_stream = (strstr(body, "\"stream\":true") != NULL)
+                   || (strstr(body, "\"stream\": true") != NULL);
+    if (want_stream && !shell_only) {
+      char hdr[256];
+      int hn = snprintf(hdr, sizeof hdr,
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/event-stream\r\n"
+        "Cache-Control: no-cache\r\n"
+        "Connection: close\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "\r\n");
+      send_all(cfd, hdr, (size_t)hn);
+      chat_sse_ud ud = { .fd = cfd };
+      char *reply = ng_agent_run_ex(agent, prompt, 1, chat_sse_delta, &ud);
+      char *esc = ng_json_escape(reply ? reply : "");
+      char *fin = NULL;
+      if (asprintf(&fin, "data: {\"done\":true,\"reply\":\"%s\"}\n\n", esc ? esc : "") > 0 && fin) {
+        send_all(cfd, fin, strlen(fin));
+        free(fin);
+      }
+      free(prompt); free(reply); free(esc);
+      free(req); close(cfd); return;
     }
     char *reply = ng_agent_run(agent, prompt);
     char *esc = ng_json_escape(reply ? reply : "");

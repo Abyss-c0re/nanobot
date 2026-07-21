@@ -16,6 +16,12 @@
 
 # Changelog
 
+## Unreleased
+
+- **feat(http):** `POST /api/chat` with `"stream":true` returns SSE (`text/event-stream`) deltas via `ng_agent_run_ex` for real-time typing clients
+- **fix(json/memory):** safer UTF-8 JSON escape + memory truncation so provider payloads never ship broken code points
+
+
 All notable changes to this project are documented here.
 
 ## 0.3.0 — 2026-07-19

@@ -3,37 +3,57 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* UTF-8 sequence length for lead byte, or 0 if invalid lead. */
+static int utf8_seq_len(unsigned char c) {
+  if (c < 0x80) return 1;
+  if ((c & 0xE0) == 0xC0) return 2;
+  if ((c & 0xF0) == 0xE0) return 3;
+  if ((c & 0xF8) == 0xF0) return 4;
+  return 0; /* continuation or illegal lead */
+}
+
 char *nb_json_escape(const char *s) {
   if (!s) s = "";
-  size_t n = 0;
-  for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
-    if (*p == '"' || *p == '\\' || *p == '\n' || *p == '\r' || *p == '\t') n += 2;
-    else if (*p < 0x20) n += 6;
-    else n++;
-  }
-  char *o = malloc(n + 1);
+  /* Worst case: every byte becomes \\uXXXX (6). */
+  size_t slen = strlen(s);
+  char *o = malloc(slen * 6 + 1);
   if (!o) return NULL;
   char *d = o;
-  for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
-    if (*p == '"') {
-      *d++ = '\\';
-      *d++ = '"';
-    } else if (*p == '\\') {
-      *d++ = '\\';
-      *d++ = '\\';
-    } else if (*p == '\n') {
-      *d++ = '\\';
-      *d++ = 'n';
-    } else if (*p == '\r') {
-      *d++ = '\\';
-      *d++ = 'r';
-    } else if (*p == '\t') {
-      *d++ = '\\';
-      *d++ = 't';
-    } else if (*p < 0x20) {
-      d += sprintf(d, "\\u%04x", (unsigned)*p);
+  const unsigned char *p = (const unsigned char *)s;
+  while (*p) {
+    unsigned char c = *p;
+    if (c == '"') {
+      *d++ = '\\'; *d++ = '"'; p++;
+    } else if (c == '\\') {
+      *d++ = '\\'; *d++ = '\\'; p++;
+    } else if (c == '\n') {
+      *d++ = '\\'; *d++ = 'n'; p++;
+    } else if (c == '\r') {
+      *d++ = '\\'; *d++ = 'r'; p++;
+    } else if (c == '\t') {
+      *d++ = '\\'; *d++ = 't'; p++;
+    } else if (c < 0x20) {
+      d += sprintf(d, "\\u%04x", (unsigned)c);
+      p++;
+    } else if (c < 0x80) {
+      *d++ = (char)c;
+      p++;
     } else {
-      *d++ = (char)*p;
+      /* Multi-byte UTF-8: only emit complete valid sequences.
+       * Truncated summary caps used to cut mid-em-dash (e2 80 94 → lone e2)
+       * which Grok rejects as "invalid unicode code point". */
+      int need = utf8_seq_len(c);
+      int ok = need > 1;
+      for (int i = 1; ok && i < need; i++) {
+        if ((p[i] & 0xC0) != 0x80) ok = 0;
+      }
+      if (ok) {
+        for (int i = 0; i < need; i++) *d++ = (char)p[i];
+        p += need;
+      } else {
+        /* skip one bad byte (do not emit invalid UTF-8 into JSON) */
+        p++;
+      }
     }
   }
   *d = 0;
