@@ -19,7 +19,9 @@
 /* Prefer lean caps on small hosts */
 /* Lean: enough room for 1–2 tools + forced final text turn */
 #define NG_LEAN_MAX_TURNS 6
-#define NG_LEAN_HTTP_MAX_CHILDREN 2
+/* Lean still needs headroom: SSE chat holds a child for the whole reply;
+ * health/UI/static must not queue forever behind two long streams. */
+#define NG_LEAN_HTTP_MAX_CHILDREN 6
 #define NG_LEAN_OUT_MAX (12 * 1024)
 #define NG_LEAN_LOG_MAX (24 * 1024)
 #define NG_HOST_LOG_MAX (256 * 1024)

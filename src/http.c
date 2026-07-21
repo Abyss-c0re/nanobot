@@ -217,6 +217,11 @@ static char *read_request(int fd, size_t *out_len) {
     char *hdrend = strstr(buf, "\r\n\r\n");
     if (hdrend) {
       size_t hlen = (size_t)(hdrend + 4 - buf);
+      /* Methods with no body: finish as soon as headers complete.
+       * Waiting for EOF here pins workers under HTTP/1.1 keep-alive. */
+      int no_body = (strncmp(buf, "GET ", 4) == 0 ||
+                     strncmp(buf, "HEAD ", 5) == 0 ||
+                     strncmp(buf, "OPTIONS ", 8) == 0);
       size_t cl = 0;
       int have_cl = 0;
       const char *clh = strcasestr(buf, "Content-Length:");
@@ -228,11 +233,14 @@ static char *read_request(int fd, size_t *out_len) {
           break;
         }
       }
-      /* Chunked without CL: keep reading until peer closes (r==0) or max. */
+      if (no_body || (have_cl && cl == 0))
+        break;
       if (have_cl) {
         if (len >= hlen + cl) break;
+      } else {
+        /* POST/PUT without Content-Length: stop at headers (rare; body empty). */
+        break;
       }
-      /* no CL: only stop at EOF (handled by r==0) or max buffer */
     }
   }
   buf[len] = 0;
