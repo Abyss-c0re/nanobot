@@ -18,6 +18,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <signal.h>
 #include <time.h>
@@ -185,17 +186,25 @@ static int static_path_ok(const char *rel) {
   return 1;
 }
 
+/* Vision chat POSTs can be several MB (base64 JPEG). Cap is not product-specific. */
+#define NG_HTTP_REQ_MAX (8 * 1024 * 1024)
+
 static char *read_request(int fd, size_t *out_len) {
-  size_t cap = 4096, len = 0;
+  size_t cap = 8192, len = 0;
   char *buf = malloc(cap);
   if (!buf) return NULL;
+  /* Optional deadline so a stuck peer cannot pin a worker forever. */
+  struct timeval tv = { .tv_sec = 120, .tv_usec = 0 };
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
   while (1) {
-    if (len + 1024 > cap) {
-      cap *= 2;
-      if (cap > 1024 * 1024) break;
-      char *nbuf = realloc(buf, cap);
+    if (len + 4096 > cap) {
+      size_t ncap = cap * 2;
+      if (ncap > NG_HTTP_REQ_MAX) ncap = NG_HTTP_REQ_MAX;
+      if (ncap <= cap) break; /* hit max */
+      char *nbuf = realloc(buf, ncap);
       if (!nbuf) break;
       buf = nbuf;
+      cap = ncap;
     }
     ssize_t r = read(fd, buf + len, cap - len - 1);
     if (r < 0) {
@@ -209,9 +218,21 @@ static char *read_request(int fd, size_t *out_len) {
     if (hdrend) {
       size_t hlen = (size_t)(hdrend + 4 - buf);
       size_t cl = 0;
+      int have_cl = 0;
       const char *clh = strcasestr(buf, "Content-Length:");
-      if (clh) cl = (size_t)strtoul(clh + 15, NULL, 10);
-      if (len >= hlen + cl) break;
+      if (clh) {
+        cl = (size_t)strtoul(clh + 15, NULL, 10);
+        have_cl = 1;
+        if (cl > NG_HTTP_REQ_MAX - hlen) {
+          /* Reject oversize before allocating forever */
+          break;
+        }
+      }
+      /* Chunked without CL: keep reading until peer closes (r==0) or max. */
+      if (have_cl) {
+        if (len >= hlen + cl) break;
+      }
+      /* no CL: only stop at EOF (handled by r==0) or max buffer */
     }
   }
   buf[len] = 0;
