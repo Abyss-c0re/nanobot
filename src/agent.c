@@ -628,44 +628,20 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
   free(inner);
   if (!messages) return strdup("oom messages");
 
-  /* Tools: OpenAI-style. Disable with NANOBOT_TOOLS=0 (env or $NANOBOT_HOME/env).
-   * Concurrent HTTP forks are fine; we always reserve a final no-tools turn. */
+  /* Tools: OpenAI-style. Default ON for all models/backends.
+   * Disable only with NANOBOT_TOOLS=0 (env file wins over process getenv so the
+   * app can re-enable tools after an older process env of 0).
+   * If the backend rejects tools, the loop below retries without them. */
   int use_tools = 1;
   {
-    const char *t = getenv("NANOBOT_TOOLS");
-    char *from_file = NULL;
-    if (!t || !t[0]) {
-      char ep[640];
-      snprintf(ep, sizeof ep, "%s/env", ng_workdir());
-      from_file = ng_slurp_env_file(ep, "NANOBOT_TOOLS");
-      t = from_file;
-    }
+    char ep[640];
+    snprintf(ep, sizeof ep, "%s/env", ng_workdir());
+    char *from_file = ng_slurp_env_file(ep, "NANOBOT_TOOLS");
+    const char *t = from_file;
+    if (!t || !t[0]) t = getenv("NANOBOT_TOOLS");
     if (t && (t[0] == '0' || t[0] == 'n' || t[0] == 'N' || t[0] == 'f' || t[0] == 'F'))
       use_tools = 0;
     free(from_file);
-  }
-  /* Offline local backends: tools often thrash tiny models; prefer pure chat. */
-  if (c && c->base_url && (strstr(c->base_url, "127.0.0.1") || strstr(c->base_url, "localhost")))
-    use_tools = 0;
-  /* Short social prompts: answer in text, no tool thrash */
-  {
-    const char *p = user_prompt;
-    while (*p == ' ' || *p == '\t') p++;
-    size_t pl = strlen(p);
-    if (pl > 0 && pl < 48 && p[0] != '@' && !strchr(p, '\n')) {
-      char low[64];
-      size_t i;
-      for (i = 0; i < pl && i < sizeof low - 1; i++) {
-        char c = p[i];
-        low[i] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
-      }
-      low[i] = 0;
-      if (!strcmp(low, "hello") || !strcmp(low, "hi") || !strcmp(low, "hey") ||
-          !strcmp(low, "thanks") || !strcmp(low, "thank you") || !strcmp(low, "ping") ||
-          !strcmp(low, "ok") || !strcmp(low, "yes") || !strcmp(low, "no") ||
-          !strncmp(low, "hello ", 6) || !strncmp(low, "hi ", 3))
-        use_tools = 0;
-    }
   }
 
   const char *tools =
