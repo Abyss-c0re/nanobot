@@ -10,6 +10,8 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/types.h>
+#include <fcntl.h>
 
 static char g_logpath[576] = "/tmp/nanobot/nanobot.log";
 static FILE *g_logf;
@@ -197,6 +199,59 @@ char *ng_read_file(const char *path, size_t *out_len) {
 int ng_write_file(const char *path, const char *data, size_t len) {
   return nb_write_file(path, data, len);
 }
+
+int ng_mkstemp_home(char *path, size_t path_sz, const char *prefix) {
+  if (!path || path_sz < 64) return -1;
+  const char *pre = (prefix && prefix[0]) ? prefix : "ng_";
+  const char *wd = ng_workdir();
+  /*
+   * Try several dirs: Android SELinux often blocks priv_app from writing
+   * shell-owned $NANOBOT_HOME under /data/local/tmp (avc: shell_data_file).
+   * App should set TMPDIR to getCacheDir()/ng_tmp which is app_data_file.
+   */
+  const char *cands[8];
+  int nc = 0;
+  const char *td = getenv("TMPDIR");
+  if (td && td[0]) cands[nc++] = td;
+  if (wd && wd[0]) {
+    static char wdtmp[640];
+    snprintf(wdtmp, sizeof wdtmp, "%s/tmp", wd);
+    cands[nc++] = wdtmp;
+  }
+  cands[nc++] = "/data/local/tmp";
+  cands[nc++] = "/cache";
+  cands[nc++] = "/tmp";
+
+  mode_t old = umask(0);
+  int fd = -1;
+  for (int i = 0; i < nc && fd < 0; i++) {
+    const char *base = cands[i];
+    if (!base || !base[0]) continue;
+    mkdir(base, 0777);
+    /* also try base/tmp for bare TMPDIR roots */
+    char dir[640];
+    if (strstr(base, "/tmp") == NULL && strcmp(base, "/tmp") != 0 &&
+        strcmp(base, "/cache") != 0) {
+      snprintf(dir, sizeof dir, "%s/tmp", base);
+      mkdir(dir, 0777);
+    } else {
+      snprintf(dir, sizeof dir, "%s", base);
+    }
+    int n = snprintf(path, path_sz, "%s/%sXXXXXX", dir, pre);
+    if (n < 0 || (size_t)n >= path_sz) continue;
+    fd = mkstemp(path);
+    if (fd < 0) {
+      /* try without nested tmp */
+      n = snprintf(path, path_sz, "%s/%sXXXXXX", base, pre);
+      if (n < 0 || (size_t)n >= path_sz) continue;
+      fd = mkstemp(path);
+    }
+  }
+  umask(old);
+  if (fd >= 0) fchmod(fd, 0666);
+  return fd;
+}
+
 char *ng_getenv_dup(const char *k) { return nb_getenv_dup(k); }
 char *ng_slurp_env_file(const char *path, const char *key) {
   return nb_slurp_env_file(path, key);

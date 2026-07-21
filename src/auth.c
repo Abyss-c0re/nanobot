@@ -50,12 +50,21 @@ static char *device_login_path(void) {
   return p;
 }
 
-/* Atomic write, mode 0600 only (secret material). */
+/* Atomic write of secret material.
+ * Default mode 0600. Lab shared home (/data/local/tmp/nanobot_home) uses 0666 so
+ * shell-started and app-started peers can both open the same sealed session —
+ * otherwise the other UID sees "not signed in" and forces a new device login
+ * (looks like the session "expired in minutes"). */
 static int write_secret_file(const char *path, const char *body) {
   if (!path || !body) return -1;
+  mode_t mode = 0600;
+  if (strstr(path, "/data/local/tmp/nanobot_home") != NULL)
+    mode = 0666;
   char tmp[700];
   snprintf(tmp, sizeof tmp, "%s.tmp.%d", path, (int)getpid());
-  int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+  mode_t old_umask = umask(0); /* so mode is not masked to 0600 */
+  int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, mode);
+  umask(old_umask);
   if (fd < 0) return -1;
   size_t n = strlen(body);
   ssize_t w = write(fd, body, n);
@@ -66,12 +75,12 @@ static int write_secret_file(const char *path, const char *body) {
   }
   if (fsync(fd) != 0) { /* best-effort on tiny flash */ }
   close(fd);
-  if (chmod(tmp, 0600) != 0) { /* enforce */ }
+  chmod(tmp, mode);
   if (rename(tmp, path) != 0) {
     unlink(tmp);
     return -1;
   }
-  chmod(path, 0600);
+  chmod(path, mode);
   return 0;
 }
 
@@ -373,8 +382,8 @@ int ng_session_load(ng_session *s) {
 
 /* curl -sS -X POST url -d form -H headers -o outfile */
 static char *curl_form_post(const char *url, const char *form, const char **extra_headers) {
-  char outtmpl[] = "/tmp/ng_auth_XXXXXX";
-  int ofd = mkstemp(outtmpl);
+  char outtmpl[640];
+  int ofd = ng_mkstemp_home(outtmpl, sizeof outtmpl, "ng_auth_");
   if (ofd < 0) return NULL;
   close(ofd);
 
@@ -383,6 +392,10 @@ static char *curl_form_post(const char *url, const char *form, const char **extr
   snprintf(uahdr, sizeof uahdr, "User-Agent: %s", ng_cli_user_agent());
 
   pid_t pid = fork();
+  if (pid < 0) {
+    unlink(outtmpl);
+    return NULL;
+  }
   if (pid == 0) {
     char *argv[32];
     int a = 0;
@@ -416,7 +429,10 @@ static char *curl_form_post(const char *url, const char *form, const char **extr
     _exit(127);
   }
   int st = 0;
-  waitpid(pid, &st, 0);
+  if (waitpid(pid, &st, 0) < 0) {
+    unlink(outtmpl);
+    return NULL;
+  }
   char *body = ng_read_file(outtmpl, NULL);
   unlink(outtmpl);
   if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) {
@@ -576,8 +592,10 @@ int ng_session_poll_login(ng_session *s) {
 
 int ng_session_ensure(ng_session *s) {
   if (ng_session_valid(s)) return 0;
+  /* Soft-expired access token: try refresh (normal every ~hours, not "lost login"). */
   if (!s->refresh_token || !s->refresh_token[0]) {
     if (s->access_token && s->access_token[0] && !s->expires_at) return 0; /* unknown expiry */
+    ng_log("auth: session not valid and no refresh_token (need Connect once)");
     return -1;
   }
 
@@ -588,11 +606,12 @@ int ng_session_ensure(ng_session *s) {
     s->refresh_token, NG_AUTH_CLIENT_ID);
   char url[256];
   snprintf(url, sizeof url, "%s/oauth2/token", NG_AUTH_ISSUER);
-  ng_log("auth: refreshing access token");
+  ng_log("auth: refreshing access token (expires_at=%ld now=%ld)",
+         (long)s->expires_at, (long)time(NULL));
   char *body = curl_form_post(url, form, NULL);
   if (!body || !strstr(body, "access_token")) {
     free(body);
-    ng_log("auth: refresh failed");
+    ng_log("auth: refresh failed — keep sealed session on disk; user may retry or Connect");
     return -1;
   }
   int rc = apply_token_response(s, body);

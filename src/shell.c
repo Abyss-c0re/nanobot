@@ -146,12 +146,183 @@ static int dangerous_allowed(void) {
   return 0;
 }
 
+/* Personal storage ACL (PrivacyPrefs files_acl → plane / $HOME/files_acl).
+ * deny  = no touch of personal trees
+ * read  = view only (block write/mutate)
+ * full  = unrestricted (subject to denylist)
+ */
+static char *read_files_acl(void) {
+  static const char *paths[] = {
+    NULL, /* filled with $HOME/files_acl */
+    "/data/local/tmp/titan2_nanobot_files_acl",
+    "/data/misc/titan2/titan2_nanobot_files_acl",
+    "/data/local/tmp/nanobot_home/files_acl",
+  };
+  char home_path[640];
+  snprintf(home_path, sizeof home_path, "%s/files_acl", ng_workdir());
+  const char *try_paths[5];
+  try_paths[0] = home_path;
+  try_paths[1] = paths[1];
+  try_paths[2] = paths[2];
+  try_paths[3] = paths[3];
+  try_paths[4] = NULL;
+  for (int i = 0; try_paths[i]; i++) {
+    size_t n = 0;
+    char *raw = ng_read_file(try_paths[i], &n);
+    if (!raw || !raw[0]) { free(raw); continue; }
+    /* first token */
+    char *p = raw;
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+    char out[16];
+    int j = 0;
+    while (*p && *p != ' ' && *p != '\n' && *p != '\r' && *p != '\t' && j + 1 < (int)sizeof out)
+      out[j++] = (char)tolower((unsigned char)*p++);
+    out[j] = 0;
+    free(raw);
+    if (!out[0]) continue;
+    if (!strcmp(out, "deny") || !strcmp(out, "blocked") || !strcmp(out, "0") || !strcmp(out, "off"))
+      return strdup("deny");
+    if (!strcmp(out, "read") || !strcmp(out, "readonly") || !strcmp(out, "ro"))
+      return strdup("read");
+    if (!strcmp(out, "full") || !strcmp(out, "rw") || !strcmp(out, "1") || !strcmp(out, "on"))
+      return strdup("full");
+  }
+  char *env = ng_getenv_dup("NANOBOT_FILES_ACL");
+  if (env && env[0]) {
+    for (char *q = env; *q; q++) *q = (char)tolower((unsigned char)*q);
+    if (strstr(env, "full")) { free(env); return strdup("full"); }
+    if (strstr(env, "read")) { free(env); return strdup("read"); }
+    free(env);
+    return strdup("deny");
+  }
+  free(env);
+  /* Product default: blocked (Privacy Constitution) */
+  return strdup("deny");
+}
+
+static int ci_contains(const char *hay, const char *needle) {
+  if (!hay || !needle || !needle[0]) return 0;
+  size_t nlen = strlen(needle);
+  for (const char *p = hay; *p; p++) {
+    size_t i = 0;
+    while (i < nlen && p[i] &&
+           tolower((unsigned char)p[i]) == tolower((unsigned char)needle[i]))
+      i++;
+    if (i == nlen) return 1;
+  }
+  return 0;
+}
+
+/* True if command references user personal storage trees. */
+static int cmd_touches_personal(const char *cmd) {
+  if (!cmd) return 0;
+  static const char *roots[] = {
+    "/sdcard",
+    "/storage/emulated",
+    "/storage/self",
+    "/mnt/sdcard",
+    "/data/media/",
+    "/DCIM",
+    "/Download",
+    "/Downloads",
+    "/Documents",
+    "/Pictures",
+    "/Movies",
+    "/Music",
+    "/Android/media",
+    "WhatsApp",
+    "Telegram",
+    "content://media",
+    "content://downloads",
+    "content://com.android.externalstorage",
+    NULL
+  };
+  for (int i = 0; roots[i]; i++) {
+    if (ci_contains(cmd, roots[i])) return 1;
+  }
+  /* bare sdcard without slash (ls sdcard) */
+  if (ci_contains(cmd, " sdcard") || ci_contains(cmd, "\tsdcard")) return 1;
+  return 0;
+}
+
+/* Mutating ops — blocked on personal trees when ACL is read-only. */
+static int cmd_mutates(const char *cmd) {
+  if (!cmd) return 0;
+  static const char *writes[] = {
+    " rm ", "rm ", "\trm ",
+    " mv ", "mv ",
+    " mkdir ", "mkdir ",
+    " rmdir ", "rmdir ",
+    " touch ", "touch ",
+    " chmod ", "chmod ",
+    " chown ", "chown ",
+    " truncate ",
+    " sed -i", "sed -i ",
+    " tee ", " | tee",
+    " >>", " >",
+    "dd of=", " of=",
+    " -delete",
+    " unzip ", "unzip ",
+    " tar -x", "tar -c",
+    " cp ", "cp ",
+    " install ",
+    " busybox dd",
+    " truncate ",
+    " sh -c ", /* often used to redirect */
+    NULL
+  };
+  /* redirect forms */
+  if (strstr(cmd, ">") && !strstr(cmd, "2>/dev/null") && !strstr(cmd, "1>/dev/null")) {
+    /* still treat as potential write if personal path present (caller checks both) */
+    if (strstr(cmd, ">>") || strstr(cmd, " >") || strstr(cmd, ">\"" ) || strstr(cmd, ">'"))
+      return 1;
+  }
+  for (int i = 0; writes[i]; i++) {
+    if (strstr(cmd, writes[i])) return 1;
+  }
+  /* starts with write verb */
+  while (*cmd == ' ' || *cmd == '\t') cmd++;
+  if (!strncmp(cmd, "rm ", 3) || !strcmp(cmd, "rm")) return 1;
+  if (!strncmp(cmd, "mv ", 3) || !strncmp(cmd, "cp ", 3)) return 1;
+  if (!strncmp(cmd, "mkdir", 5) || !strncmp(cmd, "rmdir", 5)) return 1;
+  if (!strncmp(cmd, "touch", 5) || !strncmp(cmd, "chmod", 5)) return 1;
+  return 0;
+}
+
+/* 0=ok, 1=blocked personal */
+static int personal_files_blocked(const char *command, char **why) {
+  if (why) *why = NULL;
+  if (!cmd_touches_personal(command)) return 0;
+  char *acl = read_files_acl();
+  int block = 0;
+  const char *reason = NULL;
+  if (!acl || !strcmp(acl, "deny")) {
+    block = 1;
+    reason =
+      "personal files ACL=deny — cannot open /sdcard Photos/Documents/Download.\n"
+      "Change in TitanNanobot Settings → personal files (Read only / Full).";
+  } else if (!strcmp(acl, "read")) {
+    if (cmd_mutates(command)) {
+      block = 1;
+      reason =
+        "personal files ACL=read — view only; write/delete/move blocked.\n"
+        "Enable Full access in TitanNanobot Settings if you intend edits.";
+    }
+  }
+  if (block && why && reason) *why = strdup(reason);
+  free(acl);
+  return block;
+}
+
 int ng_command_denied(const char *command) {
   if (!command) return 1;
   if (strlen(command) > 8000) return 1;
   if (strstr(command, "`") && (strstr(command, "rm ") || strstr(command, "dd "))) {
     if (!pattern_allowed("`") && !dangerous_allowed()) return 1;
   }
+
+  /* Privacy: personal storage ACL (before user denylist so it cannot be bypassed) */
+  if (personal_files_blocked(command, NULL)) return 1;
 
   char path[640];
   snprintf(path, sizeof path, "%s/shell_denylist", ng_workdir());
@@ -250,6 +421,20 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
     r.exit_code = 403;
     r.output = strdup("shell disabled (shell_enabled=0 under NANOBOT_HOME)\n");
     return r;
+  }
+  /* Personal files ACL first (explicit message) */
+  {
+    char *why = NULL;
+    if (personal_files_blocked(command, &why)) {
+      r.exit_code = 126;
+      char *msg = NULL;
+      asprintf(&msg, "nanobot: blocked by personal files privacy\n%s\n",
+               why ? why : "files_acl=deny");
+      r.output = msg ? msg : strdup("nanobot: personal files blocked\n");
+      free(why);
+      ng_log("shell: personal ACL blocked: %.120s", command);
+      return r;
+    }
   }
   /* hard denylist always */
   if (ng_command_denied(command)) {

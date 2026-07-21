@@ -34,9 +34,11 @@ add_library(nanobot_legacy STATIC
   src/shell_gate.c
   src/auth.c
   src/memory.c
+  src/task.c
   src/agent.c
   src/http.c
   src/mcp.c
+  src/mcp_remote.c
   src/improve.c
   src/hub.c
 )

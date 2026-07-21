@@ -1,10 +1,13 @@
 #include "agent.h"
 #include "memory.h"
+#include "mcp_remote.h"
 #include "shell.h"
+#include "task.h"
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -94,19 +97,17 @@ int ng_agent_save_env(const ng_agent_cfg *c) {
 
 /* OpenAI-compatible POST. Grok cloud headers when needed; plain Bearer for llama.cpp. */
 static char *curl_post_json(const char *url, const char *bearer, const char *body) {
-  char tmpl[] = "/tmp/ng_req_XXXXXX";
-  int fd = mkstemp(tmpl);
-  if (fd < 0) return strdup("mkstemp failed");
+  char tmpl[640], outtmpl[640], errtmpl[640];
+  int fd = ng_mkstemp_home(tmpl, sizeof tmpl, "ng_req_");
+  if (fd < 0) return strdup("mkstemp failed (home/tmp)");
   write(fd, body, strlen(body));
   close(fd);
 
-  char outtmpl[] = "/tmp/ng_resp_XXXXXX";
-  int ofd = mkstemp(outtmpl);
+  int ofd = ng_mkstemp_home(outtmpl, sizeof outtmpl, "ng_resp_");
   if (ofd < 0) { unlink(tmpl); return strdup("mkstemp out failed"); }
   close(ofd);
 
-  char errtmpl[] = "/tmp/ng_cerr_XXXXXX";
-  int efd = mkstemp(errtmpl);
+  int efd = ng_mkstemp_home(errtmpl, sizeof errtmpl, "ng_cerr_");
   if (efd < 0) { unlink(tmpl); unlink(outtmpl); return strdup("mkstemp err failed"); }
   close(efd);
 
@@ -116,7 +117,7 @@ static char *curl_post_json(const char *url, const char *bearer, const char *bod
   else
     snprintf(auth, sizeof auth, "Authorization: Bearer none");
 
-  char dataarg[80];
+  char dataarg[700];
   snprintf(dataarg, sizeof dataarg, "@%s", tmpl);
   char ua[96];
   snprintf(ua, sizeof ua, "User-Agent: %s", ng_cli_user_agent());
@@ -125,6 +126,11 @@ static char *curl_post_json(const char *url, const char *bearer, const char *bod
   int grok = is_grok_endpoint(url);
 
   pid_t p2 = fork();
+  if (p2 < 0) {
+    unlink(tmpl); unlink(outtmpl); unlink(errtmpl);
+    ng_log("agent: curl fork failed: %s", strerror(errno));
+    return strdup("curl fork failed (too many processes/zombies?) — restart peer");
+  }
   if (p2 == 0) {
     int er = open(errtmpl, O_WRONLY | O_TRUNC);
     if (er >= 0) { dup2(er, STDERR_FILENO); close(er); }
@@ -168,7 +174,10 @@ static char *curl_post_json(const char *url, const char *bearer, const char *bod
     _exit(127);
   }
   int st = 0;
-  waitpid(p2, &st, 0);
+  if (waitpid(p2, &st, 0) < 0) {
+    unlink(tmpl); unlink(outtmpl); unlink(errtmpl);
+    return strdup("curl waitpid failed");
+  }
   unlink(tmpl);
   if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) {
     char *err = ng_read_file(outtmpl, NULL);
@@ -196,12 +205,11 @@ static char *curl_post_json(const char *url, const char *bearer, const char *bod
 
 /* GET with same auth headers as chat (session or API key). */
 static char *curl_get_url(const char *url, const char *bearer, int grok_headers) {
-  char outtmpl[] = "/tmp/ng_get_XXXXXX";
-  int ofd = mkstemp(outtmpl);
+  char outtmpl[640], errtmpl[640];
+  int ofd = ng_mkstemp_home(outtmpl, sizeof outtmpl, "ng_get_");
   if (ofd < 0) return strdup("mkstemp out failed");
   close(ofd);
-  char errtmpl[] = "/tmp/ng_gerr_XXXXXX";
-  int efd = mkstemp(errtmpl);
+  int efd = ng_mkstemp_home(errtmpl, sizeof errtmpl, "ng_gerr_");
   if (efd < 0) { unlink(outtmpl); return strdup("mkstemp err failed"); }
   close(efd);
 
@@ -216,6 +224,10 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
   snprintf(verhdr, sizeof verhdr, "x-grok-client-version: %s", ng_cli_version());
 
   pid_t p2 = fork();
+  if (p2 < 0) {
+    unlink(outtmpl); unlink(errtmpl);
+    return strdup("curl fork failed (process limit?)");
+  }
   if (p2 == 0) {
     int er = open(errtmpl, O_WRONLY | O_TRUNC);
     if (er >= 0) { dup2(er, STDERR_FILENO); close(er); }
@@ -254,7 +266,10 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
     _exit(127);
   }
   int st = 0;
-  waitpid(p2, &st, 0);
+  if (waitpid(p2, &st, 0) < 0) {
+    unlink(outtmpl); unlink(errtmpl);
+    return strdup("curl waitpid failed");
+  }
   if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) {
     char *err = ng_read_file(outtmpl, NULL);
     char *cerr = ng_read_file(errtmpl, NULL);
@@ -372,7 +387,20 @@ void ng_agent_select_model(ng_agent_cfg *c, const char *model) {
   ng_agent_save_env(c);
 }
 
+/* Emit structured SSE event for app (tool / thinking). Prefix 0x1e for http layer. */
+static void stream_evt(ng_stream_fn on_delta, void *ud, const char *json) {
+  if (!on_delta || !json || !json[0]) return;
+  size_t n = strlen(json);
+  char *buf = (char *)malloc(n + 2);
+  if (!buf) return;
+  buf[0] = (char)0x1e;
+  memcpy(buf + 1, json, n + 1);
+  on_delta(ud, buf, n + 1);
+  free(buf);
+}
+
 /* Parse OpenAI SSE "data: {json}" lines; call on_delta for each content delta.
+ * Also surfaces reasoning/thinking as structured events for spoiler UI.
  * Returns malloc'd full assistant text accumulated. */
 static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
   char *acc = strdup("");
@@ -388,6 +416,30 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
     size_t L = strlen(s);
     while (L && (s[L-1] == '\n' || s[L-1] == '\r')) s[--L] = 0;
     if (!L || strcmp(s, "[DONE]") == 0) continue;
+
+    /* Grok / OpenAI reasoning in delta */
+    {
+      const char *d = strstr(s, "\"delta\"");
+      char *think = NULL;
+      if (d) {
+        think = ng_json_get_string(d, "reasoning_content");
+        if (!think || !think[0]) { free(think); think = ng_json_get_string(d, "reasoning"); }
+        if (!think || !think[0]) { free(think); think = ng_json_get_string(d, "thinking"); }
+      }
+      if (!think || !think[0]) {
+        free(think);
+        think = ng_json_get_string(s, "reasoning_content");
+      }
+      if (think && think[0]) {
+        char *esc = ng_json_escape(think);
+        char *ev = NULL;
+        if (esc && asprintf(&ev, "{\"type\":\"thinking\",\"text\":\"%s\"}", esc) > 0 && ev)
+          stream_evt(on_delta, ud, ev);
+        free(esc); free(ev);
+      }
+      free(think);
+    }
+
     char *piece = ng_json_get_string(s, "content");
     /* prefer delta.content path: look for "delta" then content */
     if (!piece || !piece[0]) {
@@ -415,8 +467,8 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
 /* Streaming POST (curl -N). Used for final text turns only. */
 static char *curl_post_json_stream(const char *url, const char *bearer, const char *body,
                                    ng_stream_fn on_delta, void *ud) {
-  char tmpl[] = "/tmp/ng_req_XXXXXX";
-  int fd = mkstemp(tmpl);
+  char tmpl[640];
+  int fd = ng_mkstemp_home(tmpl, sizeof tmpl, "ng_req_");
   if (fd < 0) return strdup("mkstemp failed");
   write(fd, body, strlen(body));
   close(fd);
@@ -429,7 +481,7 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
     snprintf(auth, sizeof auth, "Authorization: Bearer %s", bearer);
   else
     auth[0] = 0;
-  char dataarg[80];
+  char dataarg[700];
   snprintf(dataarg, sizeof dataarg, "@%s", tmpl);
   char ua[96];
   snprintf(ua, sizeof ua, "User-Agent: %s", ng_cli_user_agent());
@@ -438,6 +490,10 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   int grok = is_grok_endpoint(url);
 
   pid_t p2 = fork();
+  if (p2 < 0) {
+    close(pipefd[0]); close(pipefd[1]); unlink(tmpl);
+    return strdup("curl fork failed (process limit?)");
+  }
   if (p2 == 0) {
     close(pipefd[0]);
     dup2(pipefd[1], STDOUT_FILENO);
@@ -493,7 +549,11 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
     close(pipefd[0]);
   }
   int st = 0;
-  waitpid(p2, &st, 0);
+  if (waitpid(p2, &st, 0) < 0) {
+    unlink(tmpl);
+    free(acc);
+    return NULL;
+  }
   unlink(tmpl);
   if (!acc || !acc[0]) {
     free(acc);
@@ -600,7 +660,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     if (raw && len) {
       char *p = raw;
       int count = 0;
-      while (*p && count < NG_MEM_MAX_RECENT_TURNS * 2) {
+      while (*p && count < ng_memory_recent_turns() * 2) {
         char *nl = strchr(p, '\n');
         if (nl) *nl = 0;
         if (p[0] == '{') {
@@ -671,31 +731,74 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     }
   }
 
-  const char *tools =
+  /* Base shell tool + task board + optional MCP servers (mcp_list / mcp_call). */
+  char *mcp_frag = ng_mcp_openai_tools_fragment();
+  char *task_frag = ng_task_openai_tools_fragment();
+  char *tools = NULL;
+  asprintf(&tools,
     "[{\"type\":\"function\",\"function\":{"
     "\"name\":\"run_terminal_command\","
     "\"description\":\"Run ONE shell command when you need live device data. Prefer short answers without tools for greetings.\","
     "\"parameters\":{\"type\":\"object\",\"properties\":{"
     "\"command\":{\"type\":\"string\",\"description\":\"shell command\"}"
-    "},\"required\":[\"command\"]}}}]";
+    "},\"required\":[\"command\"]}}}%s%s]",
+    task_frag && task_frag[0] ? task_frag : "",
+    mcp_frag && mcp_frag[0] ? mcp_frag : "");
+  free(mcp_frag);
+  free(task_frag);
+  if (!tools) {
+    tools = strdup(
+      "[{\"type\":\"function\",\"function\":{"
+      "\"name\":\"run_terminal_command\","
+      "\"description\":\"Run ONE shell command\","
+      "\"parameters\":{\"type\":\"object\",\"properties\":{"
+      "\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}}]");
+  }
 
   char *final = NULL;
   char *last_tool_out = NULL; /* fallback text if model never speaks */
   int version_retries = 0;
   int max_turns = c->max_turns > 0 ? c->max_turns : ng_max_turns();
   if (max_turns < 2) max_turns = 2;
+  /* Open tasks get extra turns and hard ceiling so multi-step work can finish. */
+  int hard_max = ng_task_hard_max_turns();
+  if (ng_task_is_open() && max_turns < hard_max)
+    max_turns = hard_max;
+  int task_reminders = 0;
 
   for (int turn = 0; turn < max_turns; turn++) {
     if (grok) {
       if (ng_session_ensure(c->session) != 0) {
-        free(messages); free(last_tool_out);
+        free(messages); free(last_tool_out); free(tools);
         return strdup("Grok session expired. Restart nanobot and re-activate in the browser.");
       }
       bearer = ng_session_bearer(c->session);
     }
 
-    /* Last turn always no tools so the model must produce a final answer. */
-    int tools_now = use_tools && (turn < max_turns - 1);
+    /* Self-reminder: open task stays in the model's face every turn. */
+    if (use_tools && ng_task_is_open() && task_reminders < 40) {
+      char *rem = ng_task_reminder_text();
+      if (rem && rem[0]) {
+        size_t ml = strlen(messages);
+        if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
+        char *esc = ng_json_escape(rem);
+        char *nmsg = NULL;
+        asprintf(&nmsg,
+          "%s,{\"role\":\"user\",\"content\":\"%s\"}]",
+          messages, esc ? esc : "Continue the active task.");
+        free(messages);
+        messages = nmsg;
+        free(esc);
+        task_reminders++;
+      }
+      free(rem);
+    }
+
+    /* Last turn: no tools UNLESS an open task still needs work and we have budget. */
+    int open_task = ng_task_is_open();
+    int tools_now = use_tools && (turn < max_turns - 1 || (open_task && turn < hard_max - 1));
+    if (open_task && turn >= hard_max - 1)
+      tools_now = 0; /* forced stop approaching hard ceiling */
     char *body = NULL;
     if (tools_now) {
       asprintf(&body,
@@ -704,13 +807,21 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
         c->model, messages, tools);
     } else {
       /* Nudge finalization after tools */
-      if (last_tool_out && turn == max_turns - 1) {
+      if (last_tool_out && (turn >= max_turns - 1 || !open_task)) {
         size_t ml = strlen(messages);
         if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
         char *nudge = NULL;
-        asprintf(&nudge,
-          "%s,{\"role\":\"user\",\"content\":\"Using the tool results above, reply to the user now in plain text. No more tools.\"}]",
-          messages);
+        if (open_task) {
+          asprintf(&nudge,
+            "%s,{\"role\":\"user\",\"content\":\"Turn budget nearly exhausted and task still open. "
+            "Either make one last tool attempt, call task_block with why you are stuck, "
+            "or if the goal is met call task_done. Then reply to the user in plain text.\"}]",
+            messages);
+        } else {
+          asprintf(&nudge,
+            "%s,{\"role\":\"user\",\"content\":\"Using the tool results above, reply to the user now in plain text. No more tools.\"}]",
+            messages);
+        }
         free(messages);
         messages = nudge;
       }
@@ -736,6 +847,7 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
         final = streamed;
         free(messages);
         free(last_tool_out);
+        free(tools);
         if (final && strncmp(final, "API error:", 10) != 0) {
           ng_memory_record_exchange(user_prompt, final);
         }
@@ -757,8 +869,23 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
     }
 
     if (!resp) {
-      free(messages); free(last_tool_out);
+      free(messages); free(last_tool_out); free(tools);
       return strdup("no response from API");
+    }
+    if (!resp[0]) {
+      ng_log("agent: empty API body turn %d/%d tools=%d", turn + 1, max_turns, tools_now);
+      free(resp);
+      use_tools = 0;
+      continue;
+    }
+    /* Surface curl/fork failures that returned as plain text (not JSON) */
+    if (!strchr(resp, '{') &&
+        (strstr(resp, "curl ") || strstr(resp, "fork failed") ||
+         strstr(resp, "mkstemp") || strstr(resp, "waitpid"))) {
+      char *out = NULL;
+      asprintf(&out, "API transport error: %.400s", resp);
+      free(resp); free(messages); free(last_tool_out); free(tools);
+      return out ? out : strdup("API transport error");
     }
 
     if (strstr(resp, "\"error\"") || strstr(resp, "Failed to parse")) {
@@ -780,29 +907,77 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
       if (!em) em = ng_json_get_string(resp, "error");
       char *out = NULL;
       asprintf(&out, "API error: %s\n%.600s", em ? em : "?", resp);
-      free(em); free(resp); free(messages); free(last_tool_out);
+      free(em); free(resp); free(messages); free(last_tool_out); free(tools);
       return out;
     }
 
     char *tname = NULL, *targs = NULL, *tid = NULL;
     if (tools_now && ng_json_first_tool_call(resp, &tname, &targs, &tid)) {
       ng_log("agent: tool %s id=%s args=%.200s", tname, tid, targs);
+      /* Live tool tracking for streaming clients (spoiler UI) */
+      if (stream_final && on_delta) {
+        char *ea = ng_json_escape(targs ? targs : "");
+        char *en = ng_json_escape(tname ? tname : "tool");
+        char *ei = ng_json_escape(tid ? tid : "");
+        char *ev = NULL;
+        if (asprintf(&ev,
+              "{\"type\":\"tool\",\"phase\":\"start\",\"id\":\"%s\","
+              "\"name\":\"%s\",\"args\":\"%s\"}",
+              ei ? ei : "", en ? en : "", ea ? ea : "") > 0 && ev)
+          stream_evt(on_delta, userdata, ev);
+        free(ea); free(en); free(ei); free(ev);
+      }
       char *cmd = NULL;
-      if (strcmp(tname, "run_terminal_command") == 0 ||
+      char *task_out = ng_task_try_tool(tname, targs);
+      char *mcp_out = task_out ? NULL : ng_mcp_try_tool(tname, targs);
+      ng_cmd_result cr;
+      memset(&cr, 0, sizeof cr);
+      if (task_out) {
+        cr.exit_code = 0;
+        cr.output = task_out;
+        ng_log("agent: task tool %s out=%.200s", tname, task_out);
+        /* Task open → stretch turn budget so self-reminder loop can finish. */
+        if (ng_task_is_open() && max_turns < hard_max) {
+          max_turns = hard_max;
+          ng_log("agent: open task — max_turns raised to %d", max_turns);
+        }
+      } else if (mcp_out) {
+        cr.exit_code = 0;
+        cr.output = mcp_out; /* owned; free via ng_cmd_result_free or manual */
+        ng_log("agent: mcp tool done out=%.200s", mcp_out);
+      } else if (strcmp(tname, "run_terminal_command") == 0 ||
           strcmp(tname, "run_terminal_cmd") == 0 ||
           strcmp(tname, "shell") == 0 ||
           strcmp(tname, "bash") == 0) {
         cmd = extract_command_arg(targs);
+        cr = ng_run_command(cmd, c->timeout_sec);
+        ng_log("agent: exit=%d out=%.200s", cr.exit_code, cr.output ? cr.output : "");
       } else {
         asprintf(&cmd, "echo 'unknown tool %s'", tname);
+        cr = ng_run_command(cmd, c->timeout_sec);
+        ng_log("agent: exit=%d out=%.200s", cr.exit_code, cr.output ? cr.output : "");
       }
-      ng_cmd_result cr = ng_run_command(cmd, c->timeout_sec);
-      ng_log("agent: exit=%d out=%.200s", cr.exit_code, cr.output ? cr.output : "");
 
       free(last_tool_out);
       asprintf(&last_tool_out, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
       char *esc_out = ng_json_escape(last_tool_out);
       char *esc_args = ng_json_escape(targs);
+
+      if (stream_final && on_delta) {
+        char *en = ng_json_escape(tname ? tname : "tool");
+        char *ei = ng_json_escape(tid ? tid : "");
+        /* Cap tool output in SSE so UI stays light */
+        char out_cap[900];
+        snprintf(out_cap, sizeof out_cap, "%.800s", last_tool_out ? last_tool_out : "");
+        char *eo = ng_json_escape(out_cap);
+        char *ev = NULL;
+        if (asprintf(&ev,
+              "{\"type\":\"tool\",\"phase\":\"done\",\"id\":\"%s\","
+              "\"name\":\"%s\",\"exit\":%d,\"output\":\"%s\"}",
+              ei ? ei : "", en ? en : "", cr.exit_code, eo ? eo : "") > 0 && ev)
+          stream_evt(on_delta, userdata, ev);
+        free(en); free(ei); free(eo); free(ev);
+      }
 
       size_t ml = strlen(messages);
       if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
@@ -816,13 +991,40 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
       messages = new_messages;
       free(esc_args); free(esc_out);
       free(tname); free(targs); free(tid); free(cmd);
-      ng_cmd_result_free(&cr);
+      if (task_out || mcp_out) {
+        /* cr.output owned by task/mcp string; free without cmd_result_free double free */
+        free(cr.output);
+        cr.output = NULL;
+      } else {
+        ng_cmd_result_free(&cr);
+      }
       free(resp);
       continue;
     }
 
     final = ng_json_message_content(resp);
     if (final && final[0]) {
+      /* If a multi-step task is still open, do not stop — remind and continue. */
+      if (use_tools && ng_task_is_open() && turn < hard_max - 1) {
+        ng_log("agent: model tried to finish but task still open — continue");
+        size_t ml = strlen(messages);
+        if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
+        char *esc = ng_json_escape(final);
+        char *nmsg = NULL;
+        asprintf(&nmsg,
+          "%s,{\"role\":\"assistant\",\"content\":\"%s\"},"
+          "{\"role\":\"user\",\"content\":\"Task is still OPEN (not task_done / task_block). "
+          "Continue working: tools, task_step_done, then task_done or task_block.\"}]",
+          messages, esc ? esc : "");
+        free(messages);
+        messages = nmsg;
+        free(esc);
+        free(final);
+        final = NULL;
+        free(resp);
+        if (max_turns < hard_max) max_turns = hard_max;
+        continue;
+      }
       free(resp);
       break;
     }
@@ -850,12 +1052,16 @@ char *ng_agent_run_ex(ng_agent_cfg *c, const char *user_prompt,
       }
       ng_log("agent: final from last tool output (model never wrote text)");
     } else {
-      final = strdup("(no reply from model — try again or @! shell)");
+      ng_log("agent: empty final after %d turns (check curl/session/network)", max_turns);
+      final = strdup(
+        "(no reply from model — peer may be process-starved or API empty; "
+        "force-stop TitanNanobot / restart peer, then retry. Or @! shell.)");
     }
   }
 
   free(messages);
   free(last_tool_out);
+  free(tools);
   if (final && strncmp(final, "API error:", 10) != 0 &&
       strncmp(final, "(no content)", 12) != 0 &&
       strncmp(final, "curl failed", 11) != 0 &&

@@ -1,4 +1,5 @@
 #include "http.h"
+#include "mcp_remote.h"
 #include "auth.h"
 #include "shell.h"
 #include "shell_gate.h"
@@ -32,11 +33,22 @@ static void send_all(int fd, const char *data, size_t n) {
   }
 }
 
-/* SSE chat stream helper — must not be a nested fn (clang/NDK). */
+/* SSE chat stream helper — must not be a nested fn (clang/NDK).
+ * Normal chunks → {"delta":"..."}.
+ * Chunks starting with 0x1e (RS) → raw JSON event (tool / thinking) for the app. */
 typedef struct { int fd; } chat_sse_ud;
 static void chat_sse_delta(void *p, const char *chunk, size_t n) {
   chat_sse_ud *u = (chat_sse_ud *)p;
   if (!chunk || !n || !u || u->fd < 0) return;
+  /* Structured event from agent (tool / thinking) */
+  if ((unsigned char)chunk[0] == 0x1e && n > 1) {
+    char *line = NULL;
+    if (asprintf(&line, "data: %.*s\n\n", (int)(n - 1), chunk + 1) > 0 && line) {
+      send_all(u->fd, line, strlen(line));
+      free(line);
+    }
+    return;
+  }
   char *tmp = (char *)malloc(n + 1);
   if (!tmp) return;
   memcpy(tmp, chunk, n);
@@ -303,7 +315,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "{\"ok\":true,\"service\":\"nanobot\",\"role\":\"cli-api\","
       "\"hint\":\"CLI + peer/JSON API + optional MCP; optional --www for static files\","
       "\"endpoints\":[\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
-      "\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/settings\",\"/api/models\"]}";
+      "\"/peer/v1/task\",\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/task\",\"/api/settings\",\"/api/models\"]}";
     http_response(cfd, 200, "application/json", body, strlen(body));
     free(req); close(cfd); return;
   }
@@ -341,9 +353,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     if (agent && agent->base_url) base_esc = ng_json_escape(agent->base_url);
     char body[2560];
+    /* needs_browser = backend TYPE uses browser OAuth (always true for Grok).
+     * login_required = user must open Connect NOW (not signed in). Apps must
+     * use login_required / signed_in — not needs_browser — or they thrash Connect. */
+    int login_required = need_browser && !signed_in;
     int n = snprintf(body, sizeof body,
       "{\"ok\":true,\"version\":\"%s\",\"model\":\"%s\",\"signed_in\":%s,"
-      "\"login_pending\":%s,\"user_code\":\"%s\","
+      "\"login_pending\":%s,\"login_required\":%s,\"user_code\":\"%s\","
       "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
       "\"workdir\":\"%s\",\"auth\":\"%s\",\"backend\":\"%s\","
       "\"base_url\":\"%s\",\"needs_browser\":%s}",
@@ -351,6 +367,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       agent && agent->model ? agent->model : "",
       signed_in ? "true" : "false",
       (need_browser && session && session->login_pending) ? "true" : "false",
+      login_required ? "true" : "false",
       uc ? uc : "",
       vu ? vu : "",
       vuc ? vuc : "",
@@ -586,6 +603,65 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     asprintf(&body, "{\"log\":\"%s\"}", esc ? esc : "");
     http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
     free(tail); free(esc); free(body);
+    free(req); close(cfd); return;
+  }
+
+  /* Active multi-step task board (task_plan / task_done tools) */
+  if (is_get && (strcmp(path, "/api/task") == 0 || strcmp(path, "/peer/v1/task") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    char tpath[700];
+    snprintf(tpath, sizeof tpath, "%s/tasks/active.json", ng_workdir());
+    char *raw = ng_read_file(tpath, NULL);
+    if (!raw || !raw[0]) {
+      free(raw);
+      http_json(cfd, 200, "{\"ok\":true,\"open\":false,\"task\":null}");
+    } else {
+      char *body = NULL;
+      asprintf(&body, "{\"ok\":true,\"open\":true,\"task\":%s}", raw);
+      http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
+      free(body);
+      free(raw);
+    }
+    free(req); close(cfd); return;
+  }
+
+  /* ---- Outbound MCP servers (agent connects TO remote MCPs) ---- */
+  if (is_get && (strcmp(path, "/api/mcp/servers") == 0 ||
+                 strcmp(path, "/peer/v1/mcp/servers") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    char *body = ng_mcp_servers_list_json();
+    http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
+    free(body);
+    free(req); close(cfd); return;
+  }
+  if (is_post && (strcmp(path, "/api/mcp/servers") == 0 ||
+                  strcmp(path, "/peer/v1/mcp/servers") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    int rc = ng_mcp_servers_save_raw(body);
+    if (rc != 0) {
+      http_json(cfd, 400, "{\"ok\":false,\"error\":\"invalid mcp_servers json\"}");
+    } else {
+      char *list = ng_mcp_servers_list_json();
+      http_response(cfd, 200, "application/json", list ? list : "{\"ok\":true}",
+                    list ? strlen(list) : 11);
+      free(list);
+    }
+    free(req); close(cfd); return;
+  }
+  if (is_post && (strcmp(path, "/api/mcp/probe") == 0 ||
+                  strcmp(path, "/peer/v1/mcp/probe") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    char *id = ng_json_get_string(body, "id");
+    char *url = ng_json_get_string(body, "url");
+    char *auth = ng_json_get_string(body, "auth");
+    char *out = ng_mcp_server_probe(id, url, auth);
+    free(id); free(url); free(auth);
+    http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
+    free(out);
     free(req); close(cfd); return;
   }
 

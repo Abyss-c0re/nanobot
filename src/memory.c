@@ -106,6 +106,40 @@ static void truncate_store(char *s, size_t max_chars) {
   utf8_truncate(s, max_chars);
 }
 
+/* Runtime prefs from memory/prefs (app-written). Fall back to compile defaults. */
+static int pref_int(const char *key, int defv, int lo, int hi) {
+  char path[640];
+  mem_path(path, sizeof path, "prefs");
+  char *v = ng_slurp_env_file(path, key);
+  if (!v || !v[0]) { free(v); return defv; }
+  int n = atoi(v);
+  free(v);
+  if (n < lo) n = lo;
+  if (n > hi) n = hi;
+  return n;
+}
+
+static int pref_on(const char *key, int def_on) {
+  char path[640];
+  mem_path(path, sizeof path, "prefs");
+  char *v = ng_slurp_env_file(path, key);
+  if (!v || !v[0]) { free(v); return def_on; }
+  int on = !(v[0] == '0' || v[0] == 'n' || v[0] == 'N' || v[0] == 'f' || v[0] == 'F');
+  free(v);
+  return on;
+}
+
+static int mem_recent_turns(void) {
+  return pref_int("RECENT_TURNS", NG_MEM_MAX_RECENT_TURNS, 1, 24);
+}
+int ng_memory_recent_turns(void) { return mem_recent_turns(); }
+static int mem_msg_chars(void) {
+  return pref_int("MSG_CHARS", NG_MEM_MAX_MSG_CHARS, 120, 4000);
+}
+static int mem_summary_max(void) {
+  return pref_int("SUMMARY_MAX", NG_MEM_MAX_SUMMARY, 200, 8000);
+}
+
 char *ng_memory_system_prompt(void) {
   ng_memory_init();
   char corep[640], profp[640], sump[640];
@@ -113,9 +147,11 @@ char *ng_memory_system_prompt(void) {
   mem_path(profp, sizeof profp, "profile.txt");
   mem_path(sump, sizeof sump, "summary.txt");
 
-  char *core = read_capped(corep, NG_MEM_MAX_CORE);
+  int want_core = pref_on("INCLUDE_CORE", 1);
+  int want_sum = pref_on("INCLUDE_SUMMARY", 1);
+  char *core = want_core ? read_capped(corep, NG_MEM_MAX_CORE) : strdup("");
   char *prof = read_capped(profp, NG_MEM_MAX_PROFILE);
-  char *sum = read_capped(sump, NG_MEM_MAX_SUMMARY);
+  char *sum = want_sum ? read_capped(sump, mem_summary_max()) : strdup("");
 
   char *out = NULL;
   asprintf(&out,
@@ -259,8 +295,9 @@ static void append_summary_line(const char *line) {
   /* cap: keep tail */
   size_t total = strlen(nbuf);
   const char *write_from = nbuf;
-  if (total > NG_MEM_MAX_SUMMARY) {
-    write_from = nbuf + (total - NG_MEM_MAX_SUMMARY);
+  size_t cap = (size_t)mem_summary_max();
+  if (total > cap) {
+    write_from = nbuf + (total - cap);
     while (*write_from && *write_from != '\n') write_from++;
     if (*write_from == '\n') write_from++;
   }
@@ -316,8 +353,8 @@ void ng_memory_record_exchange(const char *user, const char *assistant) {
   char *u = strdup(user);
   char *a = strdup(assistant ? assistant : "");
   if (!u || !a) { free(u); free(a); return; }
-  truncate_store(u, NG_MEM_MAX_MSG_CHARS);
-  truncate_store(a, NG_MEM_MAX_MSG_CHARS);
+  truncate_store(u, mem_msg_chars());
+  truncate_store(a, mem_msg_chars());
 
   mem_msg *msgs = NULL;
   int n = 0;
@@ -338,7 +375,7 @@ void ng_memory_record_exchange(const char *user, const char *assistant) {
   msgs[n].content = a;
   n++;
 
-  int max_msgs = NG_MEM_MAX_RECENT_TURNS * 2;
+  int max_msgs = mem_recent_turns() * 2;
   if (n > max_msgs) {
     int drop = n - max_msgs;
     /* drop complete pairs from start */
