@@ -51,15 +51,20 @@ static char *device_login_path(void) {
 }
 
 /* Atomic write of secret material.
- * Default mode 0600. Lab shared home (/data/local/tmp/nanobot_home) uses 0666 so
- * shell-started and app-started peers can both open the same sealed session —
- * otherwise the other UID sees "not signed in" and forces a new device login
- * (looks like the session "expired in minutes"). */
+ * Default mode 0600. Hosts that share NANOBOT_HOME across UIDs set
+ * NANOBOT_SHARED_SECRETS=1 (or shell_shared_secrets file) for 0666. */
 static int write_secret_file(const char *path, const char *body) {
   if (!path || !body) return -1;
   mode_t mode = 0600;
-  if (strstr(path, "/data/local/tmp/nanobot_home") != NULL)
-    mode = 0666;
+  {
+    const char *sh = getenv("NANOBOT_SHARED_SECRETS");
+    if (sh && sh[0] && sh[0] != '0') mode = 0666;
+    else {
+      char sp[640];
+      snprintf(sp, sizeof sp, "%s/shell_shared_secrets", ng_workdir());
+      if (access(sp, F_OK) == 0) mode = 0666;
+    }
+  }
   char tmp[700];
   snprintf(tmp, sizeof tmp, "%s.tmp.%d", path, (int)getpid());
   mode_t old_umask = umask(0); /* so mode is not masked to 0600 */

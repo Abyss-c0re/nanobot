@@ -1251,7 +1251,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       ng_log("agent: empty final after %d turns (check curl/session/network)", max_turns);
       final = strdup(
         "(no reply from model — peer may be process-starved or API empty; "
-        "force-stop TitanNanobot / restart peer, then retry. Or @! shell.)");
+        "restart peer, then retry. Or @! shell.)");
     }
   }
 

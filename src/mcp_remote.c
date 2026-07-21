@@ -309,7 +309,7 @@ static char *initialize_and_list(const char *url, const char *auth, char **sess_
   char *init_params =
     "{\"protocolVersion\":\"2024-11-05\","
     "\"capabilities\":{},"
-    "\"clientInfo\":{\"name\":\"titan-nanobot\",\"version\":\"" NG_VERSION "\"}}";
+    "\"clientInfo\":{\"name\":\"nanobot\",\"version\":\"" NG_VERSION "\"}}";
   char *init_req = rpc_body(1, "initialize", init_params);
   char *sess = NULL;
   char *init_resp = mcp_http_post(url, auth, NULL, init_req, &sess);
@@ -463,7 +463,7 @@ static char *mcp_call_server(const char *server_id, const char *tool,
   /* initialize for session */
   char *init_params =
     "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},"
-    "\"clientInfo\":{\"name\":\"titan-nanobot\",\"version\":\"" NG_VERSION "\"}}";
+    "\"clientInfo\":{\"name\":\"nanobot\",\"version\":\"" NG_VERSION "\"}}";
   char *init_req = rpc_body(1, "initialize", init_params);
   char *init_resp = mcp_http_post(hit->url, hit->auth, NULL, init_req, &sess);
   free(init_req); free(init_resp);
@@ -549,7 +549,7 @@ static char *mcp_list_all(void) {
   if (!n) {
     free(acc);
     for (int i = 0; i < n; i++) free_srv(&arr[i]);
-    return strdup("No MCP servers configured. Add one in TitanNanobot → MCP servers.");
+    return strdup("No MCP servers configured. Add entries to $NANOBOT_HOME/mcp_servers.json.");
   }
   for (int i = 0; i < n; i++) {
     if (!arr[i].enabled) {

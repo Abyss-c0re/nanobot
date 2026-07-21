@@ -204,12 +204,8 @@ int ng_mkstemp_home(char *path, size_t path_sz, const char *prefix) {
   if (!path || path_sz < 64) return -1;
   const char *pre = (prefix && prefix[0]) ? prefix : "ng_";
   const char *wd = ng_workdir();
-  /*
-   * Try several dirs: Android SELinux often blocks priv_app from writing
-   * shell-owned $NANOBOT_HOME under /data/local/tmp (avc: shell_data_file).
-   * App should set TMPDIR to getCacheDir()/ng_tmp which is app_data_file.
-   */
-  const char *cands[8];
+  /* TMPDIR (host-set), $NANOBOT_HOME/tmp, then /tmp — no product OS paths. */
+  const char *cands[6];
   int nc = 0;
   const char *td = getenv("TMPDIR");
   if (td && td[0]) cands[nc++] = td;
@@ -218,8 +214,6 @@ int ng_mkstemp_home(char *path, size_t path_sz, const char *prefix) {
     snprintf(wdtmp, sizeof wdtmp, "%s/tmp", wd);
     cands[nc++] = wdtmp;
   }
-  cands[nc++] = "/data/local/tmp";
-  cands[nc++] = "/cache";
   cands[nc++] = "/tmp";
 
   mode_t old = umask(0);
@@ -230,8 +224,7 @@ int ng_mkstemp_home(char *path, size_t path_sz, const char *prefix) {
     mkdir(base, 0777);
     /* also try base/tmp for bare TMPDIR roots */
     char dir[640];
-    if (strstr(base, "/tmp") == NULL && strcmp(base, "/tmp") != 0 &&
-        strcmp(base, "/cache") != 0) {
+    if (strstr(base, "/tmp") == NULL && strcmp(base, "/tmp") != 0) {
       snprintf(dir, sizeof dir, "%s/tmp", base);
       mkdir(dir, 0777);
     } else {
