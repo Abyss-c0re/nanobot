@@ -27,6 +27,15 @@ void ng_agent_set_grok_backend(ng_agent_cfg *c, const char *model);
 /* Persist NANOBOT_BASE_URL / NANOBOT_MODEL into $HOME/env. */
 int ng_agent_save_env(const ng_agent_cfg *c);
 
+/* GET {base_url}/models (OpenAI-compatible; same as grok-build / llama.cpp).
+ * Uses session Bearer on cloud, optional NANOBOT_API_KEY / env Bearer on local.
+ * Returns malloc'd raw JSON body, or error string. */
+char *ng_agent_fetch_models_json(ng_agent_cfg *c);
+/* Parse model ids from OpenAI list JSON → malloc'd JSON array ["id",...] or "[]". */
+char *ng_agent_models_ids_json(const char *models_body);
+/* Set model id (and optional base) and save env. */
+void ng_agent_select_model(ng_agent_cfg *c, const char *model);
+
 /* Stream chunks of assistant text (CLI real-time). May be called 0+ times. */
 typedef void (*ng_stream_fn)(void *userdata, const char *chunk, size_t n);
 

@@ -71,10 +71,16 @@ nanobot --port 8787 --offline
 
 ```bash
 nanobot -p 'hello'          # one-shot reply (streams tokens)
+nanobot --models            # list models from current backend (GET {base}/models)
+nanobot --model grok-4.5    # select model (also via POST /api/settings)
 nanobot --mcp               # stdio MCP
 nanobot --login             # (re)start Grok device-code login
 nanobot --offline -p 'hi'   # local backend only
 ```
+
+Models are **not** limited to a hardcoded id: the default is `grok-4.5`, but you can
+list and pick any id from the provider (`--models`) or from llama.cpp the same way.
+Peer: `GET /api/models` or `GET /peer/v1/models`.
 
 ### Data dir (`~/.nanobot` by default)
 

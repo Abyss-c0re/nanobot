@@ -114,6 +114,7 @@ static void usage(const char *argv0) {
     "  MCP:   --mcp (stdio)\n"
     "  Auth:  --login  device-code (sealed under peer_token KDF)\n"
     "  Local: --offline | --base-url URL | --model NAME\n"
+    "  Models: --models  (list GET {base}/models — Grok or llama.cpp)\n"
     "  Static: --www DIR (optional)\n\n"
     "Build features: MCP=%d AUTH=%d PEER=%d HUB=%d SHELL=%d PROVIDERS=%d\n"
     "  cmake -DNANOBOT_ENABLE_MCP=OFF … etc.\n\n"
@@ -137,6 +138,7 @@ int main(int argc, char **argv) {
   int mode_mcp = 0;
   int force_login = 0;
   int force_offline = 0;
+  int list_models = 0;
   int want_stream = 1;
   int hub_mode = 0;
   int port_out = 0;
@@ -170,6 +172,8 @@ int main(int argc, char **argv) {
       cli_base = argv[++i];
     } else if (strcmp(argv[i], "--model") == 0 && i + 1 < argc) {
       cli_model = argv[++i];
+    } else if (strcmp(argv[i], "--models") == 0 || strcmp(argv[i], "models") == 0) {
+      list_models = 1;
     } else if ((strcmp(argv[i], "--port") == 0 || strcmp(argv[i], "--port-in") == 0) &&
                i + 1 < argc) {
       port = atoi(argv[++i]);
@@ -293,6 +297,40 @@ int main(int argc, char **argv) {
           ng_agent_backend_kind(&agent),
           agent.base_url ? agent.base_url : "?",
           agent.model ? agent.model : "?");
+
+  if (list_models) {
+    if (need_browser && ng_session_valid(&session))
+      ng_session_ensure(&session);
+    char *raw = ng_agent_fetch_models_json(&agent);
+    char *ids = ng_agent_models_ids_json(raw);
+    int ok = 0;
+    if (ids && ids[0] == '[' && strcmp(ids, "[]") != 0) {
+      const char *p = ids + 1;
+      while (*p) {
+        while (*p == ' ' || *p == ',' || *p == '\n' || *p == '\r') p++;
+        if (*p == ']') break;
+        if (*p == '"') {
+          p++;
+          const char *e = p;
+          while (*e && *e != '"') e++;
+          fwrite(p, 1, (size_t)(e - p), stdout);
+          fputc('\n', stdout);
+          ok = 1;
+          p = (*e == '"') ? e + 1 : e;
+        } else break;
+      }
+    }
+    if (!ok && raw) {
+      fputs(raw, stdout);
+      if (raw[0] && raw[strlen(raw) - 1] != '\n') fputc('\n', stdout);
+    }
+    free(raw);
+    free(ids);
+    ng_session_free(&session);
+    ng_agent_cfg_free(&agent);
+    return 0;
+  }
+
 
   if (mode_mcp) {
 #if !NANOBOT_ENABLE_MCP

@@ -44,3 +44,24 @@ nanobot --base-url http://127.0.0.1:8080/v1 --model local --port 8787
 ```bash
 NANOBOT_TOOLS=0 nanobot --offline   # disable tool use
 ```
+
+## List / select models
+
+Same idea as [Grok Build](https://github.com/xai-org/grok-build) / OpenAI: **GET `{base_url}/models`**.
+
+```bash
+nanobot --models                 # cloud (needs session) or use with --offline
+nanobot --offline --models       # llama.cpp / local OpenAI-compatible
+nanobot --model NAME             # pin model; saved under $NANOBOT_HOME/env
+```
+
+HTTP (peer running):
+
+```bash
+curl -sS http://127.0.0.1:8787/api/models
+# select:
+curl -sS -X POST http://127.0.0.1:8787/api/settings \
+  -H "Content-Type: application/json" \
+  -H "X-Nanobot-Peer-Token: $TOK" \
+  -d '{"model":"grok-4.5"}'
+```

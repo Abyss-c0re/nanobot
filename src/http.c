@@ -282,7 +282,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "{\"ok\":true,\"service\":\"nanobot\",\"role\":\"cli-api\","
       "\"hint\":\"CLI + peer/JSON API + optional MCP; optional --www for static files\","
       "\"endpoints\":[\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
-      "\"/api/chat\",\"/api/auth\",\"/api/settings\"]}";
+      "\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/settings\",\"/api/models\"]}";
     http_response(cfd, 200, "application/json", body, strlen(body));
     free(req); close(cfd); return;
   }
@@ -401,6 +401,41 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* List models: GET {base}/models (OpenAI-compatible; Grok session or local). */
+  if (is_get && (strcmp(path, "/api/models") == 0 || strcmp(path, "/peer/v1/models") == 0)) {
+    if (!agent) {
+      http_json(cfd, 500, "{\"error\":\"no agent\"}");
+      free(req); close(cfd); return;
+    }
+    if (session && ng_agent_needs_browser_session(agent) && ng_session_valid(session))
+      ng_session_ensure(session);
+    char *raw = ng_agent_fetch_models_json(agent);
+    char *ids = ng_agent_models_ids_json(raw);
+    char *cur = ng_json_escape(agent->model ? agent->model : "");
+    char *base_e = ng_json_escape(agent->base_url ? agent->base_url : "");
+    char *out = NULL;
+    int ok = (ids && ids[0] == '[' && strcmp(ids, "[]") != 0);
+    if (!ok && raw && raw[0] == '{') {
+      /* upstream returned object but no ids parsed — still ok with empty list */
+      ok = 1;
+    }
+    if (ok) {
+      asprintf(&out,
+        "{\"ok\":true,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s}",
+        base_e ? base_e : "", cur ? cur : "",
+        ids && ids[0] == '[' ? ids : "[]");
+    } else {
+      char *err = ng_json_escape(raw ? raw : "fetch failed");
+      asprintf(&out,
+        "{\"ok\":false,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":[],\"error\":\"%s\"}",
+        base_e ? base_e : "", cur ? cur : "", err ? err : "fetch failed");
+      free(err);
+    }
+    http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
+    free(out); free(raw); free(ids); free(cur); free(base_e);
+    free(req); close(cfd); return;
+  }
+
   /* Settings: select backend (grok | local) + optional base/model */
   if ((is_post || is_put) && strcmp(path, "/api/settings") == 0) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
@@ -414,9 +449,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *base = ng_json_get_string(body, "base_url");
     if (!base) base = ng_json_get_string(body, "base");
     char *model = ng_json_get_string(body, "model");
-    if (!backend && !base) {
+    if (!backend && !base && !(model && model[0])) {
       free(backend); free(base); free(model);
-      http_json(cfd, 400, "{\"error\":\"need backend (grok|local) or base_url\"}");
+      http_json(cfd, 400, "{\"error\":\"need backend (grok|local), base_url, or model\"}");
       free(req); close(cfd); return;
     }
     if (backend && (strcmp(backend, "grok") == 0 || strcmp(backend, "cloud") == 0)) {
@@ -431,6 +466,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         ng_agent_set_grok_backend(agent, model);
       else
         ng_agent_set_local_backend(agent, base, model);
+    } else if (model && model[0]) {
+      /* same backend, switch model only (after --models / UI pick) */
+      ng_agent_select_model(agent, model);
     }
     ng_agent_save_env(agent);
     ng_log("settings: backend=%s base=%s model=%s",

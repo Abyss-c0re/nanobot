@@ -193,6 +193,178 @@ static char *curl_post_json(const char *url, const char *bearer, const char *bod
 }
 
 
+
+/* GET with same auth headers as chat (session or API key). */
+static char *curl_get_url(const char *url, const char *bearer, int grok_headers) {
+  char outtmpl[] = "/tmp/ng_get_XXXXXX";
+  int ofd = mkstemp(outtmpl);
+  if (ofd < 0) return strdup("mkstemp out failed");
+  close(ofd);
+  char errtmpl[] = "/tmp/ng_gerr_XXXXXX";
+  int efd = mkstemp(errtmpl);
+  if (efd < 0) { unlink(outtmpl); return strdup("mkstemp err failed"); }
+  close(efd);
+
+  char auth[1600];
+  if (bearer && bearer[0])
+    snprintf(auth, sizeof auth, "Authorization: Bearer %s", bearer);
+  else
+    snprintf(auth, sizeof auth, "Authorization: Bearer none");
+  char ua[96];
+  snprintf(ua, sizeof ua, "User-Agent: %s", ng_cli_user_agent());
+  char verhdr[80];
+  snprintf(verhdr, sizeof verhdr, "x-grok-client-version: %s", ng_cli_version());
+
+  pid_t p2 = fork();
+  if (p2 == 0) {
+    int er = open(errtmpl, O_WRONLY | O_TRUNC);
+    if (er >= 0) { dup2(er, STDERR_FILENO); close(er); }
+    char *argv[40];
+    int a = 0;
+    argv[a++] = "curl";
+    argv[a++] = "-sS";
+    argv[a++] = "--max-time";
+    argv[a++] = "30";
+    argv[a++] = "--connect-timeout";
+    argv[a++] = "12";
+    if (bearer && bearer[0]) {
+      argv[a++] = "-H";
+      argv[a++] = auth;
+    }
+    if (grok_headers) {
+      argv[a++] = "-H";
+      argv[a++] = "X-XAI-Token-Auth: " NG_AUTH_TOKEN_HDR;
+      argv[a++] = "-H";
+      argv[a++] = "x-grok-client-mode: headless";
+      argv[a++] = "-H";
+      argv[a++] = "x-grok-client-surface: cli";
+      argv[a++] = "-H";
+      argv[a++] = verhdr;
+      argv[a++] = "-H";
+      argv[a++] = ua;
+    } else {
+      argv[a++] = "-H";
+      argv[a++] = "User-Agent: nanobot/" NG_VERSION;
+    }
+    argv[a++] = "-o";
+    argv[a++] = outtmpl;
+    argv[a++] = (char *)url;
+    argv[a++] = NULL;
+    execvp("curl", argv);
+    _exit(127);
+  }
+  int st = 0;
+  waitpid(p2, &st, 0);
+  if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) {
+    char *err = ng_read_file(outtmpl, NULL);
+    char *cerr = ng_read_file(errtmpl, NULL);
+    unlink(outtmpl); unlink(errtmpl);
+    if (err && err[0]) { free(cerr); return err; }
+    free(err);
+    if (cerr && cerr[0]) {
+      char *out = NULL;
+      asprintf(&out, "curl failed: %s", cerr);
+      free(cerr);
+      return out ? out : strdup("curl failed listing models");
+    }
+    free(cerr);
+    return strdup("curl failed listing models");
+  }
+  unlink(errtmpl);
+  char *resp = ng_read_file(outtmpl, NULL);
+  unlink(outtmpl);
+  return resp ? resp : strdup("");
+}
+
+char *ng_agent_fetch_models_json(ng_agent_cfg *c) {
+  if (!c || !c->base_url || !c->base_url[0])
+    return strdup("{\"error\":\"no base_url\"}");
+  char url[768];
+  /* Allow override list URL (grok-build: GROK_MODELS_LIST_URL) */
+  const char *list = getenv("NANOBOT_MODELS_LIST_URL");
+  if (list && list[0])
+    snprintf(url, sizeof url, "%s", list);
+  else {
+    size_t n = strlen(c->base_url);
+    if (n > 0 && c->base_url[n - 1] == '/')
+      snprintf(url, sizeof url, "%smodels", c->base_url);
+    else
+      snprintf(url, sizeof url, "%s/models", c->base_url);
+  }
+  const char *bearer = NULL;
+  char *tok_owned = NULL;
+  int grok = is_grok_endpoint(c->base_url);
+  if (grok && c->session) {
+    bearer = ng_session_bearer(c->session);
+  }
+  if (!bearer || !bearer[0]) {
+    tok_owned = ng_getenv_dup("NANOBOT_API_KEY");
+    if (!tok_owned) tok_owned = ng_getenv_dup("OPENAI_API_KEY");
+    if (!tok_owned) tok_owned = ng_getenv_dup("XAI_API_KEY");
+    bearer = tok_owned;
+  }
+  char *body = curl_get_url(url, bearer, grok);
+  free(tok_owned);
+  return body;
+}
+
+/* Extract "id" fields from OpenAI {"data":[{"id":"..."},...]} or flat list. */
+char *ng_agent_models_ids_json(const char *models_body) {
+  if (!models_body || !models_body[0]) return strdup("[]");
+  size_t cap = 4096, len = 1;
+  char *out = malloc(cap);
+  if (!out) return strdup("[]");
+  out[0] = '[';
+  out[1] = 0;
+  int first = 1;
+  const char *p = models_body;
+  while ((p = strstr(p, "\"id\"")) != NULL) {
+    p += 4;
+    while (*p == ' ' || *p == '\t' || *p == ':' || *p == '\n' || *p == '\r') p++;
+    if (*p != '"') continue;
+    p++;
+    const char *e = p;
+    while (*e && *e != '"') {
+      if (*e == '\\' && e[1]) e += 2;
+      else e++;
+    }
+    if (*e != '"') break;
+    size_t idlen = (size_t)(e - p);
+    if (idlen == 0 || idlen > 200) { p = e + 1; continue; }
+    /* skip non-model ids like "list" object fields if any */
+    if (idlen == 4 && !strncmp(p, "list", 4)) { p = e + 1; continue; }
+    size_t need = len + idlen + 8;
+    if (need >= cap) {
+      cap = need * 2;
+      char *n = realloc(out, cap);
+      if (!n) break;
+      out = n;
+    }
+    if (!first) out[len++] = ',';
+    first = 0;
+    out[len++] = '"';
+    memcpy(out + len, p, idlen);
+    len += idlen;
+    out[len++] = '"';
+    out[len] = 0;
+    p = e + 1;
+  }
+  if (len + 2 >= cap) {
+    char *n = realloc(out, len + 4);
+    if (n) out = n;
+  }
+  out[len++] = ']';
+  out[len] = 0;
+  return out;
+}
+
+void ng_agent_select_model(ng_agent_cfg *c, const char *model) {
+  if (!c || !model || !model[0]) return;
+  free(c->model);
+  c->model = strdup(model);
+  ng_agent_save_env(c);
+}
+
 /* Parse OpenAI SSE "data: {json}" lines; call on_delta for each content delta.
  * Returns malloc'd full assistant text accumulated. */
 static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
