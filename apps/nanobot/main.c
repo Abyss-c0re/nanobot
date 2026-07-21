@@ -5,6 +5,7 @@
 #include "memory.h"
 #include "hub_local.h"
 #include "util.h"
+#include "shell.h"
 #include <nanobot/crypto.h>
 #include <nanobot/os.h>
 #include <sys/wait.h>
@@ -211,6 +212,7 @@ int main(int argc, char **argv) {
 
   ng_set_workdir(home);
   mkdir(home, 0755);
+  ng_shell_ensure_policy_files();
 
   /* Load persisted settings (survives reboot under NANOBOT_HOME/settings).
    * CLI / env win over file. */

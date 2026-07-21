@@ -331,8 +331,15 @@ char *ng_agent_models_ids_json(const char *models_body) {
     if (*e != '"') break;
     size_t idlen = (size_t)(e - p);
     if (idlen == 0 || idlen > 200) { p = e + 1; continue; }
-    /* skip non-model ids like "list" object fields if any */
+    /* skip non-model ids: OpenAI object type, and Grok *reasoning effort*
+     * levels (high/medium/low) that appear as nested "id" in /v1/models. */
     if (idlen == 4 && !strncmp(p, "list", 4)) { p = e + 1; continue; }
+    if (idlen == 4 && (!strncmp(p, "high", 4) || !strncmp(p, "auto", 4) ||
+                       !strncmp(p, "none", 4))) { p = e + 1; continue; }
+    if (idlen == 3 && !strncmp(p, "low", 3)) { p = e + 1; continue; }
+    if (idlen == 6 && !strncmp(p, "medium", 6)) { p = e + 1; continue; }
+    if (idlen == 5 && !strncmp(p, "model", 5)) { p = e + 1; continue; }
+    if (idlen == 6 && !strncmp(p, "object", 6)) { p = e + 1; continue; }
     size_t need = len + idlen + 8;
     if (need >= cap) {
       cap = need * 2;

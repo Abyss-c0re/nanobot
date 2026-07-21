@@ -414,23 +414,53 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *cur = ng_json_escape(agent->model ? agent->model : "");
     char *base_e = ng_json_escape(agent->base_url ? agent->base_url : "");
     char *out = NULL;
-    int ok = (ids && ids[0] == '[' && strcmp(ids, "[]") != 0);
+    int nonempty = (ids && ids[0] == '[' && strcmp(ids, "[]") != 0);
+    int ok = nonempty;
     if (!ok && raw && raw[0] == '{') {
       /* upstream returned object but no ids parsed — still ok with empty list */
       ok = 1;
     }
+    /* Surface upstream error/auth failure when list is empty so UIs can explain. */
+    char *hint = NULL;
+    if (!nonempty && raw && raw[0]) {
+      if (strstr(raw, "Unauthenticated") || strstr(raw, "auth") || strstr(raw, "expired")
+          || strstr(raw, "Invalid") || strstr(raw, "error")) {
+        /* short escape: prefer JSON "error" string if present */
+        char *e = ng_json_get_string(raw, "error");
+        if (e && e[0]) {
+          hint = ng_json_escape(e);
+          free(e);
+        } else {
+          char trunc[180];
+          size_t n = strlen(raw);
+          if (n > 160) n = 160;
+          memcpy(trunc, raw, n);
+          trunc[n] = 0;
+          hint = ng_json_escape(trunc);
+        }
+      }
+    }
     if (ok) {
-      asprintf(&out,
-        "{\"ok\":true,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s}",
-        base_e ? base_e : "", cur ? cur : "",
-        ids && ids[0] == '[' ? ids : "[]");
+      if (hint && hint[0]) {
+        asprintf(&out,
+          "{\"ok\":true,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s,\"error\":\"%s\"}",
+          base_e ? base_e : "", cur ? cur : "",
+          ids && ids[0] == '[' ? ids : "[]", hint);
+      } else {
+        asprintf(&out,
+          "{\"ok\":true,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s}",
+          base_e ? base_e : "", cur ? cur : "",
+          ids && ids[0] == '[' ? ids : "[]");
+      }
     } else {
-      char *err = ng_json_escape(raw ? raw : "fetch failed");
+      char *err = hint ? hint : ng_json_escape(raw ? raw : "fetch failed");
+      hint = NULL; /* ownership moved */
       asprintf(&out,
         "{\"ok\":false,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":[],\"error\":\"%s\"}",
         base_e ? base_e : "", cur ? cur : "", err ? err : "fetch failed");
       free(err);
     }
+    free(hint);
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
     free(out); free(raw); free(ids); free(cur); free(base_e);
     free(req); close(cfd); return;
