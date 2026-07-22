@@ -6,36 +6,58 @@
 curl -fsSL https://raw.githubusercontent.com/Abyss-c0re/nanobot/main/scripts/install.sh | bash
 ```
 
+When a **terminal** is available, the script **prompts** (on `/dev/tty`, so it works
+with `curl|bash`) for install type:
+
+| choice | mode | binary | data | rights |
+|--------|------|--------|------|--------|
+| **1** (default) | local user | `~/.local/bin` | `~/.nanobot` | no root |
+| **2** | privileged / system | `/opt/nanobot/bin` | `/opt/nanobot` | **sudo** (re-runs as root) |
+
+Non-interactive / CI (no TTY): defaults to **user** unless already root (then system).
+
+```bash
+# explicit — no prompt
+curl -fsSL …/install.sh | bash -s -- --user
+curl -fsSL …/install.sh | bash -s -- --system          # escalates via sudo if needed
+curl -fsSL …/install.sh | sudo bash -s -- --system -y  # already root
+```
+
 ### prerequisites
 | path | need |
 |------|------|
 | prebuilt available | `curl` or `wget` |
 | build from source | `git`, `cmake`, `make`, C11 compiler |
+| `--system` without root | `sudo` |
 
 ### what the script does
-1. Tries a GitHub release binary named `nanobot-$OS-$ARCH`
-2. Else clones and runs `make host` on **this** machine
-3. Installs to `/opt/nanobot` (root) or `~/.local` + data in `~/.nanobot`
-4. **Keeps** existing `peer_token` and `session` on re-run
-5. Starts the peer in the background unless `--skip-start`
+1. Asks user vs system install (or uses `--user` / `--system` / `INSTALL_MODE`)
+2. For system without root: re-fetches/re-runs under **sudo**
+3. Tries a GitHub release binary named `nanobot-$OS-$ARCH`
+4. Else clones and runs `make host` on **this** machine
+5. Installs under the chosen prefix; **keeps** existing `peer_token` and `session`
+6. Starts the peer in the background unless `--skip-start`
 
 ### after install
 ```bash
-export PATH="$HOME/.local/bin:$PATH"    # or /opt/nanobot/bin
+export PATH="$HOME/.local/bin:$PATH"    # user install
+# or: export PATH="/opt/nanobot/bin:$PATH"   # system install
 nanobot --version
 curl -s http://127.0.0.1:8787/peer/v1/health
 ```
 
 ### options
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Abyss-c0re/nanobot/main/scripts/install.sh | bash -s -- \
-  --prefix /opt/nanobot --port 8787
-
+curl -fsSL …/install.sh | bash -s -- --user --port 8787
+curl -fsSL …/install.sh | bash -s -- --system --skip-start
 curl -fsSL …/install.sh | bash -s -- --from-source
 curl -fsSL …/install.sh | bash -s -- --skip-start --home /var/lib/nanobot
 
+# --prefix skips the mode prompt (inferred user vs system from path)
+curl -fsSL …/install.sh | bash -s -- --prefix /opt/nanobot --port 8787
+
 BINARY_URL=https://example.com/nanobot-linux-x86_64 \
-  curl -fsSL …/install.sh | bash
+  curl -fsSL …/install.sh | bash -s -- --user
 ```
 
 ### platforms

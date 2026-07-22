@@ -15,7 +15,11 @@ You need a normal Grok account in a browser. nanobot never ships official Grok s
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Abyss-c0re/nanobot/main/scripts/install.sh | bash
-export PATH="$HOME/.local/bin:$PATH"   # if needed; root install: /opt/nanobot/bin
+# prompts: 1 = local user (~/.local)  ·  2 = privileged/system (/opt/nanobot, sudo)
+# non-interactive:
+#   curl -fsSL …/install.sh | bash -s -- --user
+#   curl -fsSL …/install.sh | bash -s -- --system
+export PATH="$HOME/.local/bin:$PATH"   # user; system: /opt/nanobot/bin
 nanobot --version
 ```
 
