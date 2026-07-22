@@ -74,24 +74,31 @@ static int status_is_live(const char *json) {
   return 0;
 }
 
-int ng_subagent_running_count(void) {
-  char d[512];
-  sub_dir(d, sizeof d);
-  DIR *dp = opendir(d);
-  if (!dp) return 0;
-  int n = 0;
-  struct dirent *de;
-  while ((de = readdir(dp)) != NULL) {
-    size_t L = strlen(de->d_name);
-    if (L < 6 || strcmp(de->d_name + L - 5, ".json") != 0) continue;
-    char path[600];
-    snprintf(path, sizeof path, "%s/%s", d, de->d_name);
-    char *j = ng_read_file(path, NULL);
-    if (j && status_is_live(j)) n++;
-    free(j);
+/* True if pid is a live non-zombie process. */
+static int pid_is_alive(int pid) {
+  char stpath[80], stline[256];
+  if (pid <= 1) return 0;
+  snprintf(stpath, sizeof stpath, "/proc/%d/stat", pid);
+  FILE *sf = fopen(stpath, "r");
+  if (!sf) return 0;
+  if (!fgets(stline, sizeof stline, sf)) {
+    fclose(sf);
+    return 0;
   }
-  closedir(dp);
-  return n;
+  fclose(sf);
+  /* format: pid (comm) state ... — state Z = zombie (not alive) */
+  char *rp = strrchr(stline, ')');
+  if (rp && rp[1] == ' ' && rp[2] == 'Z') return 0;
+  if (kill(pid, 0) != 0 && errno == ESRCH) return 0;
+  return 1;
+}
+
+static int meta_pid(const char *json) {
+  char *ps;
+  if (!json) return 0;
+  ps = strstr(json, "\"pid\":");
+  if (!ps) return 0;
+  return atoi(ps + 6);
 }
 
 static void write_meta(const char *id, const char *type, const char *desc,
@@ -109,6 +116,61 @@ static void write_meta(const char *id, const char *type, const char *desc,
     id, et ? et : "", ed ? ed : "", es ? es : "", pid, ee ? ee : "");
   ng_write_file(path, buf, strlen(buf));
   free(et); free(ed); free(es); free(ee);
+}
+
+/* Reap one meta file if process gone; returns 1 if still truly running. */
+static int reap_meta_file(const char *path, const char *id) {
+  char *meta = ng_read_file(path, NULL);
+  char op[600];
+  int pid;
+  if (!meta) return 0;
+  if (!status_is_live(meta)) {
+    free(meta);
+    return 0;
+  }
+  pid = meta_pid(meta);
+  if (pid > 1 && pid_is_alive(pid)) {
+    free(meta);
+    return 1;
+  }
+  /* dead / zombie / never started */
+  out_path(op, sizeof op, id);
+  if (access(op, R_OK) == 0)
+    write_meta(id, "general", "", "done", pid, NULL);
+  else
+    write_meta(id, "general", "", "error", pid, "exited");
+  free(meta);
+  return 0;
+}
+
+int ng_subagent_reap_all(void) {
+  char d[512];
+  DIR *dp;
+  struct dirent *de;
+  int still = 0;
+  sub_dir(d, sizeof d);
+  dp = opendir(d);
+  if (!dp) return 0;
+  while ((de = readdir(dp)) != NULL) {
+    size_t L = strlen(de->d_name);
+    char id[NG_SUBAGENT_ID_LEN];
+    char path[600];
+    if (L < 6 || strcmp(de->d_name + L - 5, ".json") != 0) continue;
+    snprintf(id, sizeof id, "%.*s", (int)(L - 5), de->d_name);
+    if (!valid_id(id)) continue;
+    snprintf(path, sizeof path, "%s/%s", d, de->d_name);
+    if (reap_meta_file(path, id)) still++;
+  }
+  closedir(dp);
+  /* non-blocking wait: clear any direct-child zombies (intermediate forks) */
+  while (waitpid(-1, NULL, WNOHANG) > 0) {
+  }
+  return still;
+}
+
+int ng_subagent_running_count(void) {
+  /* Always reap first so count matches real processes */
+  return ng_subagent_reap_all();
 }
 
 char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
@@ -139,35 +201,82 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
 
   write_meta(id, t, desc, "queued", 0, NULL);
 
+  /* Max wall time for a subagent — self-terminates so main nanobot stays idle. */
+  int max_sec = 90;
+  {
+    char *s = ng_settings_get("SUBAGENT_TIMEOUT_SEC");
+    if (!s) s = ng_settings_get("MAX_SUB_SEC");
+    if (s) {
+      int v = atoi(s);
+      if (v >= 15 && v <= 600) max_sec = v;
+      free(s);
+    }
+  }
+
+  /*
+   * Double-fork: intermediate exits immediately; worker is reparented to init.
+   * Main nanobot never accumulates subagent zombies; worker self-exits after work.
+   */
+  int pipefd[2];
+  if (pipe(pipefd) != 0) {
+    write_meta(id, t, desc, "error", 0, "pipe failed");
+    return NULL;
+  }
   pid_t p = fork();
   if (p < 0) {
+    close(pipefd[0]);
+    close(pipefd[1]);
     write_meta(id, t, desc, "error", 0, "fork failed");
     return NULL;
   }
   if (p == 0) {
-    write_meta(id, t, desc, "running", (int)getpid(), NULL);
+    /* intermediate */
+    close(pipefd[0]);
+    pid_t p2 = fork();
+    if (p2 < 0) {
+      close(pipefd[1]);
+      _exit(1);
+    }
+    if (p2 > 0) {
+      /* intermediate exits → parent waitpid reaps us; worker continues */
+      close(pipefd[1]);
+      _exit(0);
+    }
+    /* ── worker (grandchild) ─────────────────────────────────────── */
+    int mypid = (int)getpid();
+    {
+      ssize_t w = write(pipefd[1], &mypid, sizeof mypid);
+      (void)w;
+    }
+    close(pipefd[1]);
+    setsid();
+    /* hard self-timeout: always terminate */
+    signal(SIGALRM, SIG_DFL); /* default = kill process */
+    alarm((unsigned)max_sec);
+
+    write_meta(id, t, desc, "running", mypid, NULL);
     char *pr = ng_read_file(ip, NULL);
-    /* explore/plan: soft prefix — tools allowed (shell); no further subagents */
     char *full = pr;
     if (pr && !strcmp(t, "explore")) {
       asprintf(&full,
         "[subagent type=explore — USE run_terminal_command to gather facts, "
         "then write a short factual report. Do not invent numbers. "
-        "No destructive changes.]\n%s", pr);
+        "No destructive changes. When done, STOP.]\n%s", pr);
       free(pr);
     } else if (pr && !strcmp(t, "plan")) {
       asprintf(&full,
         "[subagent type=plan — reason and structure; use shell only if needed "
-        "for a quick check. End with a clear summary.]\n%s", pr);
+        "for a quick check. End with a clear summary. Then STOP.]\n%s", pr);
       free(pr);
     } else if (pr) {
       asprintf(&full,
         "[subagent type=general — complete the assigned part; use shell when "
-        "facts are needed; end with a concise summary.]\n%s", pr);
+        "facts are needed; end with a concise summary. Then STOP.]\n%s", pr);
       free(pr);
     }
     char *reply = run_fn(agent_cfg, full ? full : "");
     free(full);
+    alarm(0);
     int maxr = 12000;
     {
       char *s = ng_settings_get("MAX_SUB_REPLY");
@@ -178,12 +287,30 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
     out_path(op, sizeof op, id);
     if (reply) ng_write_file(op, reply, strlen(reply));
     else ng_write_file(op, "", 0);
-    write_meta(id, t, desc, reply ? "done" : "error", (int)getpid(),
+    write_meta(id, t, desc, reply ? "done" : "error", mypid,
                reply ? NULL : "empty reply");
     free(reply);
-    _exit(0);
+    /* hard exit — do not return into parent agent stack */
+    _exit(reply ? 0 : 1);
   }
-  write_meta(id, t, desc, "running", (int)p, NULL);
+  /* parent of intermediate */
+  close(pipefd[1]);
+  int real_pid = 0;
+  {
+    ssize_t r = read(pipefd[0], &real_pid, sizeof real_pid);
+    if (r != (ssize_t)sizeof real_pid) real_pid = 0;
+  }
+  close(pipefd[0]);
+  /* reap intermediate immediately (never leave zombie under HTTP worker) */
+  {
+    int st = 0;
+    waitpid(p, &st, 0);
+  }
+  if (real_pid <= 1) {
+    write_meta(id, t, desc, "error", 0, "worker pid unknown");
+    return NULL;
+  }
+  write_meta(id, t, desc, "running", real_pid, NULL);
   return strdup(id);
 }
 
@@ -191,23 +318,10 @@ char *ng_subagent_status_json(const char *id) {
   if (!valid_id(id)) return strdup("{\"error\":\"bad id\"}");
   char path[600], op[600];
   meta_path(path, sizeof path, id);
+  /* reap this id if dead */
+  reap_meta_file(path, id);
   char *meta = ng_read_file(path, NULL);
   if (!meta) return strdup("{\"error\":\"not found\"}");
-  /* reaping: if pid dead and still running, mark error */
-  char *ps = strstr(meta, "\"pid\":");
-  if (ps && status_is_live(meta)) {
-    int pid = atoi(ps + 6);
-    if (pid > 1 && kill(pid, 0) != 0 && errno == ESRCH) {
-      /* finished without update? check out */
-      out_path(op, sizeof op, id);
-      if (access(op, R_OK) == 0)
-        write_meta(id, "general", "", "done", pid, NULL);
-      else
-        write_meta(id, "general", "", "error", pid, "exited");
-      free(meta);
-      meta = ng_read_file(path, NULL);
-    }
-  }
   out_path(op, sizeof op, id);
   char *out = ng_read_file(op, NULL);
   char *esc = ng_json_escape(out ? out : "");

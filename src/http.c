@@ -1142,7 +1142,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Subagents: list / spawn / status / cancel (light, max 8, share session) */
   if (is_get && (strcmp(path, "/peer/v1/subagents") == 0 ||
                  strcmp(path, "/api/subagents") == 0)) {
-    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    /* GET list is read-only; allow loopback like /api/task so board poll reaps dead PIDs */
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (agent) ng_agent_apply_provider_policy(agent);
     char *list = ng_subagent_list_json();
     char *jb = NULL;
@@ -1410,8 +1411,19 @@ int ng_http_serve(ng_http_cfg *cfg) {
          cfg->port, ng_http_max_children());
 
   g_live_children = 0;
-  while (!cfg->stop) {
+  {
+    time_t last_sub_reap = 0;
+    while (!cfg->stop) {
     reap_children();
+    /* Subagents are double-forked (reparented to init); still sweep metas so
+     * main stays "idle" with accurate running=0 and no stale "running" PIDs. */
+    {
+      time_t now = time(NULL);
+      if (now != last_sub_reap) {
+        last_sub_reap = now;
+        ng_subagent_reap_all();
+      }
+    }
     while (g_live_children >= ng_http_max_children()) {
       int st = 0;
       pid_t d = waitpid(-1, &st, 0);
@@ -1465,11 +1477,13 @@ int ng_http_serve(ng_http_cfg *cfg) {
     close(cfd);
     g_live_children++;
     reap_children();
-  }
+    } /* while !stop */
+  } /* last_sub_reap scope */
   for (;;) {
     int st = 0;
     if (waitpid(-1, &st, WNOHANG) <= 0) break;
   }
+  ng_subagent_reap_all();
   close(sfd);
   return 0;
 }

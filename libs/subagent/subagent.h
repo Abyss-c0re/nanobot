@@ -23,7 +23,11 @@ void ng_subagent_configure(int enabled, int max_slots);
 
 int ng_subagent_enabled(void);
 int ng_subagent_max(void);
+/* Count truly live workers; reaps dead/zombie metas first. */
 int ng_subagent_running_count(void);
+/* Scan all subagent metas; mark done/error if PID gone; waitpid WNOHANG.
+ * Returns number still actually running. Safe to call from main idle loop. */
+int ng_subagent_reap_all(void);
 
 /* Spawn background child that runs agent_fn(prompt). Returns malloc'd id or NULL.
  * agent_fn is ng_agent_run-compatible: (void* cfg, const char *prompt) -> malloc text.
