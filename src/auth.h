@@ -46,6 +46,15 @@ int ng_session_valid(const ng_session *s);
 /* Ensure valid token: refresh if needed. Returns 0 on success. */
 int ng_session_ensure(ng_session *s);
 
+/* Import access/refresh from Grok Build CLI (~/.grok/auth.json) if present.
+ * Same OIDC client as device login. Returns:
+ *   1 = imported and sealed into NANOBOT_HOME/session
+ *   0 = CLI not installed / no usable token (caller may fall back to --login)
+ *  -1 = parse/IO error while a candidate file existed
+ * Env: NANOBOT_GROK_AUTH_JSON overrides path (default $HOME/.grok/auth.json).
+ * Never logs token material. */
+int ng_session_try_import_grok_cli(ng_session *s);
+
 /* Start RFC8628 device login. Fills verification_uri* and user_code.
  * Does NOT block. Call ng_session_poll_login repeatedly. */
 int ng_session_start_device_login(ng_session *s);

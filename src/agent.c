@@ -5,7 +5,7 @@
 #include "task.h"
 #include "util.h"
 #include "provider.h"
-#include "sched.h"
+#include "ng_sched.h"
 #include "subagent.h"
 #include <stdio.h>
 #include <stdlib.h>

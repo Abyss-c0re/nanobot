@@ -346,6 +346,129 @@ int ng_session_load_pending(ng_session *s) {
   return 0;
 }
 
+/* Parse ISO-8601 UTC (…Z) or unix seconds string into time_t. */
+static time_t parse_expires_at(const char *s) {
+  if (!s || !s[0]) return 0;
+  /* pure integer unix */
+  {
+    char *end = NULL;
+    long v = strtol(s, &end, 10);
+    if (end && *end == 0 && v > 1000000000L) return (time_t)v;
+  }
+  /* 2026-07-22T18:21:47.560709611Z or without fractional */
+  {
+    int Y = 0, M = 0, D = 0, h = 0, m = 0, sec = 0;
+    if (sscanf(s, "%d-%d-%dT%d:%d:%d", &Y, &M, &D, &h, &m, &sec) >= 6) {
+      /* days from civil calendar → unix (Howard Hinnant algorithm, UTC) */
+      int y = Y;
+      int mo = M;
+      if (mo <= 2) {
+        y -= 1;
+        mo += 9;
+      } else {
+        mo -= 3;
+      }
+      int era = (y >= 0 ? y : y - 399) / 400;
+      unsigned yoe = (unsigned)(y - era * 400);
+      unsigned doy = (unsigned)((153 * mo + 2) / 5 + D - 1);
+      unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+      long days = (long)era * 146097L + (long)doe - 719468L;
+      return (time_t)(days * 86400L + h * 3600L + m * 60L + sec);
+    }
+  }
+  return 0;
+}
+
+static char *default_grok_cli_auth_path(char *buf, size_t n) {
+  const char *env = getenv("NANOBOT_GROK_AUTH_JSON");
+  if (env && env[0]) {
+    snprintf(buf, n, "%s", env);
+    return buf;
+  }
+  const char *h = getenv("HOME");
+  if (h && h[0]) {
+    snprintf(buf, n, "%s/.grok/auth.json", h);
+    return buf;
+  }
+  snprintf(buf, n, "%s", "/tmp/.grok/auth.json");
+  return buf;
+}
+
+int ng_session_try_import_grok_cli(ng_session *s) {
+  char path[700];
+  size_t len = 0;
+  char *raw = NULL;
+  char *key = NULL;
+  char *rt = NULL;
+  char *exs = NULL;
+  char *email = NULL;
+  time_t exp = 0;
+
+  if (!s) return -1;
+  default_grok_cli_auth_path(path, sizeof path);
+  if (access(path, R_OK) != 0) {
+    ng_log("auth: Grok Build CLI auth not found (%s) — use --login if needed", path);
+    return 0;
+  }
+  raw = ng_read_file(path, &len);
+  if (!raw || !raw[0]) {
+    free(raw);
+    ng_log("auth: Grok Build CLI auth empty (%s)", path);
+    return 0;
+  }
+  /* Grok Build stores access JWT under "key"; refresh under "refresh_token". */
+  key = ng_json_get_string(raw, "key");
+  if (!key || !key[0]) {
+    free(key);
+    key = ng_json_get_string(raw, "access_token");
+  }
+  rt = ng_json_get_string(raw, "refresh_token");
+  exs = ng_json_get_string(raw, "expires_at");
+  email = ng_json_get_string(raw, "email");
+  free(raw);
+  raw = NULL;
+
+  if ((!key || !key[0]) && (!rt || !rt[0])) {
+    free(key); free(rt); free(exs); free(email);
+    ng_log("auth: Grok Build CLI auth has no key/refresh_token");
+    return 0;
+  }
+  exp = parse_expires_at(exs);
+  free(exs);
+
+  /* Prefer still-valid access; refresh_token alone is enough to refresh. */
+  if (key && key[0] && exp && time(NULL) + 60 >= exp && !(rt && rt[0])) {
+    ng_log("auth: Grok Build CLI access expired and no refresh_token");
+    free(key); free(rt); free(email);
+    return 0;
+  }
+
+  free(s->access_token);
+  free(s->refresh_token);
+  free(s->email);
+  s->access_token = (key && key[0]) ? key : NULL;
+  if (!s->access_token) free(key);
+  s->refresh_token = (rt && rt[0]) ? rt : NULL;
+  if (!s->refresh_token) free(rt);
+  s->email = (email && email[0]) ? email : NULL;
+  if (!s->email) free(email);
+  s->expires_at = exp;
+  s->login_pending = 0;
+
+  if (ng_session_save(s) != 0) {
+    ng_log("auth: failed to seal imported Grok Build CLI session");
+    return -1;
+  }
+  ng_log("auth: imported Grok Build CLI session (expires_at=%ld email=%s)",
+         (long)s->expires_at, s->email ? s->email : "?");
+  /* If access near expiry, try refresh once. */
+  if (!ng_session_valid(s) && s->refresh_token) {
+    if (ng_session_ensure(s) != 0)
+      ng_log("auth: imported refresh failed — may need: grok auth / nanobot --login");
+  }
+  return 1;
+}
+
 int ng_session_load(ng_session *s) {
   /* Keep tokens and/or pending device login across fork workers. */
   int was_clear = 0, opened_legacy = 0;
@@ -362,7 +485,11 @@ int ng_session_load(ng_session *s) {
   s->refresh_token = rt;
   s->email = em;
   s->expires_at = 0;
-  if (ex) { s->expires_at = (time_t)strtol(ex, NULL, 10); free(ex); }
+  if (ex) {
+    s->expires_at = parse_expires_at(ex);
+    if (!s->expires_at) s->expires_at = (time_t)strtol(ex, NULL, 10);
+    free(ex);
+  }
   free(body);
 
   /*
