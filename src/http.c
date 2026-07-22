@@ -7,7 +7,8 @@
 #include "hub_local.h"
 #include "agent.h"
 #include "subagent.h"
-#include "sched.h"
+#include "ng_sched.h"
+#include "braincube_plugin.h"
 #include <nanobot/crypto.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -347,7 +348,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "{\"ok\":true,\"service\":\"nanobot\",\"role\":\"cli-api\","
       "\"hint\":\"CLI + peer/JSON API + optional MCP; optional --www for static files\","
       "\"endpoints\":[\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
-      "\"/peer/v1/task\",\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/task\",\"/api/settings\",\"/api/models\"]}";
+      "\"/peer/v1/task\",\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/task\","
+      "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/subagents\"]}";
     http_response(cfd, 200, "application/json", body, strlen(body));
     free(req); close(cfd); return;
   }
@@ -1099,6 +1101,41 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     http_response(cfd, 200, "application/json", body, blen);
     free(body);
+    free(req); close(cfd); return;
+  }
+
+  /* BrainCube plugin — sensor cubes + MetaCube; live viz for wrapper */
+  if (is_get && (strcmp(path, "/peer/v1/braincube/live") == 0 ||
+                 strcmp(path, "/api/braincube/live") == 0)) {
+    /* allow_loopback=1: local wrapper/CLI without token; remote still needs token */
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    {
+      char *jb = ng_bc_live_json(); /* live_json calls init internally */
+      http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+      free(jb);
+    }
+    free(req); close(cfd); return;
+  }
+  if (is_get && (strcmp(path, "/peer/v1/braincube") == 0 ||
+                 strcmp(path, "/api/braincube") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    {
+      char *jb = ng_bc_status_json();
+      http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+      free(jb);
+    }
+    free(req); close(cfd); return;
+  }
+  if (is_post && (strcmp(path, "/peer/v1/braincube") == 0 ||
+                  strcmp(path, "/api/braincube") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    {
+      char *jb = ng_bc_handle_post(body);
+      http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+      free(jb);
+    }
     free(req); close(cfd); return;
   }
 
