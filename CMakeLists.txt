@@ -30,6 +30,14 @@ add_subdirectory(libs/json)
 add_subdirectory(libs/provider)
 add_subdirectory(libs/sched)
 add_subdirectory(libs/subagent)
+option(NANOBOT_WITH_BRAINCUBE "link BrainCube research lib (third_party submodule)" ON)
+if(NANOBOT_WITH_BRAINCUBE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/braincube/CMakeLists.txt")
+  set(BRAINCUBE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  add_subdirectory(third_party/braincube EXCLUDE_FROM_ALL)
+  set(NANOBOT_HAS_BRAINCUBE 1)
+else()
+  set(NANOBOT_HAS_BRAINCUBE 0)
+endif()
 
 add_library(nanobot_legacy STATIC
   src/util.c
@@ -60,6 +68,12 @@ target_link_libraries(nanobot_legacy
     nanobot::sched
     nanobot::subagent
 )
+if(NANOBOT_HAS_BRAINCUBE)
+  target_link_libraries(nanobot_legacy PUBLIC braincube::braincube)
+  target_compile_definitions(nanobot_legacy PUBLIC NANOBOT_HAS_BRAINCUBE=1)
+else()
+  target_compile_definitions(nanobot_legacy PUBLIC NANOBOT_HAS_BRAINCUBE=0)
+endif()
 
 foreach(_f MCP AUTH PEER HUB SHELL PROVIDERS)
   if(NANOBOT_ENABLE_${_f})
@@ -76,4 +90,4 @@ if(NANOBOT_BUILD_TESTS)
   add_subdirectory(tests/crypto)
 endif()
 
-message(STATUS "nanobot: MCP=${NANOBOT_ENABLE_MCP} AUTH=${NANOBOT_ENABLE_AUTH} PEER=${NANOBOT_ENABLE_PEER} HUB=${NANOBOT_ENABLE_HUB} SHELL=${NANOBOT_ENABLE_SHELL} PROVIDERS=${NANOBOT_ENABLE_PROVIDERS}")
+message(STATUS "nanobot: MCP=${NANOBOT_ENABLE_MCP} AUTH=${NANOBOT_ENABLE_AUTH} PEER=${NANOBOT_ENABLE_PEER} HUB=${NANOBOT_ENABLE_HUB} SHELL=${NANOBOT_ENABLE_SHELL} PROVIDERS=${NANOBOT_ENABLE_PROVIDERS} BRAINCUBE=${NANOBOT_HAS_BRAINCUBE}")

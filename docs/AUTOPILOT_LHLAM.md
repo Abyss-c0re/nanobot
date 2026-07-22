@@ -1,9 +1,24 @@
-# Autopilot / LHLAM (abstract)
+# Autopilot / LHLAM / BrainCube
 
-Nanobot does **not** embed vacuum/game drivers. Real-time autopilot research lives in host labs.
+Nanobot does **not** embed vacuum/game drivers. Real-time adapters live in host labs.
 
-**Reference lab:** `Dev/Clanker/lhlam` (BrainCube + optional rockctl adapter).
+## Dependency (canonical algorithm)
 
-Nanobot’s role in that loop is optional **1-bit supervision** (`POST /peer/v1/prompt` with a forced 0/1 reply) and existing light subagents for offline analysis — never the hot control path.
+| Item | Location |
+|------|----------|
+| **Research library** | private `Abyss-c0re/braincube` |
+| **In-tree sync** | `third_party/braincube` **git submodule** |
+| **CMake** | `NANOBOT_WITH_BRAINCUBE=ON` when submodule present |
+| **License** | Research proprietary — submodule `LICENSE` / `NOTICE` / `papers/` |
 
-See `Clanker/lhlam/docs/ALGORITHM.md`.
+```bash
+git submodule update --init --recursive third_party/braincube
+make host   # status line includes BRAINCUBE=1
+```
+
+## Labs
+- Clanker observation / rockctl dry-run: `Dev/Clanker/lhlam`
+- Nanobot: optional **1-bit** supervision via peer; never hot control path
+
+## Papers
+`third_party/braincube/papers/` (CODEOWNERS-protected). See `papers/CITATIONS.md`.
