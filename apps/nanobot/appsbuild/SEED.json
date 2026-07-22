@@ -1,0 +1,82 @@
+{
+  "kind": "nanobot-app-seed",
+  "created": "20260722T171458Z",
+  "product": "nanobot",
+  "app": "apps/nanobot",
+  "version": "0.5.0",
+  "target": {
+    "device": "clanker-roborock-a38",
+    "arch": "armv7l-linux-musleabihf",
+    "host": "192.168.8.209",
+    "home": "/mnt/data/nanobot",
+    "port": 8787
+  },
+  "binary": {
+    "path": "build/armv7/nanobot",
+    "deploy_script": "scripts/deploy_binary_safe.sh",
+    "env": {
+      "NANOBOT_REMOTE_HOST": "192.168.8.209",
+      "NANOBOT_REMOTE_DIR": "/mnt/data/nanobot",
+      "REMOTE_ARCH": "armv7"
+    },
+    "notes": "Safe deploy never touches peer_token/session/settings/www"
+  },
+  "process_policy": {
+    "max_listeners": 1,
+    "subagents_default": true,
+    "subagents_tiny": true,
+    "settings": {
+      "UI": "on",
+      "WWW": "/mnt/data/nanobot-wrapper/www",
+      "PORT": "8787",
+      "LEAN": "1",
+      "SHELL": "on",
+      "SUBAGENTS": "1",
+      "SUBAGENTS_MAX": "2",
+      "LLM_SERIAL": "1",
+      "MAX_SUB_PROMPT": "1800",
+      "MAX_SUB_REPLY": "2500",
+      "SUBAGENT_TIMEOUT_SEC": "45",
+      "MAX_CTX_CHARS": "24000"
+    },
+    "charter": "clanker/docs/PROCESS_STACK.md"
+  },
+  "follow_up": [
+    {
+      "id": "FU-1",
+      "title": "Shell allow/deny Settings panel in wrapper",
+      "priority": "P1",
+      "notes": "Backend files exist; need GET/PUT /api/shell/policy + Settings UI"
+    },
+    {
+      "id": "FU-2",
+      "title": "Task board live updates (wrapper)",
+      "priority": "P0",
+      "status": "shipped_seed",
+      "notes": "startTaskPoll 2s + tool-event refresh; keep in wrapper appsbuild"
+    },
+    {
+      "id": "FU-3",
+      "title": "HTTP fork zombie reaping on tiny board",
+      "priority": "P1",
+      "notes": "fork-per-request leaves Z under load; prefer waitpid hygiene, not new process trees"
+    },
+    {
+      "id": "FU-4",
+      "title": "Passive clean-observe train (not RC default)",
+      "priority": "P1",
+      "notes": "lhlam observe during OEM clean; RC teach optional only"
+    },
+    {
+      "id": "FU-5",
+      "title": "Tiny subagents on 251MB robot",
+      "priority": "P0",
+      "status": "seeded",
+      "notes": "SUBAGENTS=1 MAX=2 serial LLM short prompt/reply/timeout; self-exit; main stays one listener"
+    }
+  ],
+  "companion": {
+    "wrapper": "nanobot-wrapper",
+    "seed": "../nanobot-wrapper/appsbuild/SEED.json"
+  }
+}
