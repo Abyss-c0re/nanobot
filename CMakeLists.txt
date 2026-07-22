@@ -27,6 +27,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 add_subdirectory(libs/crypto)
 add_subdirectory(libs/os)
 add_subdirectory(libs/json)
+add_subdirectory(libs/provider)
+add_subdirectory(libs/sched)
+add_subdirectory(libs/subagent)
 
 add_library(nanobot_legacy STATIC
   src/util.c
@@ -53,6 +56,9 @@ target_link_libraries(nanobot_legacy
     nanobot::crypto
     nanobot::os
     nanobot::json
+    nanobot::provider
+    nanobot::sched
+    nanobot::subagent
 )
 
 foreach(_f MCP AUTH PEER HUB SHELL PROVIDERS)

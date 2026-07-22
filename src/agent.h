@@ -69,4 +69,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                                const char *images_json,
                                int stream_final, ng_stream_fn on_delta, void *userdata);
 
+/* Provider policy (subagents max, LLM serial) — safe to call often. */
+void ng_agent_apply_provider_policy(ng_agent_cfg *c);
+/* Spawn light subagent sharing this cfg's session; returns malloc'd id or NULL. */
+char *ng_agent_subagent_spawn(ng_agent_cfg *c, const char *type, const char *desc,
+                              const char *prompt);
+
 #endif

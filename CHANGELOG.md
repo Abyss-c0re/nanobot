@@ -1,3 +1,9 @@
+## 0.5.1 — light subagents + LLM serial
+
+- Tiny libs: provider policy, LLM flock sched, subagent slots (max 8, share session)
+- Tools + peer `/api/subagents`; settings `SUBAGENTS*` / `LLM_SERIAL` (local serial default on, Grok off)
+- Docs: docs/SUBAGENTS.md
+
 ## 0.5.0 (in progress — modular CMake + hub)
 - **Docker tiny by default**: Alpine + static `nanobot`/`shell_server` (~4.6 MB layers vs ~45 MB python-slim); `make docker` / `VARIANT=fat` for openssl + MCP bridge
 - Modern CMake multi-lib build (`make host` / `make arm` / `make static` wrap CMake)

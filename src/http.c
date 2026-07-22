@@ -5,6 +5,9 @@
 #include "shell_gate.h"
 #include "util.h"
 #include "hub_local.h"
+#include "agent.h"
+#include "subagent.h"
+#include "sched.h"
 #include <nanobot/crypto.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -549,9 +552,30 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *base = ng_json_get_string(body, "base_url");
     if (!base) base = ng_json_get_string(body, "base");
     char *model = ng_json_get_string(body, "model");
+    /* Optional light policy keys (subagents / serial LLM) */
+    char *sa = ng_json_get_string(body, "subagents");
+    if (!sa) sa = ng_json_get_string(body, "SUBAGENTS");
+    char *samax = ng_json_get_string(body, "subagents_max");
+    if (!samax) samax = ng_json_get_string(body, "SUBAGENTS_MAX");
+    char *serial = ng_json_get_string(body, "llm_serial");
+    if (!serial) serial = ng_json_get_string(body, "LLM_SERIAL");
+    char *maxctx = ng_json_get_string(body, "max_ctx_chars");
+    if (!maxctx) maxctx = ng_json_get_string(body, "MAX_CTX_CHARS");
+    int policy_only = 0;
+    if (sa) { ng_settings_set("SUBAGENTS", sa); policy_only = 1; }
+    if (samax) { ng_settings_set("SUBAGENTS_MAX", samax); policy_only = 1; }
+    if (serial) { ng_settings_set("LLM_SERIAL", serial); policy_only = 1; }
+    if (maxctx) { ng_settings_set("MAX_CTX_CHARS", maxctx); policy_only = 1; }
+    free(sa); free(samax); free(serial); free(maxctx);
     if (!backend && !base && !(model && model[0])) {
+      if (policy_only) {
+        if (agent) ng_agent_apply_provider_policy(agent);
+        free(backend); free(base); free(model);
+        http_json(cfd, 200, "{\"ok\":true,\"saved\":\"policy\"}");
+        free(req); close(cfd); return;
+      }
       free(backend); free(base); free(model);
-      http_json(cfd, 400, "{\"error\":\"need backend (grok|local), base_url, or model\"}");
+      http_json(cfd, 400, "{\"error\":\"need backend (grok|local), base_url, model, or policy keys\"}");
       free(req); close(cfd); return;
     }
     if (backend && (strcmp(backend, "grok") == 0 || strcmp(backend, "cloud") == 0)) {
@@ -571,6 +595,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       ng_agent_select_model(agent, model);
     }
     ng_agent_save_env(agent);
+    ng_agent_apply_provider_policy(agent);
     ng_log("settings: backend=%s base=%s model=%s",
            ng_agent_backend_kind(agent),
            agent->base_url ? agent->base_url : "?",
@@ -580,13 +605,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *out = NULL;
     asprintf(&out,
       "{\"ok\":true,\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
-      "\"needs_browser\":%s,\"signed_in\":%s}",
+      "\"needs_browser\":%s,\"signed_in\":%s,"
+      "\"subagents\":%s,\"subagents_max\":%d,\"llm_serial\":%s}",
       ng_agent_backend_kind(agent),
       be ? be : "",
       me ? me : "",
       ng_agent_needs_browser_session(agent) ? "true" : "false",
       (ng_agent_needs_browser_session(agent) && session && ng_session_valid(session))
-        ? "true" : (ng_agent_needs_browser_session(agent) ? "false" : "true"));
+        ? "true" : (ng_agent_needs_browser_session(agent) ? "false" : "true"),
+      ng_subagent_enabled() ? "true" : "false",
+      ng_subagent_max(),
+      ng_llm_sched_enabled() ? "true" : "false");
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
     free(out); free(be); free(me);
     free(backend); free(base); free(model);
@@ -1071,6 +1100,82 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     http_response(cfd, 200, "application/json", body, blen);
     free(body);
     free(req); close(cfd); return;
+  }
+
+  /* Subagents: list / spawn / status / cancel (light, max 8, share session) */
+  if (is_get && (strcmp(path, "/peer/v1/subagents") == 0 ||
+                 strcmp(path, "/api/subagents") == 0)) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    if (agent) ng_agent_apply_provider_policy(agent);
+    char *list = ng_subagent_list_json();
+    char *jb = NULL;
+    asprintf(&jb,
+      "{\"ok\":true,\"enabled\":%s,\"max\":%d,\"running\":%d,"
+      "\"llm_serial\":%s,\"subagents\":%s}",
+      ng_subagent_enabled() ? "true" : "false",
+      ng_subagent_max(), ng_subagent_running_count(),
+      ng_llm_sched_enabled() ? "true" : "false",
+      list ? list : "[]");
+    free(list);
+    http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+    free(jb); free(req); close(cfd); return;
+  }
+  if (is_post && (strcmp(path, "/peer/v1/subagents") == 0 ||
+                  strcmp(path, "/api/subagents") == 0)) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    if (agent) ng_agent_apply_provider_policy(agent);
+    char *body = strstr(req, "\r\n\r\n");
+    body = body ? body + 4 : "";
+    char *action = ng_json_get_string(body, "action");
+    if (!action) action = strdup("spawn");
+    if (!strcmp(action, "cancel")) {
+      char *id = ng_json_get_string(body, "id");
+      int rc = ng_subagent_cancel(id ? id : "");
+      free(id); free(action);
+      http_json(cfd, rc == 0 ? 200 : 400,
+                rc == 0 ? "{\"ok\":true,\"cancelled\":true}"
+                        : "{\"error\":\"cancel failed\"}");
+      free(req); close(cfd); return;
+    }
+    if (!strcmp(action, "status")) {
+      char *id = ng_json_get_string(body, "id");
+      char *j = ng_subagent_status_json(id ? id : "");
+      free(id); free(action);
+      http_response(cfd, 200, "application/json", j ? j : "{}", j ? strlen(j) : 2);
+      free(j); free(req); close(cfd); return;
+    }
+    /* spawn */
+    char *prompt = ng_json_get_string(body, "prompt");
+    char *desc = ng_json_get_string(body, "description");
+    char *type = ng_json_get_string(body, "type");
+    if (!prompt || !prompt[0] || !agent) {
+      free(prompt); free(desc); free(type); free(action);
+      http_json(cfd, 400, "{\"error\":\"need prompt\"}");
+      free(req); close(cfd); return;
+    }
+    if (!ng_subagent_enabled()) {
+      free(prompt); free(desc); free(type); free(action);
+      http_json(cfd, 503, "{\"error\":\"subagents disabled (SUBAGENTS=0)\"}");
+      free(req); close(cfd); return;
+    }
+    char *id = ng_agent_subagent_spawn(agent, type, desc, prompt);
+    free(prompt); free(desc); free(type); free(action);
+    if (!id) {
+      http_json(cfd, 429, "{\"error\":\"spawn failed or at max concurrent (8)\"}");
+      free(req); close(cfd); return;
+    }
+    char *jb = NULL;
+    asprintf(&jb, "{\"ok\":true,\"id\":\"%s\",\"status\":\"running\"}", id);
+    free(id);
+    http_response(cfd, 202, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+    free(jb); free(req); close(cfd); return;
+  }
+  if (is_get && strncmp(path, "/peer/v1/subagents/", 19) == 0) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    const char *id = path + 19;
+    char *j = ng_subagent_status_json(id);
+    http_response(cfd, 200, "application/json", j ? j : "{}", j ? strlen(j) : 2);
+    free(j); free(req); close(cfd); return;
   }
 
   if (is_post && strcmp(path, "/peer/v1/prompt") == 0) {

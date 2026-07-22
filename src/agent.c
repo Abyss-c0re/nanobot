@@ -4,6 +4,9 @@
 #include "shell.h"
 #include "task.h"
 #include "util.h"
+#include "provider.h"
+#include "sched.h"
+#include "subagent.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +14,29 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+
+/* Nested subagent workers: no further spawning (keep robot light). */
+static char *subagent_run_adapter(void *cfg, const char *prompt) {
+  setenv("NANOBOT_SUBAGENT", "1", 1);
+  return ng_agent_run((ng_agent_cfg *)cfg, prompt);
+}
+
+void ng_agent_apply_provider_policy(ng_agent_cfg *c) {
+  ng_provider_policy pol;
+  ng_provider_policy_defaults(&pol, ng_agent_backend_kind(c));
+  ng_provider_policy_load_settings(&pol);
+  ng_llm_sched_set_enabled(pol.llm_serial);
+  ng_subagent_configure(pol.subagents_enabled, pol.subagents_max);
+  if (c && pol.max_turns > 0 && c->max_turns > pol.max_turns)
+    c->max_turns = pol.max_turns;
+}
+
+char *ng_agent_subagent_spawn(ng_agent_cfg *c, const char *type, const char *desc,
+                              const char *prompt) {
+  ng_agent_apply_provider_policy(c);
+  if (!ng_subagent_enabled()) return NULL;
+  return ng_subagent_spawn(c, subagent_run_adapter, type, desc, prompt);
+}
 
 void ng_agent_cfg_init(ng_agent_cfg *c) {
   memset(c, 0, sizeof *c);
@@ -96,7 +122,20 @@ int ng_agent_save_env(const ng_agent_cfg *c) {
 }
 
 /* OpenAI-compatible POST. Grok cloud headers when needed; plain Bearer for llama.cpp. */
+static char *curl_post_json_unlocked(const char *url, const char *bearer, const char *body);
+
+typedef struct { const char *url; const char *bearer; const char *body; } curl_job_t;
+static char *curl_post_json_job(void *ud) {
+  curl_job_t *j = (curl_job_t *)ud;
+  return curl_post_json_unlocked(j->url, j->bearer, j->body);
+}
+
 static char *curl_post_json(const char *url, const char *bearer, const char *body) {
+  curl_job_t j = { url, bearer, body };
+  return ng_llm_sched_run(curl_post_json_job, &j);
+}
+
+static char *curl_post_json_unlocked(const char *url, const char *bearer, const char *body) {
   char tmpl[640], outtmpl[640], errtmpl[640];
   int fd = ng_mkstemp_home(tmpl, sizeof tmpl, "ng_req_");
   if (fd < 0) return strdup("mkstemp failed (home/tmp)");
@@ -926,9 +965,16 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     }
   }
 
-  /* Base shell tool + task board + optional MCP servers (mcp_list / mcp_call). */
+  /* Provider policy: serial LLM (local default), subagent budget (Grok max 8). */
+  ng_agent_apply_provider_policy(c);
+  /* Nested subagent process: no tools thrash / no further subagents */
+  if (getenv("NANOBOT_SUBAGENT"))
+    use_tools = 0;
+
+  /* Base shell tool + task board + light subagents + optional MCP. */
   char *mcp_frag = ng_mcp_openai_tools_fragment();
   char *task_frag = ng_task_openai_tools_fragment();
+  char *sub_frag = ng_subagent_openai_tools_fragment();
   char *tools = NULL;
   asprintf(&tools,
     "[{\"type\":\"function\",\"function\":{"
@@ -936,11 +982,13 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     "\"description\":\"Run ONE shell command when you need live device data. Prefer short answers without tools for greetings.\","
     "\"parameters\":{\"type\":\"object\",\"properties\":{"
     "\"command\":{\"type\":\"string\",\"description\":\"shell command\"}"
-    "},\"required\":[\"command\"]}}}%s%s]",
+    "},\"required\":[\"command\"]}}}%s%s%s]",
     task_frag && task_frag[0] ? task_frag : "",
+    sub_frag && sub_frag[0] ? sub_frag : "",
     mcp_frag && mcp_frag[0] ? mcp_frag : "");
   free(mcp_frag);
   free(task_frag);
+  free(sub_frag);
   if (!tools) {
     tools = strdup(
       "[{\"type\":\"function\",\"function\":{"
@@ -1127,7 +1175,9 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       }
       char *cmd = NULL;
       char *task_out = ng_task_try_tool(tname, targs);
-      char *mcp_out = task_out ? NULL : ng_mcp_try_tool(tname, targs);
+      char *sub_out = task_out ? NULL
+        : ng_subagent_try_tool(c, subagent_run_adapter, tname, targs);
+      char *mcp_out = (task_out || sub_out) ? NULL : ng_mcp_try_tool(tname, targs);
       ng_cmd_result cr;
       memset(&cr, 0, sizeof cr);
       if (task_out) {
@@ -1139,6 +1189,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
           max_turns = hard_max;
           ng_log("agent: open task — max_turns raised to %d", max_turns);
         }
+      } else if (sub_out) {
+        cr.exit_code = 0;
+        cr.output = sub_out;
+        ng_log("agent: subagent tool %s out=%.200s", tname, sub_out);
       } else if (mcp_out) {
         cr.exit_code = 0;
         cr.output = mcp_out; /* owned; free via ng_cmd_result_free or manual */
