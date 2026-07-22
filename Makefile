@@ -18,15 +18,17 @@ host native:
 	  ln -sf nanobot "$(ROOT)/build/host/nanobot-mcp" 2>/dev/null || true
 	@echo "host: $(ROOT)/build/host/nanobot ($$(wc -c < $(ROOT)/build/host/nanobot)) bytes)"
 
+# ARMv7 Clanker: lean lattice (~2KB/cube vs ~17KB) — MAX_N=8 ASSOC=256 CHAIN=8
 arm:
 	cmake -S "$(ROOT)" -B "$(ROOT)/build/armv7" \
 	  -DCMAKE_TOOLCHAIN_FILE="$(ROOT)/cmake/NanobotArmv7.cmake" \
-	  -DCMAKE_BUILD_TYPE=Release -DNANOBOT_BUILD_TESTS=OFF
+	  -DCMAKE_BUILD_TYPE=Release -DNANOBOT_BUILD_TESTS=OFF \
+	  -DLHLAM_MAX_N=8 -DLHLAM_ASSOC_N=256 -DLHLAM_CHAIN_MAX=8
 	cmake --build "$(ROOT)/build/armv7" -j
 	@STRIP="$(ROOT)/toolchain/armv7l-linux-musleabihf-cross/bin/armv7l-linux-musleabihf-strip"; \
 	  if [ -x "$$STRIP" ]; then "$$STRIP" "$(ROOT)/build/armv7/nanobot" || true; fi
 	@ln -sfn nanobot "$(ROOT)/build/armv7/nanobot-mcp" 2>/dev/null || true
-	@echo "armv7: $(ROOT)/build/armv7/nanobot ($$(wc -c < $(ROOT)/build/armv7/nanobot)) bytes)"
+	@echo "armv7: $(ROOT)/build/armv7/nanobot ($$(wc -c < $(ROOT)/build/armv7/nanobot)) bytes lean LHLAM_MAX_N=8 ASSOC=256"
 
 test: host
 	ctest --test-dir "$(ROOT)/build/host" --output-on-failure

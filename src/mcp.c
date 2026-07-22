@@ -2,6 +2,7 @@
 #include "improve.h"
 #include "memory.h"
 #include "shell.h"
+#include "braincube_plugin.h"
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -263,6 +264,42 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     return 0;
   }
 
+  /* Clanker BrainCube / CubeChain training — agent can report progress to user. */
+  if (strcmp(name, "braincube_train_status") == 0 ||
+      strcmp(name, "train_status") == 0 ||
+      strcmp(name, "cubechain_status") == 0) {
+    char *rep = ng_bc_train_status_report();
+    text_result(out_result, rep ? rep : "unavailable", 0);
+    free(rep); free(name);
+    return 0;
+  }
+  if (strcmp(name, "braincube_explore") == 0 || strcmp(name, "explore") == 0) {
+    char *v = tool_arg(json, "value");
+    char *body = NULL, *resp = NULL;
+    int on = !v || v[0] == '1' || (v[0] && (v[0] == 't' || v[0] == 'T' || v[0] == 'o'));
+    if (v && (v[0] == '0' || v[0] == 'f' || v[0] == 'F')) on = 0;
+    asprintf(&body, "{\"action\":\"explore\",\"value\":\"%s\"}", on ? "1" : "0");
+    resp = ng_bc_handle_post(body ? body : "{}");
+    text_result(out_result, resp ? resp : "{}", 0);
+    free(body); free(resp); free(v); free(name);
+    return 0;
+  }
+  if (strcmp(name, "braincube_supervise") == 0) {
+    char *want = tool_arg(json, "want");
+    char *ttl = tool_arg(json, "ttl_sec");
+    char *note = tool_arg(json, "note");
+    char *body = NULL, *resp = NULL;
+    asprintf(&body,
+      "{\"action\":\"supervise\",\"want\":\"%s\",\"ttl_sec\":%d,\"note\":\"%s\"}",
+      want && want[0] ? want : "free_ok",
+      ttl ? atoi(ttl) : 40,
+      note && note[0] ? note : "mcp_agent");
+    resp = ng_bc_handle_post(body ? body : "{}");
+    text_result(out_result, resp ? resp : "{}", 0);
+    free(body); free(resp); free(want); free(ttl); free(note); free(name);
+    return 0;
+  }
+
   char *esc = ng_json_escape(name);
   char *msg = NULL;
   asprintf(&msg, "unknown tool: %s", esc ? esc : "?");
@@ -301,7 +338,20 @@ static const char *TOOLS_JSON =
   "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
   "\"focus\":{\"type\":\"string\",\"description\":\"optional focus for this cycle\"},"
   "\"cycles\":{\"type\":\"string\",\"description\":\"1-4, default 1\"}}"
-  "}}"
+  "}},"
+  "{\"name\":\"braincube_train_status\","
+  "\"description\":\"How BrainCube/CubeChain training is going on this device (continuous, explore, field trials, pick, teaches, latest trial). Use this to answer the user about training progress.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},"
+  "{\"name\":\"braincube_explore\","
+  "\"description\":\"Start/stop RC explore mode: robot messes around with short quiet moves to build associations (undock first). value=1/0.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"value\":{\"type\":\"string\",\"description\":\"1/on or 0/off\"}}"
+  "}},"
+  "{\"name\":\"braincube_supervise\","
+  "\"description\":\"Supervise BrainCube: focus a sensor lane for ttl_sec (charge, free_ok, bump_L, …). Logs one-liner then purges bulky logs.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"want\":{\"type\":\"string\"},\"ttl_sec\":{\"type\":\"string\"},\"note\":{\"type\":\"string\"}},"
+  "\"required\":[\"want\"]}}"
   "]}";
 
 int ng_mcp_stdio_run(ng_agent_cfg *agent) {

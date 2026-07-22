@@ -52,6 +52,7 @@ add_library(nanobot_legacy STATIC
   src/mcp_remote.c
   src/improve.c
   src/hub.c
+  src/braincube_plugin.c
 )
 add_library(nanobot::legacy ALIAS nanobot_legacy)
 target_include_directories(nanobot_legacy

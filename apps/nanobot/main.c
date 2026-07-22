@@ -6,6 +6,7 @@
 #include "hub_local.h"
 #include "util.h"
 #include "shell.h"
+#include "braincube_plugin.h"
 #include <nanobot/crypto.h>
 #include <nanobot/os.h>
 #include <sys/wait.h>
@@ -167,6 +168,9 @@ int main(int argc, char **argv) {
       mode_mcp = 1;
     } else if (strcmp(argv[i], "--login") == 0) {
       force_login = 1;
+    } else if (strcmp(argv[i], "--import-grok-cli") == 0) {
+      /* handled after home set; mark via env for simplicity */
+      setenv("NANOBOT_IMPORT_GROK_CLI", "1", 1);
     } else if (strcmp(argv[i], "--offline") == 0 || strcmp(argv[i], "--llama") == 0) {
       force_offline = 1;
     } else if ((strcmp(argv[i], "--base-url") == 0 || strcmp(argv[i], "--base") == 0) && i + 1 < argc) {
@@ -272,10 +276,24 @@ int main(int argc, char **argv) {
   fprintf(stderr, "  limits: lean=%s turns=%d children=%d out=%zu log=%zu\n",
           ng_is_lean() ? "yes" : "no", ng_max_turns(), ng_http_max_children(),
           ng_out_max(), ng_log_max());
+  /* BrainCube: parent continuous learn (fork workers only serve snapshots). */
+  fprintf(stderr, "  braincube: available=%s\n", ng_bc_available() ? "yes" : "no");
+  ng_bc_boot_parent();
+  fprintf(stderr, "  braincube: continuous=%s\n", ng_bc_continuous() ? "on" : "off");
 
   ng_session session;
   ng_session_init(&session);
   ng_session_load(&session);
+  /* If no sealed session yet, grab Grok Build CLI token when installed. */
+#if NANOBOT_ENABLE_AUTH
+  if (!force_offline && !ng_session_valid(&session)) {
+    int imp = ng_session_try_import_grok_cli(&session);
+    if (imp == 1)
+      fprintf(stderr, "  auth: imported Grok Build CLI session from ~/.grok/auth.json\n");
+    else if (imp == 0 && !ng_session_valid(&session))
+      fprintf(stderr, "  auth: no Grok Build CLI token — use --login or browser /activate\n");
+  }
+#endif
 
   ng_agent_cfg agent;
   ng_agent_cfg_init(&agent);
