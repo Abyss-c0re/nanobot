@@ -147,12 +147,23 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
   if (p == 0) {
     write_meta(id, t, desc, "running", (int)getpid(), NULL);
     char *pr = ng_read_file(ip, NULL);
-    /* explore/plan: soft prefix (no separate tool sandbox on device) */
+    /* explore/plan: soft prefix — tools allowed (shell); no further subagents */
     char *full = pr;
-    if (pr && (!strcmp(t, "explore") || !strcmp(t, "plan"))) {
+    if (pr && !strcmp(t, "explore")) {
       asprintf(&full,
-        "[subagent type=%s — read/analyze only; do not claim destructive changes]\n%s",
-        t, pr);
+        "[subagent type=explore — USE run_terminal_command to gather facts, "
+        "then write a short factual report. Do not invent numbers. "
+        "No destructive changes.]\n%s", pr);
+      free(pr);
+    } else if (pr && !strcmp(t, "plan")) {
+      asprintf(&full,
+        "[subagent type=plan — reason and structure; use shell only if needed "
+        "for a quick check. End with a clear summary.]\n%s", pr);
+      free(pr);
+    } else if (pr) {
+      asprintf(&full,
+        "[subagent type=general — complete the assigned part; use shell when "
+        "facts are needed; end with a concise summary.]\n%s", pr);
       free(pr);
     }
     char *reply = run_fn(agent_cfg, full ? full : "");

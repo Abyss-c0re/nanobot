@@ -967,14 +967,14 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
   /* Provider policy: serial LLM (local default), subagent budget (Grok max 8). */
   ng_agent_apply_provider_policy(c);
-  /* Nested subagent process: no tools thrash / no further subagents */
-  if (getenv("NANOBOT_SUBAGENT"))
-    use_tools = 0;
+  /* Nested subagent worker: keep shell tools (real multiagent work) but never
+   * spawn further subagents / heavy task board / MCP fan-out. */
+  int is_subworker = getenv("NANOBOT_SUBAGENT") != NULL;
 
   /* Base shell tool + task board + light subagents + optional MCP. */
-  char *mcp_frag = ng_mcp_openai_tools_fragment();
-  char *task_frag = ng_task_openai_tools_fragment();
-  char *sub_frag = ng_subagent_openai_tools_fragment();
+  char *mcp_frag = is_subworker ? strdup("") : ng_mcp_openai_tools_fragment();
+  char *task_frag = is_subworker ? strdup("") : ng_task_openai_tools_fragment();
+  char *sub_frag = is_subworker ? strdup("") : ng_subagent_openai_tools_fragment();
   char *tools = NULL;
   asprintf(&tools,
     "[{\"type\":\"function\",\"function\":{"
@@ -989,6 +989,9 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   free(mcp_frag);
   free(task_frag);
   free(sub_frag);
+  /* Subworkers need a few tool rounds to actually inspect the environment. */
+  if (is_subworker && c->max_turns < 8)
+    c->max_turns = 8;
   if (!tools) {
     tools = strdup(
       "[{\"type\":\"function\",\"function\":{"
