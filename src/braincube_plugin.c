@@ -76,6 +76,12 @@ static const char *g_lane_name[NG_BC_SENSORS] = {
 static int g_world_state = 3, g_world_charge = 0, g_world_battery = 0, g_world_error = 0;
 static int g_world_bump[3];
 static uint64_t g_live_seq;
+/* Useful-learn gates: avoid docked static self-teach spam (empty UI feel). */
+static uint8_t g_prev_feat[8];
+static int g_prev_feat_ok;
+static uint32_t g_useful_teaches;   /* teaches with real info change / clean motion */
+static uint32_t g_skipped_teaches;  /* docked/static ticks skipped */
+static int g_prev_state = -1;
 #endif
 
 static void state_path(char *buf, size_t n) {
@@ -481,17 +487,79 @@ static void chain_init_locked(void) {
   g_chain_ticks = g_chain_agree = g_chain_conflict = 0;
 }
 
-/* Sensor-derived teacher: which lane should be salient given world. */
+/* Roborock-ish state digits we care about (feat[5] = state % 10). */
+static int state_is_cleaning(int st) {
+  /* 5 cleaning, 6 returning, 7 manual/RC, 4? some firmwares use 17→7 */
+  return st == 5 || st == 6 || st == 7 || st == 4;
+}
+static int state_is_docked_idle(int st, int charge) {
+  /* charge=1 docked; states 8/15/3/2 often idle/charge related */
+  if (!charge) return 0;
+  if (st == 5 || st == 6 || st == 7) return 0; /* actively working / RC */
+  return 1;
+}
+
+/* Feature vector changed enough to carry information. */
+static int feat_changed(const uint8_t *feat, size_t nf) {
+  size_t i;
+  if (!g_prev_feat_ok || nf < 8) return 1;
+  for (i = 0; i < 8; i++)
+    if (feat[i] != g_prev_feat[i]) return 1;
+  return 0;
+}
+
+/*
+ * Sensor-derived teacher: exclusive single lane that *should* be salient.
+ * Returns -1 to skip teach (no useful signal) — critical on dock.
+ *
+ * Useful development rules:
+ *  1) Bump / error always teach (real hazard).
+ *  2) While cleaning/returning/RC: free_ok when clear, charge when docked mid-run rare.
+ *  3) Low battery only when not on dock.
+ *  4) Docked + static sensors → NO teach (was inflating self_teaches with garbage).
+ *  5) State lane only on state *transition*, not every 2Hz tick.
+ */
 static int self_teacher_want(const uint8_t *feat, size_t nf) {
+  int st, ch, changed, cleaning;
   if (!feat || nf < 8) return -1;
+  st = (int)(feat[5] % 10);
+  ch = feat[3] >= 5 ? 1 : 0;
+  changed = feat_changed(feat, nf);
+  cleaning = state_is_cleaning(st);
+
+  /* Hard signals first */
   if (feat[0] >= 5) return 0; /* bump_L */
   if (feat[1] >= 5) return 1; /* bump_C */
   if (feat[2] >= 5) return 2; /* bump_R */
   if (feat[6] >= 5) return 6; /* error */
-  if (feat[3] >= 5) return 3; /* charge / dock */
-  if (feat[4] <= 2) return 4; /* low battery band */
-  if (feat[7] >= 5) return 7; /* free_ok clear path */
-  return 5; /* state stream as default attention */
+
+  /* Docked idle static: do not self-train (biggest source of useless teaches). */
+  if (state_is_docked_idle(st, ch) && !changed)
+    return -1;
+
+  /* Active work: clear path is the positive class we want the brain to prefer. */
+  if (cleaning && feat[7] >= 5)
+    return 7; /* free_ok */
+  if (cleaning && ch)
+    return 3; /* on dock while "working" — rare; notice charge */
+  if (!ch && feat[4] <= 2)
+    return 4; /* low battery undocked */
+
+  /* State transition only — not default every tick */
+  if (g_prev_state >= 0 && st != g_prev_state)
+    return 5;
+
+  /* Undocked free room, first samples or mild change → free_ok */
+  if (!ch && feat[7] >= 5 && changed)
+    return 7;
+
+  /* Docked but something changed (e.g. charge edge, state dig) */
+  if (ch && changed) {
+    if (feat[3] >= 5) return 3;
+    return 5;
+  }
+
+  return -1; /* skip: no useful teacher bit this tick */
 }
 
 /* Pull agent supervise from file (fork-safe) + expire TTL. */
@@ -658,6 +726,7 @@ static void write_live_snap_locked(void) {
       asprintf(&enriched,
         "%s,\"continuous\":%s,\"self_teach\":%s,\"learning\":true,"
         "\"teaches_ok\":%u,\"teaches_bad\":%u,\"self_teaches\":%u,\"agent_teaches\":%u,"
+        "\"useful_teaches\":%u,\"skipped_teaches\":%u,"
         "\"last_teach_want\":%d,\"last_teach_src\":\"%s\","
         "\"agent_want\":%d,\"agent_note\":\"%s\","
         "\"agent_service\":%s,\"session_id\":\"%s\",\"session_age_s\":%ld,\"resets\":%u}",
@@ -665,6 +734,7 @@ static void write_live_snap_locked(void) {
         g_continuous ? "true" : "false",
         g_self_teach ? "true" : "false",
         g_teaches_ok, g_teaches_bad, g_self_teaches, g_agent_teaches,
+        g_useful_teaches, g_skipped_teaches,
         g_last_teach_want, g_last_teach_src[0] ? g_last_teach_src : "none",
         g_agent_want,
         g_agent_note[0] ? g_agent_note : "",
@@ -758,9 +828,16 @@ static int chain_tick_locked(uint8_t *feat, size_t nf, int teach_want /* -1 none
     if (ok) g_chain_agree++;
     for (i = 0; i < NG_BC_LANES; i++) {
       int want_fire = (i == teach_want) ? 1 : 0;
-      /* train fire: correct → hit, wrong → miss */
-      lhlam_cube_feedback(&g_lane[i], feat, nf, g_lane_fire[i],
-                          (g_lane_fire[i] == want_fire) ? 1 : 0);
+      /* Exclusive fire teach: only teacher lane should fire */
+      {
+        uint8_t sin[8];
+        size_t sn = 0;
+        sin[sn++] = (uint8_t)(i < (int)nf ? feat[i] % 10 : 0);
+        sin[sn++] = (uint8_t)i;
+        for (k = 0; k < nf && sn < 6; k++) sin[sn++] = (uint8_t)(feat[k] % 10);
+        lhlam_cube_feedback(&g_lane[i], sin, sn, want_fire,
+                            (g_lane_fire[i] == want_fire) ? 1 : 0);
+      }
     }
     if (ok) g_teaches_ok++; else g_teaches_bad++;
     g_last_teach_want = teach_want;
@@ -1066,6 +1143,9 @@ static void chain_hard_reset_locked(void) {
   g_lane = NULL; g_coord = NULL;
   g_chain_ticks = g_chain_agree = g_chain_conflict = 0;
   g_teaches_ok = g_teaches_bad = g_self_teaches = g_agent_teaches = 0;
+  g_useful_teaches = g_skipped_teaches = 0;
+  g_prev_feat_ok = 0;
+  g_prev_state = -1;
   g_ticks = g_decides = 0;
   g_last_decision = g_last_teach_want = -1;
   g_agent_want = -1; g_agent_until = 0; g_agent_note[0] = 0;
@@ -1168,6 +1248,7 @@ static void *adapt_loop(void *arg) {
     /* Always poll control cmds even if continuous paused */
     train_cmd_poll_locked();
     if (g_enabled && (g_continuous || g_auto_adapt)) {
+      int st_now, ch_now, useful = 0;
       if (!g_chain_live) chain_init_locked();
       supervise_poll_locked();
       nf = sample_clanker_sensors(feat, sizeof feat);
@@ -1177,28 +1258,48 @@ static void *adapt_loop(void *arg) {
       for (i = (int)nf; i < NG_BC_SENSORS; i++)
         feat[i] = (uint8_t)(g_sensor_val[i] % 10);
       if (nf < (size_t)NG_BC_SENSORS) nf = (size_t)NG_BC_SENSORS;
-      /* Agent supervision wins while TTL active; else self-teacher. */
+      st_now = g_world_state;
+      ch_now = g_world_charge;
+      /* Agent supervision wins while TTL active; else self-teacher (may skip). */
       if (g_agent_want >= 0 && g_agent_want < NG_BC_SENSORS &&
           (g_agent_until == 0 || time(NULL) <= g_agent_until)) {
         teach = g_agent_want;
         snprintf(g_last_teach_src, sizeof g_last_teach_src, "agent");
         g_agent_teaches++;
+        useful = 1;
       } else if (g_self_teach) {
         teach = self_teacher_want(feat, nf);
-        if (teach < 0) teach = 5; /* always train something */
-        snprintf(g_last_teach_src, sizeof g_last_teach_src, "self");
-        g_self_teaches++;
+        if (teach >= 0) {
+          snprintf(g_last_teach_src, sizeof g_last_teach_src, "self");
+          g_self_teaches++;
+          useful = 1;
+        } else {
+          snprintf(g_last_teach_src, sizeof g_last_teach_src, "skip");
+          g_skipped_teaches++;
+        }
       } else {
         teach = -1;
         snprintf(g_last_teach_src, sizeof g_last_teach_src, "none");
       }
       if (g_chain_live && nf > 0) {
-        int d = chain_tick_locked(feat, nf, teach);
+        int d;
+        /* Always tick for online prediction/viz; teach only if useful signal. */
+        d = chain_tick_locked(feat, nf, teach);
         g_ticks++;
         g_last_decision = d;
         g_decides++;
+        if (useful) g_useful_teaches++;
+        /* remember feat/state for next info-gate */
+        if (nf >= 8) {
+          memcpy(g_prev_feat, feat, 8);
+          g_prev_feat_ok = 1;
+        }
+        g_prev_state = st_now % 10;
+        (void)ch_now;
         write_live_snap_locked();
-        if ((g_chain_ticks % 8) == 0) chain_persist_locked();
+        /* Persist more often when useful learning, less when skipping */
+        if (useful || (g_chain_ticks % 16) == 0)
+          chain_persist_locked();
       }
     }
 #else
