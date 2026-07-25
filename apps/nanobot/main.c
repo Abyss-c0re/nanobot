@@ -137,13 +137,24 @@ static void usage(const char *argv0) {
     argv0, argv0, argv0, argv0, argv0, argv0, argv0);
 }
 
-/* Machine-readable auth for UI / app CLI wrapper (stdout = one JSON line). */
-static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent) {
+/* Machine-readable auth for UI / app CLI wrapper (stdout = one JSON line).
+ * poll_state: none|pending|signed_in|expired|denied|error|throttled
+ * Cross-device browser approval is normal — pending until token, not "cancelled". */
+static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent,
+                            const char *poll_state, const char *poll_error) {
   int need_browser = agent && ng_agent_needs_browser_session(agent);
   int signed_in = need_browser ? (s && ng_session_valid(s)) : 1;
   int pending = s && s->login_pending;
   const char *backend = agent ? ng_agent_backend_kind(agent) : "unknown";
+  const char *state = poll_state;
+  if (!state || !state[0]) {
+    if (signed_in) state = "signed_in";
+    else if (pending) state = "pending";
+    else state = "none";
+  }
   char *vu = NULL, *vuc = NULL, *uc = NULL, *base_esc = NULL, *model_esc = NULL;
+  char *err_esc = NULL;
+  long deadline = (s && s->device_deadline) ? (long)s->device_deadline : 0;
   if (s && need_browser) {
     if (s->verification_uri) vu = ng_json_escape(s->verification_uri);
     if (s->verification_uri_complete) vuc = ng_json_escape(s->verification_uri_complete);
@@ -151,12 +162,15 @@ static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent) {
   }
   if (agent && agent->base_url) base_esc = ng_json_escape(agent->base_url);
   if (agent && agent->model) model_esc = ng_json_escape(agent->model);
+  if (poll_error && poll_error[0]) err_esc = ng_json_escape(poll_error);
   printf(
     "{\"ok\":true,\"version\":\"%s\",\"signed_in\":%s,\"login_pending\":%s,"
     "\"login_required\":%s,\"needs_browser\":%s,\"user_code\":\"%s\","
     "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
     "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
-    "\"auth\":\"%s\",\"workdir\":\"%s\",\"transport\":\"cli\"}\n",
+    "\"auth\":\"%s\",\"workdir\":\"%s\",\"transport\":\"cli\","
+    "\"poll_state\":\"%s\",\"error\":\"%s\",\"device_deadline\":%ld,"
+    "\"cross_device_ok\":true}\n",
     NG_VERSION,
     signed_in ? "true" : "false",
     pending ? "true" : "false",
@@ -169,8 +183,11 @@ static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent) {
     base_esc ? base_esc : "",
     model_esc ? model_esc : "",
     need_browser ? "browser_device_code" : "local_openai_compatible",
-    ng_workdir());
-  free(vu); free(vuc); free(uc); free(base_esc); free(model_esc);
+    ng_workdir(),
+    state,
+    err_esc ? err_esc : "",
+    deadline);
+  free(vu); free(vuc); free(uc); free(base_esc); free(model_esc); free(err_esc);
   fflush(stdout);
 }
 
@@ -412,28 +429,63 @@ int main(int argc, char **argv) {
         }
       }
     }
-    if (auth_start) {
-      if (auth_force || !ng_session_valid(&session)) {
-        if (auth_force) ng_session_clear(&session);
-        else ng_session_load_pending(&session);
-        if (!session.login_pending || auth_force) {
-          if (ng_session_start_device_login(&session) != 0) {
-            printf("{\"ok\":false,\"error\":\"device login failed (network/DNS?)\"}\n");
-            ng_session_free(&session);
-            ng_agent_cfg_free(&agent);
-            return 1;
+    {
+      const char *poll_state = NULL;
+      const char *poll_error = NULL;
+      if (auth_start) {
+        if (auth_force || !ng_session_valid(&session)) {
+          if (auth_force) ng_session_clear(&session);
+          else ng_session_load_pending(&session);
+          if (!session.login_pending || auth_force) {
+            if (ng_session_start_device_login(&session) != 0) {
+              printf("{\"ok\":false,\"error\":\"device login failed (network/DNS?)\","
+                     "\"poll_state\":\"error\",\"cross_device_ok\":true}\n");
+              ng_session_free(&session);
+              ng_agent_cfg_free(&agent);
+              return 1;
+            }
+          }
+        }
+        poll_state = ng_session_valid(&session) ? "signed_in"
+          : (session.login_pending ? "pending" : "none");
+      }
+      if (auth_poll || (auth_status && session.login_pending)) {
+        /* Always reload pending so a fresh CLI process sees device_login
+         * sealed by --auth-start (same home). Browser may be on another device. */
+        (void)ng_session_load_pending(&session);
+        if (!session.login_pending || !session.device_code) {
+          if (ng_session_valid(&session)) {
+            poll_state = "signed_in";
+          } else {
+            poll_state = "none";
+            poll_error = "no_pending";
+          }
+        } else {
+          int pr = ng_session_poll_login(&session);
+          if (pr == 1) {
+            fprintf(stderr, "  auth: browser approved (cli poll; any device OK)\n");
+            poll_state = "signed_in";
+          } else if (pr == 0) {
+            poll_state = "pending"; /* authorization_pending / throttle / transport */
+          } else {
+            /* pr < 0: expired, denied, or hard error — pending cleared in poll */
+            if (!session.login_pending) {
+              poll_state = "expired";
+              poll_error = "device_code_expired_or_denied";
+            } else {
+              poll_state = "error";
+              poll_error = "poll_failed";
+            }
           }
         }
       }
+      if (auth_status && need_browser && !ng_session_valid(&session) && !session.login_pending)
+        (void)ng_session_ensure(&session);
+      if (ng_session_valid(&session)) poll_state = "signed_in";
+      else if (session.login_pending && (!poll_state || !strcmp(poll_state, "none")))
+        poll_state = "pending";
+      print_auth_json(&session, &agent, poll_state, poll_error);
     }
-    if (auth_poll || (auth_status && session.login_pending)) {
-      int pr = ng_session_poll_login(&session);
-      if (pr == 1)
-        fprintf(stderr, "  auth: browser approved (cli poll)\n");
-    }
-    if (auth_status && need_browser && !ng_session_valid(&session) && !session.login_pending)
-      (void)ng_session_ensure(&session);
-    print_auth_json(&session, &agent);
     ng_session_free(&session);
     ng_agent_cfg_free(&agent);
     return 0;
@@ -548,7 +600,7 @@ int main(int argc, char **argv) {
       ng_agent_cfg_free(&agent);
       return 1;
     }
-    print_auth_json(&session, &agent);
+    print_auth_json(&session, &agent, "signed_in", NULL);
     ng_session_free(&session);
     ng_agent_cfg_free(&agent);
     return 0;
