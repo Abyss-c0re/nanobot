@@ -1402,10 +1402,15 @@ int ng_http_serve(ng_http_cfg *cfg) {
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  /* Default: loopback only. --lan / bind_lan=1 opens 0.0.0.0 (opt-in MCP/LAN). */
+  addr.sin_addr.s_addr = (cfg && cfg->bind_lan)
+    ? htonl(INADDR_ANY)
+    : htonl(INADDR_LOOPBACK);
   addr.sin_port = htons((uint16_t)cfg->port);
   if (bind(sfd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-    ng_log("bind :%d: %s", cfg->port, strerror(errno));
+    ng_log("bind %s:%d: %s",
+           (cfg && cfg->bind_lan) ? "0.0.0.0" : "127.0.0.1",
+           cfg->port, strerror(errno));
     close(sfd);
     return -1;
   }
@@ -1414,8 +1419,10 @@ int ng_http_serve(ng_http_cfg *cfg) {
     close(sfd);
     return -1;
   }
-  ng_log("http listening on 0.0.0.0:%d (concurrent fork, max %d)",
-         cfg->port, ng_http_max_children());
+  ng_log("http listening on %s:%d (concurrent fork, max %d)%s",
+         (cfg && cfg->bind_lan) ? "0.0.0.0" : "127.0.0.1",
+         cfg->port, ng_http_max_children(),
+         (cfg && cfg->bind_lan) ? " [LAN — peer token required for mutate]" : " [loopback only]");
 
   g_live_children = 0;
   {

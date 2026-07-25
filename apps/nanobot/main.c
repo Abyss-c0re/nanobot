@@ -109,38 +109,84 @@ static void print_banner(int port, ng_session *sess, const char *www_root) {
 
 static void usage(const char *argv0) {
   fprintf(stderr,
-    "nanobot %s — standalone agent host (no external product required)\n\n"
-    "  CLI:   -p prompt | --no-stream | @! shell\n"
-    "  Peer:  --port N  (HTTP /peer /api; self-auth via /activate or --login)\n"
-    "  Hub:   --hub | --port-out M\n"
-    "  MCP:   --mcp (stdio)\n"
-    "  Auth:  --login  device-code (sealed under peer_token KDF)\n"
-    "  Local: --offline | --base-url URL | --model NAME\n"
-    "  Models: --models  (list GET {base}/models — Grok or llama.cpp)\n"
-    "  Static: --www DIR (optional)\n\n"
-    "Build features: MCP=%d AUTH=%d PEER=%d HUB=%d SHELL=%d PROVIDERS=%d\n"
-    "  cmake -DNANOBOT_ENABLE_MCP=OFF … etc.\n\n"
-    "Usage:\n"
-    "  %s --port 8787\n"
-    "  %s --hub\n"
+    "nanobot %s — CLI agent (HTTP peer is opt-in only)\n\n"
+    "  CLI (default product path — no open port):\n"
+    "    -p prompt | --no-stream | @! shell\n"
+    "    --auth-status | --auth-start [--force] | --auth-poll\n"
+    "    --login          browser device-code (blocking; then exit)\n"
+    "    --offline | --base-url URL | --model NAME | --models\n"
+    "    --mcp            MCP on stdio (no HTTP)\n\n"
+    "  Optional HTTP (MCP bridge / LAN share — explicit):\n"
+    "    --port N         listen (default bind 127.0.0.1 only)\n"
+    "    --lan            bind 0.0.0.0 (requires peer_token for mutate)\n"
+    "    --hub | --port-out M | --www DIR\n\n"
+    "Build features: MCP=%d AUTH=%d PEER=%d HUB=%d SHELL=%d PROVIDERS=%d\n\n"
+    "Examples:\n"
+    "  %s --login\n"
+    "  %s --auth-status\n"
     "  %s -p 'hello'\n"
-    "  %s --offline -p '…'\n"
-    "  %s --login | --mcp | --www DIR | --home DIR\n\n"
+    "  %s --offline --base-url http://127.0.0.1:8080/v1 -p '…'\n"
+    "  %s --mcp\n"
+    "  %s --port 8787          # loopback API only\n"
+    "  %s --port 8787 --lan    # intentional LAN (token-gated)\n\n"
     "Env: NANOBOT_HOME  NANOBOT_PEER_TOKEN  NANOBOT_OUT_TOKEN\n"
-    "     NANOBOT_LABAUTH_MASTER=path (optional; never hard-required)\n"
-    "Auth is self-contained: peer_token auto-created under NANOBOT_HOME.\n",
+    "Auth sealed under peer_token KDF. No server unless --port.\n",
     NG_VERSION,
     NANOBOT_ENABLE_MCP, NANOBOT_ENABLE_AUTH, NANOBOT_ENABLE_PEER,
     NANOBOT_ENABLE_HUB, NANOBOT_ENABLE_SHELL, NANOBOT_ENABLE_PROVIDERS,
-    argv0, argv0, argv0, argv0, argv0);
+    argv0, argv0, argv0, argv0, argv0, argv0, argv0);
+}
+
+/* Machine-readable auth for UI / app CLI wrapper (stdout = one JSON line). */
+static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent) {
+  int need_browser = agent && ng_agent_needs_browser_session(agent);
+  int signed_in = need_browser ? (s && ng_session_valid(s)) : 1;
+  int pending = s && s->login_pending;
+  const char *backend = agent ? ng_agent_backend_kind(agent) : "unknown";
+  char *vu = NULL, *vuc = NULL, *uc = NULL, *base_esc = NULL, *model_esc = NULL;
+  if (s && need_browser) {
+    if (s->verification_uri) vu = ng_json_escape(s->verification_uri);
+    if (s->verification_uri_complete) vuc = ng_json_escape(s->verification_uri_complete);
+    if (s->user_code) uc = ng_json_escape(s->user_code);
+  }
+  if (agent && agent->base_url) base_esc = ng_json_escape(agent->base_url);
+  if (agent && agent->model) model_esc = ng_json_escape(agent->model);
+  printf(
+    "{\"ok\":true,\"version\":\"%s\",\"signed_in\":%s,\"login_pending\":%s,"
+    "\"login_required\":%s,\"needs_browser\":%s,\"user_code\":\"%s\","
+    "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
+    "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+    "\"auth\":\"%s\",\"workdir\":\"%s\",\"transport\":\"cli\"}\n",
+    NG_VERSION,
+    signed_in ? "true" : "false",
+    pending ? "true" : "false",
+    (need_browser && !signed_in) ? "true" : "false",
+    need_browser ? "true" : "false",
+    uc ? uc : "",
+    vu ? vu : "",
+    vuc ? vuc : "",
+    backend,
+    base_esc ? base_esc : "",
+    model_esc ? model_esc : "",
+    need_browser ? "browser_device_code" : "local_openai_compatible",
+    ng_workdir());
+  free(vu); free(vuc); free(uc); free(base_esc); free(model_esc);
+  fflush(stdout);
 }
 
 int main(int argc, char **argv) {
-  int port = NG_DEFAULT_PORT;
+  /* port < 0 means HTTP peer not requested (CLI-first product path). */
+  int port = -1;
+  int want_peer = 0;
+  int bind_lan = 0;
   int mode_mcp = 0;
   int force_login = 0;
   int force_offline = 0;
   int list_models = 0;
+  int auth_status = 0;
+  int auth_start = 0;
+  int auth_poll = 0;
+  int auth_force = 0;
   int want_stream = 1;
   int hub_mode = 0;
   int port_out = 0;
@@ -168,6 +214,14 @@ int main(int argc, char **argv) {
       mode_mcp = 1;
     } else if (strcmp(argv[i], "--login") == 0) {
       force_login = 1;
+    } else if (strcmp(argv[i], "--auth-status") == 0) {
+      auth_status = 1;
+    } else if (strcmp(argv[i], "--auth-start") == 0) {
+      auth_start = 1;
+    } else if (strcmp(argv[i], "--auth-poll") == 0) {
+      auth_poll = 1;
+    } else if (strcmp(argv[i], "--force") == 0) {
+      auth_force = 1;
     } else if (strcmp(argv[i], "--import-grok-cli") == 0) {
       /* handled after home set; mark via env for simplicity */
       setenv("NANOBOT_IMPORT_GROK_CLI", "1", 1);
@@ -182,11 +236,19 @@ int main(int argc, char **argv) {
     } else if ((strcmp(argv[i], "--port") == 0 || strcmp(argv[i], "--port-in") == 0) &&
                i + 1 < argc) {
       port = atoi(argv[++i]);
+      want_peer = 1;
+    } else if (strcmp(argv[i], "--peer") == 0) {
+      want_peer = 1;
+      if (port < 0) port = NG_DEFAULT_PORT;
+    } else if (strcmp(argv[i], "--lan") == 0 || strcmp(argv[i], "--bind-any") == 0) {
+      bind_lan = 1;
     } else if (strcmp(argv[i], "--port-out") == 0 && i + 1 < argc) {
       port_out = atoi(argv[++i]);
       hub_mode = 1;
+      want_peer = 1;
     } else if (strcmp(argv[i], "--hub") == 0) {
       hub_mode = 1;
+      want_peer = 1;
       if (port_out <= 0) port_out = 0; /* set after port known */
     } else if (strcmp(argv[i], "--stream") == 0) {
       want_stream = 1;
@@ -212,6 +274,11 @@ int main(int argc, char **argv) {
       fprintf(stderr, "unknown arg: %s\n", argv[i]);
       usage(argv[0]); return 2;
     }
+  }
+  if (want_peer && port < 0) port = NG_DEFAULT_PORT;
+  if (hub_mode && !want_peer) {
+    want_peer = 1;
+    if (port < 0) port = NG_DEFAULT_PORT;
   }
 
   ng_set_workdir(home);
@@ -239,7 +306,8 @@ int main(int argc, char **argv) {
         }
       }
     }
-    if (sp && sp[0] && port == NG_DEFAULT_PORT) {
+    /* Settings PORT only applies when peer was explicitly requested. */
+    if (want_peer && sp && sp[0] && port == NG_DEFAULT_PORT) {
       int p = atoi(sp);
       if (p > 0 && p < 65536) port = p;
     }
@@ -313,10 +381,64 @@ int main(int argc, char **argv) {
   }
 
   int need_browser = ng_agent_needs_browser_session(&agent);
-  fprintf(stderr, "  backend: %s  base=%s  model=%s\n",
-          ng_agent_backend_kind(&agent),
-          agent.base_url ? agent.base_url : "?",
-          agent.model ? agent.model : "?");
+  if (!auth_status && !auth_start && !auth_poll)
+    fprintf(stderr, "  backend: %s  base=%s  model=%s\n",
+            ng_agent_backend_kind(&agent),
+            agent.base_url ? agent.base_url : "?",
+            agent.model ? agent.model : "?");
+
+  /* --- CLI auth (JSON on stdout; no HTTP) — product UI path --- */
+  if (auth_status || auth_start || auth_poll) {
+#if !NANOBOT_ENABLE_AUTH
+    printf("{\"ok\":false,\"error\":\"AUTH disabled in build\"}\n");
+    ng_session_free(&session);
+    ng_agent_cfg_free(&agent);
+    return 2;
+#else
+    /* Seal key needs peer_token file even without HTTP. */
+    {
+      char pt[640];
+      snprintf(pt, sizeof pt, "%s/peer_token", home);
+      if (access(pt, R_OK) != 0) {
+        unsigned char raw[16];
+        char tok[33];
+        if (nb_random_bytes(raw, sizeof raw) == 0 &&
+            nb_hex_encode(raw, sizeof raw, tok, sizeof tok) == 0) {
+          char line[64];
+          int n = snprintf(line, sizeof line, "token=%s\n", tok);
+          (void)nb_write_secret_file(pt, line, (size_t)n);
+          nb_secure_wipe(raw, sizeof raw);
+          nb_secure_wipe(tok, sizeof tok);
+        }
+      }
+    }
+    if (auth_start) {
+      if (auth_force || !ng_session_valid(&session)) {
+        if (auth_force) ng_session_clear(&session);
+        else ng_session_load_pending(&session);
+        if (!session.login_pending || auth_force) {
+          if (ng_session_start_device_login(&session) != 0) {
+            printf("{\"ok\":false,\"error\":\"device login failed (network/DNS?)\"}\n");
+            ng_session_free(&session);
+            ng_agent_cfg_free(&agent);
+            return 1;
+          }
+        }
+      }
+    }
+    if (auth_poll || (auth_status && session.login_pending)) {
+      int pr = ng_session_poll_login(&session);
+      if (pr == 1)
+        fprintf(stderr, "  auth: browser approved (cli poll)\n");
+    }
+    if (auth_status && need_browser && !ng_session_valid(&session) && !session.login_pending)
+      (void)ng_session_ensure(&session);
+    print_auth_json(&session, &agent);
+    ng_session_free(&session);
+    ng_agent_cfg_free(&agent);
+    return 0;
+#endif
+  }
 
   if (list_models) {
     if (need_browser && ng_session_valid(&session))
@@ -413,30 +535,74 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  /* Auth is self-contained: device-code via --login or GET /activate (if PEER).
-   * Never depends on any vacuum/ product. */
-  if (force_login && need_browser) {
+  /* --login without --port: blocking browser device-code, then exit (no HTTP). */
+  if (force_login && need_browser && !want_peer) {
+#if !NANOBOT_ENABLE_AUTH
+    fprintf(stderr, "  --login: AUTH disabled in this build\n");
+    ng_session_free(&session);
+    ng_agent_cfg_free(&agent);
+    return 2;
+#else
+    if (ng_session_login_blocking(&session) != 0) {
+      ng_session_free(&session);
+      ng_agent_cfg_free(&agent);
+      return 1;
+    }
+    print_auth_json(&session, &agent);
+    ng_session_free(&session);
+    ng_agent_cfg_free(&agent);
+    return 0;
+#endif
+  }
+
+  if (force_login && need_browser && want_peer) {
 #if !NANOBOT_ENABLE_AUTH
     fprintf(stderr, "  --login: AUTH disabled in this build\n");
 #else
     ng_session_clear(&session);
-    fprintf(stderr, "  --login: open /activate after server starts (or poll device flow)\n");
+    (void)ng_session_start_device_login(&session);
+    fprintf(stderr, "  --login: device-code started; peer will poll\n");
 #endif
   } else if (need_browser && ng_session_valid(&session)) {
 #if NANOBOT_ENABLE_AUTH
     if (ng_session_ensure(&session) != 0)
-      fprintf(stderr, "  Session refresh failed; use /activate or --login\n");
+      fprintf(stderr, "  Session refresh failed; use --login or --auth-start\n");
 #endif
+  } else if (need_browser && !want_peer) {
+    fprintf(stderr,
+            "  No cloud session. Run: nanobot --login\n"
+            "  Or: nanobot --auth-start  (JSON for UI) then --auth-poll\n"
+            "  Or: --offline / --base-url for local llama (no browser)\n"
+            "  HTTP peer is opt-in: --port N (loopback) or --port N --lan\n");
+    ng_session_free(&session);
+    ng_agent_cfg_free(&agent);
+    return 2;
   } else if (need_browser) {
     fprintf(stderr,
-            "  No cloud session — peer up; activate via /activate or: nanobot --login\n"
-            "  Or --offline / --base-url for local OpenAI-compatible (no browser)\n");
+            "  No cloud session — peer will accept /activate or --login first\n");
   } else {
     fprintf(stderr, "  Local/OpenAI-compatible backend — no browser session required\n");
   }
 
-  /* Peer token: nanobot-owned secret under NANOBOT_HOME (create if missing).
-   * Do not rotate/delete on deploy — only create when absent. */
+  /* No --port / --peer / --hub: CLI-only. Do not open a network socket. */
+  if (!want_peer) {
+    if (oneshot || mode_mcp || list_models || force_login) {
+      /* already handled above */
+    }
+    fprintf(stderr,
+            "nanobot: nothing to do.\n"
+            "  Chat:   nanobot -p 'prompt'\n"
+            "  Auth:   nanobot --login | --auth-status | --auth-start\n"
+            "  MCP:    nanobot --mcp\n"
+            "  HTTP:   nanobot --port 8787          # 127.0.0.1 only\n"
+            "          nanobot --port 8787 --lan    # intentional LAN\n");
+    usage(argv[0]);
+    ng_session_free(&session);
+    ng_agent_cfg_free(&agent);
+    return 2;
+  }
+
+  /* Peer token only when HTTP is actually started. */
   {
     char pt[640];
     snprintf(pt, sizeof pt, "%s/peer_token", home);
@@ -461,7 +627,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  /* Optional external master file (path via env only — no product hardcodes). */
   {
     int master_present = 0;
     const char *env_m = getenv("NANOBOT_LABAUTH_MASTER");
@@ -497,6 +662,12 @@ int main(int argc, char **argv) {
   return 2;
 #endif
 
+  if (port <= 0) port = NG_DEFAULT_PORT;
+  if (bind_lan)
+    fprintf(stderr, "  WARN: --lan binds 0.0.0.0 — mutate routes need peer_token\n");
+  else
+    fprintf(stderr, "  HTTP bind: 127.0.0.1:%d (not LAN-visible)\n", port);
+
   signal(SIGINT, on_sig);
   signal(SIGTERM, on_sig);
   print_banner(port, &session, www_root);
@@ -525,6 +696,7 @@ int main(int argc, char **argv) {
     .session = &session,
     .stop = 0,
     .www_root = www_root,
+    .bind_lan = bind_lan,
   };
   while (!g_stop) {
     http.stop = g_stop;
