@@ -20,6 +20,7 @@ typedef struct {
   char *device_code;
   int poll_interval;
   time_t device_deadline;
+  time_t last_token_poll; /* wall time of last /oauth2/token attempt */
   int login_pending;
 } ng_session;
 

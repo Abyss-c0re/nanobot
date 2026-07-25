@@ -285,8 +285,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* advance pending device login on any request */
-  if (session && session->login_pending) {
+  /* Advance pending device login on any request.
+   * Forked HTTP workers do not share memory: login_pending lives on disk
+   * (device_login secret). Always call poll_login so it can load_pending
+   * first — otherwise only the worker that ran /api/auth/start ever polls
+   * the token and the app sees "link opened, never signed in". */
+  if (session) {
     int pr = ng_session_poll_login(session);
     if (pr == 1) ng_log("auth: browser approved session");
   }
@@ -375,8 +379,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/status") == 0)) {
     int need_browser = agent && ng_agent_needs_browser_session(agent);
-    /* Soft-expired access_token still counts as signed-in after a successful refresh. */
-    if (need_browser && session && !ng_session_valid(session))
+    /* Soft-expired access_token still counts as signed-in after a successful refresh.
+     * Skip ensure while device-login is pending — refresh cannot help and spam-logs
+     * "need Connect once" on every app poll. */
+    if (need_browser && session && !ng_session_valid(session)
+        && !session->login_pending)
       (void)ng_session_ensure(session);
     int signed_in = need_browser ? (session && ng_session_valid(session)) : 1;
     const char *backend = agent ? ng_agent_backend_kind(agent) : "unknown";
@@ -1445,7 +1452,9 @@ int ng_http_serve(ng_http_cfg *cfg) {
       break;
     }
 
-    /* Refresh tokens + pending device login from secure files (fork-safe). */
+    /* Refresh tokens + pending device login from secure files (fork-safe).
+     * Parent token poll is interval-throttled inside ng_session_poll_login so
+     * accept() is not blocked on curl for every connection. */
     if (cfg->session) {
       ng_session_load(cfg->session);
       if (cfg->session->login_pending) {

@@ -281,6 +281,7 @@ int ng_session_save_pending(const ng_session *s) {
     "verification_uri_complete=%s\n"
     "poll_interval=%d\n"
     "device_deadline=%ld\n"
+    "last_token_poll=%ld\n"
     "issuer=%s\n"
     "client_id=%s\n",
     s->device_code,
@@ -289,6 +290,7 @@ int ng_session_save_pending(const ng_session *s) {
     s->verification_uri_complete ? s->verification_uri_complete : "",
     s->poll_interval > 0 ? s->poll_interval : 5,
     (long)s->device_deadline,
+    (long)s->last_token_poll,
     NG_AUTH_ISSUER,
     NG_AUTH_CLIENT_ID);
   if (n < 0 || n >= (int)sizeof buf) return -1;
@@ -331,6 +333,9 @@ int ng_session_load_pending(ng_session *s) {
   char *dl = slurp_body(body, "device_deadline");
   s->device_deadline = dl ? (time_t)strtol(dl, NULL, 10) : 0;
   free(dl);
+  char *lp = slurp_body(body, "last_token_poll");
+  s->last_token_poll = lp ? (time_t)strtol(lp, NULL, 10) : 0;
+  free(lp);
   free(body);
   if (s->device_deadline && time(NULL) > s->device_deadline) {
     ng_log("auth: stored device login expired — clearing");
@@ -677,12 +682,25 @@ int ng_session_poll_login(ng_session *s) {
   if (!s->login_pending || !s->device_code)
     ng_session_load_pending(s);
   if (!s->login_pending || !s->device_code) return -1;
-  if (s->device_deadline && time(NULL) > s->device_deadline) {
+  time_t now = time(NULL);
+  if (s->device_deadline && now > s->device_deadline) {
     ng_log("auth: device code expired");
     s->login_pending = 0;
     ng_session_clear_pending();
     return -1;
   }
+
+  /* RFC8628: honor poll_interval across fork workers via sealed last_token_poll.
+   * Without this, every HTTP accept curls /oauth2/token (up to 30s) and the peer
+   * accept loop stalls — app looks "crashed" / never finishes auth. */
+  int interval = s->poll_interval > 0 ? s->poll_interval : 5;
+  if (interval < 3) interval = 3;
+  if (s->last_token_poll && (now - s->last_token_poll) < interval)
+    return 0;
+
+  s->last_token_poll = now;
+  /* Persist stamp before network so concurrent fork workers skip too. */
+  (void)ng_session_save_pending(s);
 
   char form[2048];
   snprintf(form, sizeof form,
@@ -693,12 +711,22 @@ int ng_session_poll_login(ng_session *s) {
   char url[256];
   snprintf(url, sizeof url, "%s/oauth2/token", NG_AUTH_ISSUER);
   char *body = curl_form_post(url, form, NULL);
-  if (!body) return 0; /* transient */
+  if (!body) {
+    ng_log("auth: token poll transport failed (will retry)");
+    return 0; /* transient */
+  }
 
   if (strstr(body, "access_token")) {
     int rc = apply_token_response(s, body);
     free(body);
     return rc == 0 ? 1 : -1;
+  }
+
+  /* Cloudflare / HTML challenge or non-JSON — do not clear pending. */
+  if (body[0] == '<' || strstr(body, "Cloudflare") || strstr(body, "Attention Required")) {
+    ng_log("auth: token poll got non-JSON (blocked/challenge) — retry later");
+    free(body);
+    return 0;
   }
 
   char *err = ng_json_get_string(body, "error");
@@ -707,7 +735,8 @@ int ng_session_poll_login(ng_session *s) {
       free(err); free(body); return 0;
     }
     if (strcmp(err, "slow_down") == 0) {
-      s->poll_interval += 5;
+      s->poll_interval = interval + 5;
+      (void)ng_session_save_pending(s);
       free(err); free(body); return 0;
     }
     ng_log("auth: poll error: %s", err);
@@ -716,6 +745,7 @@ int ng_session_poll_login(ng_session *s) {
     ng_session_clear_pending();
     return -1;
   }
+  ng_log("auth: token poll unexpected body (%.120s)", body);
   free(body);
   return 0;
 }
