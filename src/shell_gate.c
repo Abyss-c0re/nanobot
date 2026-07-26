@@ -89,6 +89,40 @@ static int pattern_allowed_local(const char *pat) {
   return ok;
 }
 
+/**
+ * True when shell_allow already covers this command.
+ * 1) allow line is an exact match for a dangerous pattern present in cmd, OR
+ * 2) allow line is a substring of the full command (e.g. "svc power reboot").
+ * Residual: shell_dangerous file path ignored shell_allow → reboot always 425
+ * even after user enabled "Allow reboot" in the app.
+ */
+static int command_covered_by_shell_allow(const char *command) {
+  if (!command || !command[0]) return 0;
+  /* known dangerous tokens the app writes into shell_allow */
+  for (int i = 0; default_dangerous[i]; i++) {
+    if (strstr(command, default_dangerous[i])
+        && pattern_allowed_local(default_dangerous[i]))
+      return 1;
+  }
+  char path[640];
+  snprintf(path, sizeof path, "%s/shell_allow", ng_workdir());
+  FILE *f = fopen(path, "r");
+  if (!f) return 0;
+  char line[512];
+  int ok = 0;
+  while (fgets(line, sizeof line, f)) {
+    char *p = line;
+    while (*p == ' ' || *p == '\t') p++;
+    if (!*p || *p == '#') continue;
+    size_t n = strlen(p);
+    while (n && (p[n - 1] == '\n' || p[n - 1] == '\r' || p[n - 1] == ' '))
+      p[--n] = 0;
+    if (n >= 2 && strstr(command, p)) { ok = 1; break; }
+  }
+  fclose(f);
+  return ok;
+}
+
 ng_shell_class ng_shell_classify(const char *command) {
   if (!command || !command[0]) return NG_SHELL_DENY;
   /* hard deny first */
@@ -96,6 +130,10 @@ ng_shell_class ng_shell_classify(const char *command) {
     /* if only matched as dangerous-style and allow file has exception, still check */
     return NG_SHELL_DENY;
   }
+  /* User allowlist wins before dangerous gate (app "Allow reboot"). */
+  if (command_covered_by_shell_allow(command))
+    return NG_SHELL_ALLOW;
+
   ng_shell_ensure_dangerous_file();
   char path[640];
   snprintf(path, sizeof path, "%s/shell_dangerous", ng_workdir());

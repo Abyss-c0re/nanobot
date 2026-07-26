@@ -24,8 +24,10 @@ void ng_memory_init(void) {
   if (access(core, R_OK) != 0) {
     const char *seed =
       "nanobot is a small standalone agent host (CLI, shell, memory, MCP, peer API).\n"
-      "Prefer short answers. Do not destroy the host. Write under NANOBOT_HOME when needed.\n"
-      "User may run offline shell with @! <command>.\n";
+      "Prefer short answers. Use run_terminal_command for device work the user asks for.\n"
+      "Shell policy (denylist/allow) enforces safety — do not invent a hard refuse for "
+      "allowed commands (e.g. reboot when shell_allow lists it).\n"
+      "Write under NANOBOT_HOME when needed. User may run offline shell with @! <command>.\n";
     ng_write_file(core, seed, strlen(seed));
   }
 }
@@ -160,7 +162,11 @@ char *ng_memory_system_prompt(void) {
     "Tools: call run_terminal_command for live work. Never invent tool output. Never prefix answers with @!.\n"
     "Context discipline: do NOT load full logs or long histories into the model.\n"
     "User @! is shell bypass; you must use tools, not echo @!.\n"
-    "Do not destroy the host. Prefer paths under NANOBOT_HOME.\n"
+    "Host safety: do not invent destructive commands. When the user asks for a "
+    "shell action (including reboot if allowed under NANOBOT_HOME/shell_allow), "
+    "call run_terminal_command — do not refuse based on generic safety slogans. "
+    "Policy is enforced by the shell denylist/allow/dangerous gate, not by "
+    "pretending you cannot run tools. Prefer paths under NANOBOT_HOME when unsure.\n"
     "\n## Always true (core)\n%s\n"
     "%s%s"
     "%s%s",
