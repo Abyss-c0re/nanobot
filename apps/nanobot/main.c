@@ -2,6 +2,7 @@
 #include "auth.h"
 #include "http.h"
 #include "mcp.h"
+#include "mcp_remote.h"
 #include "memory.h"
 #include "hub_local.h"
 #include "util.h"
@@ -115,7 +116,10 @@ static void usage(const char *argv0) {
     "    --auth-status | --auth-start [--force] | --auth-poll\n"
     "    --login          browser device-code (blocking; then exit)\n"
     "    --offline | --base-url URL | --model NAME | --models\n"
-    "    --mcp            MCP on stdio (no HTTP)\n\n"
+    "    --mcp            MCP on stdio (no HTTP)\n"
+    "    --mcp-list       list remote MCP servers (pure C; $NANOBOT_HOME/mcp_servers.json)\n"
+    "    --mcp-call S T [JSON]  call remote MCP tool (no Python, no LLM)\n"
+    "    --order TARGET …      commander order: status|nexus <text>|blackcube [ping|prophecy]\n\n"
     "  Optional HTTP (MCP bridge / LAN share — explicit):\n"
     "    --port N         listen (default bind 127.0.0.1 only)\n"
     "    --lan            bind 0.0.0.0 (requires peer_token for mutate)\n"
@@ -127,6 +131,8 @@ static void usage(const char *argv0) {
     "  %s -p 'hello'\n"
     "  %s --offline --base-url http://127.0.0.1:8080/v1 -p '…'\n"
     "  %s --mcp\n"
+    "  %s --mcp-call nexuscore nexus_command '{\"text\":\"hello\"}'\n"
+    "  %s --order nexus acknowledge commander\n"
     "  %s --port 8787          # loopback API only\n"
     "  %s --port 8787 --lan    # intentional LAN (token-gated)\n\n"
     "Env: NANOBOT_HOME  NANOBOT_PEER_TOKEN  NANOBOT_OUT_TOKEN\n"
@@ -134,7 +140,131 @@ static void usage(const char *argv0) {
     NG_VERSION,
     NANOBOT_ENABLE_MCP, NANOBOT_ENABLE_AUTH, NANOBOT_ENABLE_PEER,
     NANOBOT_ENABLE_HUB, NANOBOT_ENABLE_SHELL, NANOBOT_ENABLE_PROVIDERS,
-    argv0, argv0, argv0, argv0, argv0, argv0, argv0);
+    argv0, argv0, argv0, argv0, argv0, argv0, argv0, argv0, argv0);
+}
+
+/* Pure-C commander order path (NeuralCube). No Python. No LLM. */
+static void order_log(const char *line) {
+  char path[700];
+  snprintf(path, sizeof path, "%s/orders.log", ng_workdir());
+  FILE *f = fopen(path, "a");
+  if (!f) return;
+  time_t t = time(NULL);
+  struct tm tm;
+  localtime_r(&t, &tm);
+  char ts[40];
+  strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%S", &tm);
+  fprintf(f, "%s %s\n", ts, line ? line : "");
+  fclose(f);
+}
+
+static int run_mcp_call_cli(const char *server, const char *tool, const char *args_obj) {
+#if !NANOBOT_ENABLE_MCP
+  (void)server; (void)tool; (void)args_obj;
+  fprintf(stderr, "MCP disabled in this build\n");
+  return 2;
+#else
+  if (!server || !server[0] || !tool || !tool[0]) {
+    fprintf(stderr, "usage: nanobot --mcp-call SERVER TOOL [JSON_OBJECT]\n");
+    return 2;
+  }
+  const char *args = (args_obj && args_obj[0]) ? args_obj : "{}";
+  if (args[0] != '{') {
+    fprintf(stderr, "arguments must be a JSON object string, e.g. {}\n");
+    return 2;
+  }
+  char *esc_s = ng_json_escape(server);
+  char *esc_t = ng_json_escape(tool);
+  /* arguments field as embedded object (mcp_remote accepts raw object) */
+  char *payload = NULL;
+  if (asprintf(&payload,
+               "{\"server\":\"%s\",\"tool\":\"%s\",\"arguments\":%s}",
+               esc_s ? esc_s : server, esc_t ? esc_t : tool, args) < 0) {
+    free(esc_s); free(esc_t);
+    return 1;
+  }
+  free(esc_s); free(esc_t);
+  char *out = ng_mcp_try_tool("mcp_call", payload);
+  free(payload);
+  if (!out) {
+    fprintf(stderr, "mcp_call: not handled\n");
+    return 1;
+  }
+  fputs(out, stdout);
+  if (out[0] && out[strlen(out) - 1] != '\n') fputc('\n', stdout);
+  char logline[400];
+  snprintf(logline, sizeof logline, "mcp_call server=%s tool=%s ok", server, tool);
+  order_log(logline);
+  /* LAST_ORDER.json pure C */
+  {
+    char dir[700], path[700];
+    snprintf(dir, sizeof dir, "%s/nexus", ng_workdir());
+    mkdir(dir, 0755);
+    snprintf(path, sizeof path, "%s/LAST_ORDER.json", dir);
+    FILE *f = fopen(path, "w");
+    if (f) {
+      fprintf(f, "{\"server\":\"%s\",\"tool\":\"%s\"}\n", server, tool);
+      fclose(f);
+    }
+  }
+  free(out);
+  return 0;
+#endif
+}
+
+static int run_order_cli(const char *target, const char *text) {
+#if !NANOBOT_ENABLE_MCP
+  (void)target; (void)text;
+  fprintf(stderr, "MCP disabled in this build\n");
+  return 2;
+#else
+  if (!target || !target[0]) {
+    fprintf(stderr, "usage: nanobot --order status|nexus <text>|blackcube [ping|prophecy|status]\n");
+    return 2;
+  }
+  if (!strcmp(target, "status") || !strcmp(target, "stat")) {
+    char *list = ng_mcp_try_tool("mcp_list", "{}");
+    if (list) { fputs(list, stdout); free(list); }
+    return run_mcp_call_cli("nexuscore", "nexus_status", "{}");
+  }
+  if (!strcmp(target, "nexus") || !strcmp(target, "nexuscore") ||
+      !strcmp(target, "hive") || !strcmp(target, "core")) {
+    const char *msg = (text && text[0]) ? text : "ORDER from NeuralCube Titan commander";
+    char *esc = ng_json_escape(msg);
+    char *args = NULL;
+    if (asprintf(&args, "{\"text\":\"%s\"}", esc ? esc : msg) < 0) {
+      free(esc);
+      return 1;
+    }
+    free(esc);
+    int rc = run_mcp_call_cli("nexuscore", "nexus_command", args);
+    free(args);
+    if (rc != 0) {
+      /* soft fallback: smx tick still advances hive */
+      fprintf(stderr, "nexus_command soft-fail; trying nexus_smx_tick\n");
+      return run_mcp_call_cli("nexuscore", "nexus_smx_tick", "{}");
+    }
+    return 0;
+  }
+  if (!strcmp(target, "blackcube") || !strcmp(target, "bc") || !strcmp(target, "station")) {
+    const char *sub = (text && text[0]) ? text : "ping";
+    /* first word only for subcommand */
+    char sub0[64];
+    size_t i = 0;
+    while (sub[i] && sub[i] != ' ' && i + 1 < sizeof sub0) {
+      sub0[i] = sub[i];
+      i++;
+    }
+    sub0[i] = 0;
+    if (!strcmp(sub0, "prophecy") || !strcmp(sub0, "tick"))
+      return run_mcp_call_cli("blackcube", "blackcube_prophecy_tick", "{}");
+    if (!strcmp(sub0, "status"))
+      return run_mcp_call_cli("blackcube", "blackcube_cube_status", "{}");
+    return run_mcp_call_cli("blackcube", "blackcube_ping", "{}");
+  }
+  fprintf(stderr, "unknown order target: %s\n", target);
+  return 2;
+#endif
 }
 
 /* Machine-readable auth for UI / app CLI wrapper (stdout = one JSON line).
@@ -197,6 +327,15 @@ int main(int argc, char **argv) {
   int want_peer = 0;
   int bind_lan = 0;
   int mode_mcp = 0;
+  int mode_mcp_list = 0;
+  int mode_mcp_call = 0;
+  int mode_order = 0;
+  const char *mcp_call_server = NULL;
+  const char *mcp_call_tool = NULL;
+  const char *mcp_call_args = NULL;
+  const char *order_target = NULL;
+  char order_text[2048];
+  order_text[0] = 0;
   int force_login = 0;
   int force_offline = 0;
   int list_models = 0;
@@ -229,6 +368,29 @@ int main(int argc, char **argv) {
       usage(argv[0]); return 0;
     } else if (strcmp(argv[i], "--mcp") == 0 || strcmp(argv[i], "mcp") == 0) {
       mode_mcp = 1;
+    } else if (strcmp(argv[i], "--mcp-list") == 0 || strcmp(argv[i], "mcp-list") == 0) {
+      mode_mcp_list = 1;
+    } else if ((strcmp(argv[i], "--mcp-call") == 0 || strcmp(argv[i], "mcp-call") == 0) &&
+               i + 2 < argc) {
+      mode_mcp_call = 1;
+      mcp_call_server = argv[++i];
+      mcp_call_tool = argv[++i];
+      if (i + 1 < argc && argv[i + 1][0] == '{')
+        mcp_call_args = argv[++i];
+    } else if ((strcmp(argv[i], "--order") == 0 || strcmp(argv[i], "order") == 0) &&
+               i + 1 < argc) {
+      mode_order = 1;
+      order_target = argv[++i];
+      size_t off = 0;
+      for (int j = i + 1; j < argc; j++) {
+        size_t n = strlen(argv[j]);
+        if (off + n + 2 >= sizeof order_text) break;
+        if (off) order_text[off++] = ' ';
+        memcpy(order_text + off, argv[j], n);
+        off += n;
+        order_text[off] = 0;
+      }
+      break; /* remaining argv is order text */
     } else if (strcmp(argv[i], "--login") == 0) {
       force_login = 1;
     } else if (strcmp(argv[i], "--auth-status") == 0) {
@@ -301,6 +463,25 @@ int main(int argc, char **argv) {
   ng_set_workdir(home);
   mkdir(home, 0755);
   ng_shell_ensure_policy_files();
+
+  /* Pure-C MCP / commander order path — no Python, no LLM (NeuralCube). */
+  if (mode_mcp_list) {
+#if NANOBOT_ENABLE_MCP
+    char *out = ng_mcp_try_tool("mcp_list", "{}");
+    if (out) {
+      fputs(out, stdout);
+      if (out[0] && out[strlen(out) - 1] != '\n') fputc('\n', stdout);
+      free(out);
+      return 0;
+    }
+#endif
+    fprintf(stderr, "mcp_list unavailable\n");
+    return 1;
+  }
+  if (mode_mcp_call)
+    return run_mcp_call_cli(mcp_call_server, mcp_call_tool, mcp_call_args);
+  if (mode_order)
+    return run_order_cli(order_target, order_text);
 
   /* Load persisted settings (survives reboot under NANOBOT_HOME/settings).
    * CLI / env win over file. */
