@@ -68,9 +68,14 @@ static int g_sensor_val[NG_BC_SENSORS];  /* last raw sensor digits 0..9 */
 static uint32_t g_lane_ticks[NG_BC_SENSORS];
 static float g_activity[NG_BC_SENSORS];  /* 0..1 smoothed activity for viz */
 static float g_meta_activity;
-static const char *g_lane_name[NG_BC_SENSORS] = {
+/* Mutable labels: Clanker RC names by default; Commander plane renames in sample. */
+static char g_lane_name_buf[NG_BC_SENSORS][24] = {
   "bump_L", "bump_C", "bump_R", "charge",
   "battery", "state", "error", "free_ok"
+};
+static const char *g_lane_name[NG_BC_SENSORS] = {
+  g_lane_name_buf[0], g_lane_name_buf[1], g_lane_name_buf[2], g_lane_name_buf[3],
+  g_lane_name_buf[4], g_lane_name_buf[5], g_lane_name_buf[6], g_lane_name_buf[7]
 };
 /* last world snapshot for live viz */
 static int g_world_state = 3, g_world_charge = 0, g_world_battery = 0, g_world_error = 0;
@@ -82,6 +87,33 @@ static int g_prev_feat_ok;
 static uint32_t g_useful_teaches;   /* teaches with real info change / clean motion */
 static uint32_t g_skipped_teaches;  /* docked/static ticks skipped */
 static int g_prev_state = -1;
+
+/* --- First Cube's LAW / Crimson Cube (BlackCube Commander) ---
+ * Endless reverse-Rubik game loop: search state-matrix paths so energy
+ * travels I→O faster than the peer cube's plug impulse. I and O race.
+ * Win = combine algocubes into Meta while keeping edge at CORE_N (small).
+ * Energy MUST flow — NexusCore develops only when race is won.
+ */
+#define LAW_NAME "first_cube"
+#define LAW_VERSION "1.0.0"
+static uint32_t g_law_ticks;
+static uint32_t g_law_races;       /* I/O race attempts */
+static uint32_t g_law_wins;        /* impulse exited O first */
+static uint32_t g_law_losses;      /* plug beat O (conflict / blocked) */
+static uint32_t g_law_combines;    /* successful algocube joins */
+static uint32_t g_law_paths;       /* pathfind solutions found */
+static uint32_t g_law_path_fail;   /* no open path this tick */
+static uint32_t g_law_energy;      /* cumulative flow score (NexusCore fuel) */
+static int g_law_last_path_len;    /* last BFS path length */
+static int g_law_last_i_ms;        /* simulated I arrival cost */
+static int g_law_last_o_ms;        /* simulated O exit cost */
+static int g_law_last_plug_ms;     /* peer plug impulse cost */
+static int g_law_last_winner;      /* 1=I→O win, 0=plug win, -1=no race */
+static int g_law_last_in_cell;     /* meta cell index I port */
+static int g_law_last_out_cell;    /* meta cell index O port */
+static int g_law_last_algo_a;      /* algocube A lane */
+static int g_law_last_algo_b;      /* algocube B lane (combine target) */
+static char g_law_status[96];
 #endif
 
 static void state_path(char *buf, size_t n) {
@@ -729,7 +761,16 @@ static void write_live_snap_locked(void) {
         "\"useful_teaches\":%u,\"skipped_teaches\":%u,"
         "\"last_teach_want\":%d,\"last_teach_src\":\"%s\","
         "\"agent_want\":%d,\"agent_note\":\"%s\","
-        "\"agent_service\":%s,\"session_id\":\"%s\",\"session_age_s\":%ld,\"resets\":%u}",
+        "\"agent_service\":%s,\"session_id\":\"%s\",\"session_age_s\":%ld,\"resets\":%u,"
+        "\"law\":{\"name\":\"%s\",\"ver\":\"%s\",\"ticks\":%u,"
+        "\"races\":%u,\"wins\":%u,\"losses\":%u,\"combines\":%u,"
+        "\"paths\":%u,\"path_fail\":%u,\"energy\":%u,"
+        "\"path_len\":%d,\"i_ms\":%d,\"o_ms\":%d,\"plug_ms\":%d,"
+        "\"winner\":%d,\"algo_a\":%d,\"algo_b\":%d,"
+        "\"i_cell\":%d,\"o_cell\":%d,"
+        "\"status\":\"%s\","
+        "\"principle\":\"energy_must_flow\","
+        "\"game\":\"endless_reverse_rubik_io_race\"}}",
         jb,
         g_continuous ? "true" : "false",
         g_self_teach ? "true" : "false",
@@ -741,7 +782,14 @@ static void write_live_snap_locked(void) {
         g_agent_service ? "true" : "false",
         g_session_id[0] ? g_session_id : "",
         g_session_start ? (long)(time(NULL) - g_session_start) : 0L,
-        g_resets);
+        g_resets,
+        LAW_NAME, LAW_VERSION, g_law_ticks,
+        g_law_races, g_law_wins, g_law_losses, g_law_combines,
+        g_law_paths, g_law_path_fail, g_law_energy,
+        g_law_last_path_len, g_law_last_i_ms, g_law_last_o_ms, g_law_last_plug_ms,
+        g_law_last_winner, g_law_last_algo_a, g_law_last_algo_b,
+        g_law_last_in_cell, g_law_last_out_cell,
+        g_law_status[0] ? g_law_status : "init");
       free(jb);
       jb = enriched;
     }
@@ -767,6 +815,199 @@ static char *read_live_snap_if_fresh(int max_age_s) {
   b = ng_read_file(path, &blen);
   if (!b || blen < 8) { free(b); return NULL; }
   return b;
+}
+
+/* BFS on meta cube lattice: open ports = cells with neuron OR high digit.
+ * Keeps meta edge small (CORE_N) — reverse-Rubik: solve without growing volume. */
+static int law_idx(int n, int x, int y, int z) {
+  return (z * n + y) * n + x;
+}
+static void law_xyz(int n, int idx, int *x, int *y, int *z) {
+  *x = idx % n;
+  *y = (idx / n) % n;
+  *z = idx / (n * n);
+}
+static int law_open_cell(const lhlam_cube *c, int idx) {
+  unsigned n, nn;
+  if (!c) return 0;
+  n = c->n ? c->n : LHLAM_CORE_N;
+  nn = n * n * n;
+  if (idx < 0 || (unsigned)idx >= nn) return 0;
+  if (c->neuron[idx]) return 1;
+  if ((c->cells[idx] % 10) >= 5) return 1;
+  return 0;
+}
+
+/* Path length from I-face cell to O-face cell on open ports; -1 if none.
+ * Cost = hops + digit friction (chaos residual of reverse-Rubik search). */
+static int law_pathfind(const lhlam_cube *c, int start, int goal, int *out_cost) {
+  unsigned n, nn, i;
+  int q[LHLAM_MAX_CELLS];
+  int dist[LHLAM_MAX_CELLS];
+  int qh = 0, qt = 0;
+  int dx[6] = {1, -1, 0, 0, 0, 0};
+  int dy[6] = {0, 0, 1, -1, 0, 0};
+  int dz[6] = {0, 0, 0, 0, 1, -1};
+  if (out_cost) *out_cost = -1;
+  if (!c) return -1;
+  n = c->n ? c->n : LHLAM_CORE_N;
+  if (n > LHLAM_MAX_N) n = LHLAM_MAX_N;
+  nn = n * n * n;
+  if (start < 0 || goal < 0 || (unsigned)start >= nn || (unsigned)goal >= nn)
+    return -1;
+  for (i = 0; i < nn; i++) dist[i] = -1;
+  dist[start] = 0;
+  q[qt++] = start;
+  while (qh < qt) {
+    int cur = q[qh++];
+    int x, y, z, d;
+    if (cur == goal) {
+      if (out_cost) *out_cost = dist[cur];
+      return dist[cur];
+    }
+    law_xyz((int)n, cur, &x, &y, &z);
+    for (d = 0; d < 6; d++) {
+      int nx = x + dx[d], ny = y + dy[d], nz = z + dz[d], ni, step;
+      if (nx < 0 || ny < 0 || nz < 0
+          || nx >= (int)n || ny >= (int)n || nz >= (int)n) continue;
+      ni = law_idx((int)n, nx, ny, nz);
+      if (!law_open_cell(c, ni) && ni != goal) continue;
+      if (dist[ni] >= 0) continue;
+      step = 1 + (int)(c->cells[ni] % 3); /* friction */
+      dist[ni] = dist[cur] + step;
+      if (qt < (int)nn) q[qt++] = ni;
+    }
+  }
+  return -1;
+}
+
+/*
+ * First Cube's LAW tick — endless game loop step.
+ * 1) Pick two algocubes (firing lanes or pick + highest sensor).
+ * 2) Map I port (low-z face) and O port (high-z face) on Meta.
+ * 3) Pathfind I→O through open matrix cells (best state travel).
+ * 4) Race: I→O cost vs plug cube impulse cost (peer trying same port).
+ * 5) If I→O wins: combine (feedback + compact) — energy flows, NexusCore +.
+ * Meta cube stays CORE_N (never evolve larger for combine).
+ */
+static void law_tick_locked(const uint8_t *feat, size_t nf) {
+  int n, i_cell, o_cell, path_cost, plug_cost, a, b, i, best_a, best_b;
+  uint8_t race_in[12];
+  size_t rn = 0;
+  if (!g_chain_live || !g_coord) return;
+  g_law_ticks++;
+  n = g_coord->n ? g_coord->n : LHLAM_CORE_N;
+  if (n > LHLAM_CORE_N) {
+    /* Force small meta — prophecy: volume is not wisdom. */
+    n = LHLAM_CORE_N;
+  }
+  /* I face: z=0 mid; O face: z=n-1 mid */
+  i_cell = law_idx(n, n / 2, n / 2, 0);
+  o_cell = law_idx(n, n / 2, n / 2, n - 1);
+  g_law_last_in_cell = i_cell;
+  g_law_last_out_cell = o_cell;
+
+  /* Algocube pair: pick + strongest other fire / sensor */
+  best_a = g_chain_pick >= 0 ? g_chain_pick : 0;
+  best_b = (best_a + 1) % NG_BC_SENSORS;
+  {
+    int sc_b = -1;
+    for (i = 0; i < NG_BC_SENSORS; i++) {
+      int sc = g_lane_fire[i] * 3 + (i < (int)nf ? (int)(feat[i] % 10) : 0);
+      if (i == best_a) continue;
+      if (sc > sc_b) { sc_b = sc; best_b = i; }
+    }
+  }
+  a = best_a; b = best_b;
+  g_law_last_algo_a = a;
+  g_law_last_algo_b = b;
+
+  path_cost = -1;
+  if (law_pathfind(g_coord, i_cell, o_cell, &path_cost) < 0) {
+    g_law_path_fail++;
+    g_law_last_path_len = -1;
+    g_law_last_winner = -1;
+    snprintf(g_law_status, sizeof g_law_status,
+             "path_blocked energy=%u", g_law_energy);
+    /* Still tick meta with race digits so lattice opens over time */
+    race_in[rn++] = (uint8_t)(i_cell % 10);
+    race_in[rn++] = (uint8_t)(o_cell % 10);
+    race_in[rn++] = (uint8_t)a;
+    race_in[rn++] = (uint8_t)b;
+    lhlam_cube_tick(g_coord, race_in, rn);
+    /* Maybe open neurons without growing n */
+    lhlam_cube_maybe_evolve(g_coord);
+    if (g_coord->n > LHLAM_CORE_N) {
+      /* Hard clamp: export/import not available mid-tick — zero excess edge
+       * by re-init seed chain keep (stats only). Prefer compact teach. */
+      g_coord->n = LHLAM_CORE_N;
+    }
+    return;
+  }
+  g_law_paths++;
+  g_law_last_path_len = path_cost;
+
+  /* I→O impulse cost (lower = faster through open ports) */
+  g_law_last_i_ms = path_cost;
+  g_law_last_o_ms = path_cost + (int)(g_coord->cells[o_cell] % 4);
+  /* Plug cube (B) races to claim O: fire strength + digit + conflict penalty */
+  plug_cost = 2 + (g_lane_fire[b] ? 0 : 4)
+    + (b < (int)nf ? (int)(9 - (feat[b] % 10)) : 5)
+    + (g_lane_fire[a] && g_lane_fire[b] ? 2 : 0);
+  g_law_last_plug_ms = plug_cost;
+  g_law_races++;
+
+  /* RACE: I→O must beat plug to O */
+  if (g_law_last_o_ms < plug_cost) {
+    /* WIN — energy flows; combine A+B into meta; NexusCore fuel++ */
+    g_law_wins++;
+    g_law_last_winner = 1;
+    g_law_energy += (uint32_t)(1 + (plug_cost - g_law_last_o_ms));
+    race_in[rn++] = (uint8_t)a;
+    race_in[rn++] = (uint8_t)b;
+    race_in[rn++] = 9; /* energy high */
+    race_in[rn++] = (uint8_t)(path_cost % 10);
+    lhlam_cube_tick(g_coord, race_in, rn);
+    lhlam_cube_feedback(g_coord, race_in, rn, 1, 1);
+    /* Bridge algocubes: exclusive fire teach toward A, silence B conflict */
+    {
+      uint8_t sin[8];
+      size_t sn = 0;
+      sin[sn++] = (uint8_t)(a < (int)nf ? feat[a] % 10 : 0);
+      sin[sn++] = (uint8_t)a;
+      lhlam_cube_feedback(&g_lane[a], sin, sn, 1, 1);
+      sn = 0;
+      sin[sn++] = (uint8_t)(b < (int)nf ? feat[b] % 10 : 0);
+      sin[sn++] = (uint8_t)b;
+      lhlam_cube_feedback(&g_lane[b], sin, sn, 0, g_lane_fire[b] ? 0 : 1);
+    }
+    g_law_combines++;
+    snprintf(g_law_status, sizeof g_law_status,
+             "WIN flow A=%d B=%d path=%d plug=%d E=%u",
+             a, b, path_cost, plug_cost, g_law_energy);
+  } else {
+    /* LOSS — plug claimed O; meta still learns the blocked path */
+    g_law_losses++;
+    g_law_last_winner = 0;
+    race_in[rn++] = (uint8_t)a;
+    race_in[rn++] = (uint8_t)b;
+    race_in[rn++] = 1;
+    race_in[rn++] = (uint8_t)(plug_cost % 10);
+    lhlam_cube_tick(g_coord, race_in, rn);
+    lhlam_cube_feedback(g_coord, race_in, rn, 0, 0);
+    snprintf(g_law_status, sizeof g_law_status,
+             "LOSS plug A=%d B=%d path=%d plug=%d E=%u",
+             a, b, path_cost, plug_cost, g_law_energy);
+  }
+  /* JSON-safe status (no quotes/backslash) */
+  {
+    char *p;
+    for (p = g_law_status; *p; p++) {
+      if (*p == '"' || *p == '\\' || *p == '\n') *p = ' ';
+    }
+  }
+  /* Keep meta small after any evolution attempt */
+  if (g_coord->n > LHLAM_CORE_N) g_coord->n = LHLAM_CORE_N;
 }
 
 /* One chain step: plane digits → each lane fire → coord picks lane.
@@ -842,6 +1083,8 @@ static int chain_tick_locked(uint8_t *feat, size_t nf, int teach_want /* -1 none
     if (ok) g_teaches_ok++; else g_teaches_bad++;
     g_last_teach_want = teach_want;
   }
+  /* Endless Crimson Cube law — I/O race + pathfind + combine */
+  law_tick_locked(feat, nf);
   lhlam_cube_stats(g_coord, g_last_stats, sizeof g_last_stats);
   return pick;
 }
@@ -970,6 +1213,12 @@ static char *chain_live_json_locked(void) {
       "{\"ok\":true,\"live\":true,\"seq\":%u,\"hz\":4,"
       "\"declaration\":\"each sensor = one LHTL cube (IN+OUT); Meta maps all\","
       "\"brain\":\"sensor_cubes+meta\","
+      "\"law\":{\"name\":\"%s\",\"ver\":\"%s\",\"ticks\":%u,"
+      "\"races\":%u,\"wins\":%u,\"losses\":%u,\"combines\":%u,"
+      "\"paths\":%u,\"path_fail\":%u,\"energy\":%u,"
+      "\"path_len\":%d,\"winner\":%d,\"algo_a\":%d,\"algo_b\":%d,"
+      "\"i_ms\":%d,\"o_ms\":%d,\"plug_ms\":%d,"
+      "\"status\":\"%s\",\"principle\":\"energy_must_flow\"},"
       "\"meta\":{\"id\":\"meta\",\"role\":\"meta\",\"name\":\"MetaCube\","
       "\"pick\":%d,\"pick_name\":\"%s\",\"activity\":%.3f,"
       "\"hits\":%u,\"misses\":%u,\"acc\":%.3f,\"gen\":%u,\"n\":%u,"
@@ -978,8 +1227,14 @@ static char *chain_live_json_locked(void) {
       "\"structure\":{\"mode\":\"iso4\",\"cubes\":%s},"
       "\"world\":{\"state\":%d,\"charge\":%d,\"battery\":%d,\"error\":%d,"
       "\"bump\":[%d,%d,%d]},"
-      "\"viz\":{\"layout\":\"radial+iso3d\",\"meta_center\":true,\"colors\":\"activity\"}}",
+      "\"viz\":{\"layout\":\"radial+iso3d\",\"meta_center\":true,\"colors\":\"crimson_activity\"}}",
       (unsigned)g_live_seq,
+      LAW_NAME, LAW_VERSION, g_law_ticks,
+      g_law_races, g_law_wins, g_law_losses, g_law_combines,
+      g_law_paths, g_law_path_fail, g_law_energy,
+      g_law_last_path_len, g_law_last_winner, g_law_last_algo_a, g_law_last_algo_b,
+      g_law_last_i_ms, g_law_last_o_ms, g_law_last_plug_ms,
+      g_law_status[0] ? g_law_status : "init",
       g_chain_pick,
       (g_chain_pick >= 0 && g_chain_pick < NG_BC_SENSORS) ? g_lane_name[g_chain_pick] : "none",
       (double)g_meta_activity,
@@ -1031,12 +1286,68 @@ int ng_bc_auto_adapt(void) { return g_auto_adapt; }
 int ng_bc_direct_io(void) { return g_direct_io; }
 
 /* Hash path contents into digit features for the cube. */
-static size_t sample_plane_digits(uint8_t *out, size_t cap) {
+/* Read first non-empty line from plane file under T2 or ST. */
+static int plane_read_line(const char *name, char *buf, size_t cap) {
   static const char *roots[] = {
-    "/data/misc/titan2",
-    "/data/local/tmp",
-    NULL
+    "/data/misc/titan2", "/data/local/tmp", "/data/adb/titan2", NULL
   };
+  int r;
+  for (r = 0; roots[r]; r++) {
+    char path[768];
+    size_t fl = 0;
+    char *body;
+    snprintf(path, sizeof path, "%s/%s", roots[r], name);
+    body = ng_read_file(path, &fl);
+    if (!body || fl == 0) { free(body); continue; }
+    size_t i = 0, o = 0;
+    while (i < fl && (body[i] == ' ' || body[i] == '\t' || body[i] == '\n')) i++;
+    while (i < fl && body[i] != '\n' && body[i] != '\r' && o + 1 < cap)
+      buf[o++] = body[i++];
+    buf[o] = 0;
+    free(body);
+    if (o > 0) return 1;
+  }
+  return 0;
+}
+
+/* Map Titan Commander plane tokens → digit 0..9 for CubeChain IN. */
+static uint8_t plane_token_digit(const char *name, const char *body) {
+  if (!body || !body[0]) return 0;
+  if (!strcmp(name, "titan2_pad_mode")) {
+    if (!strcmp(body, "off")) return 0;
+    if (!strcmp(body, "trackpad") || !strcmp(body, "1")) return 7;
+    if (!strcmp(body, "mouse") || !strcmp(body, "2")) return 9;
+    return 3;
+  }
+  if (!strcmp(name, "titan2_usb_hid_session")
+      || !strcmp(name, "titan2_usb_hid_on")
+      || !strcmp(name, "titan2_usb_hid_grab")
+      || !strcmp(name, "titan2_subdisplay_on")
+      || !strcmp(name, "titan2_a11y_live")) {
+    if (body[0] == '1' || !strcasecmp(body, "on") || !strcasecmp(body, "true"))
+      return 9;
+    return 0;
+  }
+  if (!strcmp(name, "titan2_sub_mode")) {
+    if (!strcmp(body, "cube")) return 9;
+    if (!strcmp(body, "apps")) return 7;
+    if (!strcmp(body, "face")) return 5;
+    return 0;
+  }
+  /* generic: first digit or hash */
+  if (isdigit((unsigned char)body[0])) return (uint8_t)(body[0] - '0');
+  {
+    unsigned h = 2166136261u;
+    size_t i;
+    for (i = 0; body[i] && i < 64; i++) {
+      h ^= (unsigned char)body[i];
+      h *= 16777619u;
+    }
+    return (uint8_t)(h % 10);
+  }
+}
+
+static size_t sample_plane_digits(uint8_t *out, size_t cap) {
   size_t n = 0;
   memset(out, 0, cap);
   if (!g_direct_io) {
@@ -1049,36 +1360,55 @@ static size_t sample_plane_digits(uint8_t *out, size_t cap) {
     }
     return n;
   }
-  for (int r = 0; roots[r] && n < cap; r++) {
-    DIR *d = opendir(roots[r]);
-    if (!d) continue;
-    struct dirent *ent;
-    while ((ent = readdir(d)) != NULL && n < cap) {
-      if (ent->d_name[0] == '.') continue;
-      /* only titan2_* plane tokens */
-      if (strncmp(ent->d_name, "titan2_", 7) != 0) continue;
-      char path[768];
-      snprintf(path, sizeof path, "%s/%s", roots[r], ent->d_name);
-      size_t fl = 0;
-      char *body = ng_read_file(path, &fl);
-      if (!body) continue;
-      unsigned h = 2166136261u;
-      for (size_t i = 0; i < fl && i < 256; i++) {
-        h ^= (unsigned char)body[i];
-        h *= 16777619u;
-      }
-      free(body);
-      /* name hash too */
-      for (const char *p = ent->d_name; *p; p++) {
-        h ^= (unsigned char)*p;
-        h *= 16777619u;
-      }
-      out[n++] = (uint8_t)(h % 10);
+  /* BlackCube Commander: fixed 8-lane SoT (all cubes share this bus). */
+  {
+    static const char *lanes[8] = {
+      "titan2_pad_mode",           /* 0 pad_off / track / mouse */
+      "titan2_usb_hid_session",    /* 1 HID session */
+      "titan2_usb_hid_grab",       /* 2 exclusive grab */
+      "titan2_subdisplay_on",      /* 3 rear panel power */
+      "titan2_sub_mode",           /* 4 face|apps|cube */
+      "titan2_a11y_live",          /* 5 a11y belt */
+      "titan2_dt2w",               /* 6 DT2W optional */
+      "titan2_subdisplay_bri"      /* 7 rear brightness */
+    };
+    static const char *cmd_names[8] = {
+      "pad_mode", "hid_session", "hid_grab", "sub_on",
+      "sub_mode", "a11y", "dt2w", "sub_bri"
+    };
+    char line[96];
+    int i;
+    for (i = 0; i < 8 && n < cap; i++) {
+      if (plane_read_line(lanes[i], line, sizeof line))
+        out[n++] = plane_token_digit(lanes[i], line);
+      else
+        out[n++] = 0;
+      /* Retitle sensor lanes for Commander viz when direct_io */
+      if (i < NG_BC_SENSORS)
+        snprintf(g_lane_name_buf[i], sizeof g_lane_name_buf[i], "%s", cmd_names[i]);
     }
-    closedir(d);
+    /* publish law energy into virt for kernel cube (all cubes) */
+    {
+      char vpath[768], vbody[256];
+      int vl;
+      snprintf(vpath, sizeof vpath, "/data/local/tmp/cubebrain_viz/virtual.tsv");
+      vl = snprintf(vbody, sizeof vbody,
+        "# Crimson law (nanobot)\n"
+        "virt_law_energy\t%u\n"
+        "virt_law_wins\t%u\n"
+        "virt_law_losses\t%u\n"
+        "virt_law_combines\t%u\n"
+        "virt_law_winner\t%d\n"
+        "virt_nanobot_up\t9\n",
+        g_law_energy, g_law_wins, g_law_losses, g_law_combines, g_law_last_winner);
+      if (vl > 0) {
+        mkdir("/data/local/tmp/cubebrain_viz", 0777);
+        ng_write_file(vpath, vbody, (size_t)vl);
+      }
+    }
+    g_plane_samples++;
+    return n;
   }
-  g_plane_samples++;
-  return n;
 }
 
 /* ---- train control: base64 + fork-safe cmd files (reset/import) ---- */
@@ -1428,6 +1758,11 @@ char *ng_bc_handle_post(const char *json_body) {
     free(action);
     return ng_bc_live_json();
   }
+  if (!strcmp(action, "law") || !strcmp(action, "crimson") || !strcmp(action, "first_cube")) {
+    /* First Cube's LAW snapshot (I/O race + pathfind + NexusCore energy). */
+    free(action);
+    return ng_bc_live_json();
+  }
   if (!strcmp(action, "chain_tick") || !strcmp(action, "sense")) {
     /* Observation only — continuous parent does training; avoid double-init in fork. */
     free(action);
@@ -1676,6 +2011,166 @@ char *ng_bc_handle_post(const char *json_body) {
       free(b64);
       free(action);
       return jb ? jb : strdup("{\"ok\":false}");
+    }
+#else
+    free(action);
+    return strdup("{\"ok\":false}");
+#endif
+  }
+
+  /*
+   * SMX1 — State Matrix eXchange binary (cubes talk binary when sharing matrices).
+   * Wire: magic SMX1 | ver | n | flags | pad | seq u32 | pick i8+pad3 |
+   *        cells[n³] | [neuron n³] | [law energy/wins/losses/combines u32×4]
+   * flags: bit0 neuron, bit1 law trailer
+   * action=matrix_bin | exchange_bin | smx1  (export)
+   * action=matrix_bin_import | smx1_import  data=base64
+   */
+  if (!strcmp(action, "matrix_bin") || !strcmp(action, "exchange_bin")
+      || !strcmp(action, "smx1")) {
+#if NANOBOT_HAS_BRAINCUBE
+    {
+      char *which = ng_json_get_string(json_body, "cube"); /* meta|lane name|index */
+      const lhlam_cube *src = NULL;
+      uint8_t *blob = NULL;
+      size_t cap, o = 0;
+      unsigned n, nn, i;
+      uint32_t seq32;
+      int8_t pick8;
+      uint8_t flags = 0;
+      char *b64, *jb = NULL;
+      pthread_mutex_lock(&g_mu);
+      if (!g_chain_live) chain_init_locked();
+      src = g_coord;
+      if (which && which[0]) {
+        int li = lane_from_token(which);
+        if (li >= 0 && li < NG_BC_SENSORS && g_lane)
+          src = &g_lane[li];
+        else if (!strcmp(which, "meta") || !strcmp(which, "coord"))
+          src = g_coord;
+      }
+      free(which);
+      if (!src || !g_chain_live) {
+        pthread_mutex_unlock(&g_mu);
+        free(action);
+        return strdup("{\"ok\":false,\"error\":\"no cube lattice\"}");
+      }
+      n = src->n ? src->n : LHLAM_CORE_N;
+      if (n > LHLAM_MAX_N) n = LHLAM_MAX_N;
+      nn = n * n * n;
+      flags = 0x01; /* always include neuron mask for exchange */
+      if (src == g_coord) flags |= 0x02; /* law trailer on meta */
+      cap = 4 + 4 + 4 + 4 + nn + nn + 16;
+      blob = (uint8_t *)malloc(cap);
+      if (!blob) {
+        pthread_mutex_unlock(&g_mu);
+        free(action);
+        return strdup("{\"ok\":false,\"error\":\"OOM\"}");
+      }
+      blob[o++] = 'S'; blob[o++] = 'M'; blob[o++] = 'X'; blob[o++] = '1';
+      blob[o++] = 1; /* ver */
+      blob[o++] = (uint8_t)n;
+      blob[o++] = flags;
+      blob[o++] = 0;
+      seq32 = (uint32_t)g_live_seq;
+      memcpy(blob + o, &seq32, 4); o += 4;
+      pick8 = (int8_t)g_chain_pick;
+      blob[o++] = (uint8_t)pick8;
+      blob[o++] = 0; blob[o++] = 0; blob[o++] = 0;
+      for (i = 0; i < nn; i++) blob[o++] = (uint8_t)(src->cells[i] % 10);
+      for (i = 0; i < nn; i++) blob[o++] = src->neuron[i] ? 1 : 0;
+      if (flags & 0x02) {
+        uint32_t le = g_law_energy, lw = g_law_wins, ll = g_law_losses, lc = g_law_combines;
+        memcpy(blob + o, &le, 4); o += 4;
+        memcpy(blob + o, &lw, 4); o += 4;
+        memcpy(blob + o, &ll, 4); o += 4;
+        memcpy(blob + o, &lc, 4); o += 4;
+      }
+      pthread_mutex_unlock(&g_mu);
+      b64 = b64_encode(blob, o);
+      free(blob);
+      if (!b64) { free(action); return strdup("{\"ok\":false,\"error\":\"b64 OOM\"}"); }
+      asprintf(&jb,
+        "{\"ok\":true,\"format\":\"SMX1\",\"wire\":\"binary\","
+        "\"note\":\"cubes exchange State Matrix as binary SMX1\","
+        "\"bytes\":%zu,\"n\":%u,\"flags\":%u,\"data\":\"%s\"}",
+        o, n, (unsigned)flags, b64);
+      free(b64);
+      free(action);
+      return jb ? jb : strdup("{\"ok\":false}");
+    }
+#else
+    free(action);
+    return strdup("{\"ok\":false}");
+#endif
+  }
+
+  if (!strcmp(action, "matrix_bin_import") || !strcmp(action, "smx1_import")
+      || !strcmp(action, "exchange_bin_import")) {
+#if NANOBOT_HAS_BRAINCUBE
+    {
+      char *data = ng_json_get_string(json_body, "data");
+      char *which = ng_json_get_string(json_body, "cube");
+      size_t raw_n = 0;
+      uint8_t *raw;
+      unsigned n, nn, i, o = 0;
+      uint8_t flags, ver;
+      lhlam_cube *dst = NULL;
+      if (!data || !data[0]) {
+        free(data); free(which); free(action);
+        return strdup("{\"ok\":false,\"error\":\"need data=base64 SMX1\"}");
+      }
+      raw = b64_decode(data, &raw_n);
+      free(data);
+      if (!raw || raw_n < 16 || raw[0] != 'S' || raw[1] != 'M' || raw[2] != 'X' || raw[3] != '1') {
+        free(raw); free(which); free(action);
+        return strdup("{\"ok\":false,\"error\":\"not SMX1 binary\"}");
+      }
+      ver = raw[4]; n = raw[5]; flags = raw[6];
+      o = 12; /* skip magic+hdr+seq start: 4+4 = 8, then seq 4 → 12, pick 4 → 16 */
+      o = 16;
+      if (ver != 1 || n < 2 || n > LHLAM_MAX_N) {
+        free(raw); free(which); free(action);
+        return strdup("{\"ok\":false,\"error\":\"bad SMX1 header\"}");
+      }
+      nn = n * n * n;
+      if (raw_n < 16 + nn) {
+        free(raw); free(which); free(action);
+        return strdup("{\"ok\":false,\"error\":\"SMX1 truncated\"}");
+      }
+      pthread_mutex_lock(&g_mu);
+      if (!g_chain_live) chain_init_locked();
+      dst = g_coord;
+      if (which && which[0]) {
+        int li = lane_from_token(which);
+        if (li >= 0 && li < NG_BC_SENSORS && g_lane) dst = &g_lane[li];
+      }
+      free(which);
+      if (!dst) {
+        pthread_mutex_unlock(&g_mu);
+        free(raw); free(action);
+        return strdup("{\"ok\":false,\"error\":\"no dest cube\"}");
+      }
+      dst->n = (uint8_t)n;
+      for (i = 0; i < nn; i++) dst->cells[i] = raw[o + i] % 10;
+      o += nn;
+      if ((flags & 0x01) && raw_n >= o + nn) {
+        for (i = 0; i < nn; i++) dst->neuron[i] = raw[o + i] ? 1 : 0;
+        o += nn;
+      }
+      if ((flags & 0x02) && dst == g_coord && raw_n >= o + 16) {
+        memcpy(&g_law_energy, raw + o, 4); o += 4;
+        memcpy(&g_law_wins, raw + o, 4); o += 4;
+        memcpy(&g_law_losses, raw + o, 4); o += 4;
+        memcpy(&g_law_combines, raw + o, 4);
+      }
+      chain_persist_locked();
+      write_live_snap_locked();
+      pthread_mutex_unlock(&g_mu);
+      free(raw);
+      free(action);
+      return strdup("{\"ok\":true,\"imported\":true,\"format\":\"SMX1\","
+                    "\"note\":\"State Matrix applied from binary exchange\"}");
     }
 #else
     free(action);
@@ -2046,7 +2541,9 @@ char *ng_bc_handle_post(const char *json_body) {
     "\"continuous\",\"self_teach\",\"supervise\",\"agent_teach\",\"teach\","
     "\"session_start\",\"session_stop\",\"train_start\",\"train_stop\","
     "\"explore\",\"field_trials\",\"trials\",\"results\","
-    "\"export\",\"import\",\"reset\",\"brain_reset\",\"agent_service\",\"control\","
+    "\"export\",\"import\",\"matrix_bin\",\"exchange_bin\",\"smx1\","
+    "\"matrix_bin_import\",\"smx1_import\","
+    "\"reset\",\"brain_reset\",\"agent_service\",\"control\","
     "\"auto_adapt\",\"enable\",\"disable\",\"direct_io\",\"dry_run\",\"tick\","
     "\"decide\",\"sample\",\"feedback\",\"selftest\",\"chain_status\",\"chain_tick\"]}");
 }

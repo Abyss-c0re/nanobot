@@ -358,6 +358,10 @@ int main(int argc, char **argv) {
     if (h && h[0]) {
       snprintf(home_buf, sizeof home_buf, "%s/.nanobot", h);
       home = home_buf;
+    } else if (access("/data/local/tmp/nanobot_home", X_OK) == 0 ||
+               access("/data/local/tmp/nanobot_home", R_OK) == 0) {
+      /* Titan product: empty HOME on Android shell/app → lab shared home. */
+      home = "/data/local/tmp/nanobot_home";
     } else {
       home = "/tmp/nanobot";
     }
@@ -460,6 +464,28 @@ int main(int argc, char **argv) {
     if (port < 0) port = NG_DEFAULT_PORT;
   }
 
+  /*
+   * Titan 1.8.2 residual: app-private --home /data/user/0/…/nanobot_home with
+   * no sealed session while /data/local/tmp/nanobot_home still holds Grok.
+   * Redirect so peer/CLI never report signed_in=false over a live shared seal.
+   */
+  {
+    static const char *shared_home = "/data/local/tmp/nanobot_home";
+    char sess_cur[700], sess_shared[700], tok_shared[700];
+    int cur_app =
+      (home && (strstr(home, "/data/user/") || strstr(home, "/data/data/")));
+    snprintf(sess_cur, sizeof sess_cur, "%s/session", home ? home : "");
+    snprintf(sess_shared, sizeof sess_shared, "%s/session", shared_home);
+    snprintf(tok_shared, sizeof tok_shared, "%s/peer_token", shared_home);
+    if (cur_app && access(sess_cur, R_OK) != 0 &&
+        access(sess_shared, R_OK) == 0 && access(tok_shared, R_OK) == 0) {
+      fprintf(stderr,
+              "  auth: redirect workdir %s → %s (shared Grok session SoT)\n",
+              home, shared_home);
+      home = shared_home;
+    }
+  }
+
   ng_set_workdir(home);
   mkdir(home, 0755);
   ng_shell_ensure_policy_files();
@@ -550,14 +576,18 @@ int main(int argc, char **argv) {
   ng_session session;
   ng_session_init(&session);
   ng_session_load(&session);
-  /* If no sealed session yet, grab Grok Build CLI token when installed. */
+  /* Import Grok Build CLI when sealed session missing/expired, or --import-grok-cli. */
 #if NANOBOT_ENABLE_AUTH
-  if (!force_offline && !ng_session_valid(&session)) {
-    int imp = ng_session_try_import_grok_cli(&session);
-    if (imp == 1)
-      fprintf(stderr, "  auth: imported Grok Build CLI session from ~/.grok/auth.json\n");
-    else if (imp == 0 && !ng_session_valid(&session))
-      fprintf(stderr, "  auth: no Grok Build CLI token — use --login or browser /activate\n");
+  {
+    const char *fe = getenv("NANOBOT_IMPORT_GROK_CLI");
+    int force_import = (fe && fe[0] && fe[0] != '0');
+    if (!force_offline && (force_import || !ng_session_valid(&session))) {
+      int imp = ng_session_try_import_grok_cli(&session);
+      if (imp == 1)
+        fprintf(stderr, "  auth: imported Grok Build CLI session from ~/.grok/auth.json\n");
+      else if (imp == 0 && !ng_session_valid(&session))
+        fprintf(stderr, "  auth: no Grok Build CLI token — use --login or browser /activate\n");
+    }
   }
 #endif
 

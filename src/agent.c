@@ -608,6 +608,135 @@ static char *extract_command_arg(const char *args_json) {
   return strdup(args_json ? args_json : "");
 }
 
+/*
+ * Cosplay tool_call: model dumps XML / Grok-Build markup into *content*
+ * instead of OpenAI tool_calls JSON. That path never executes — we detect
+ * and promote to a real shell tool when possible.
+ *
+ * Examples:
+ *   <tool_name>run_terminal_command</tool_name>
+ *   <parameter_name>command</parameter_name>
+ *   <parameter_value>reboot</parameter_value>
+ *   invoke tool run_terminal_command with command is reboot
+ */
+static int content_looks_like_tool_cosplay(const char *s) {
+  if (!s || !s[0]) return 0;
+  if (strstr(s, "<tool_call") || strstr(s, "</tool_call>") ||
+      strstr(s, "<tool_name>") || strstr(s, "tool_name>") ||
+      strstr(s, "run_terminal_command") || strstr(s, "run_terminal_cmd") ||
+      strstr(s, "parameter_value") || strstr(s, "parameter_name"))
+    return 1;
+  return 0;
+}
+
+/* Extract between <tag>...</tag> (first match). Caller frees. */
+static char *xml_tag_text(const char *s, const char *tag) {
+  if (!s || !tag) return NULL;
+  char open[96], close[96];
+  snprintf(open, sizeof open, "<%s>", tag);
+  snprintf(close, sizeof close, "</%s>", tag);
+  const char *a = strstr(s, open);
+  if (!a) return NULL;
+  a += strlen(open);
+  const char *b = strstr(a, close);
+  if (!b || b <= a) return NULL;
+  size_t n = (size_t)(b - a);
+  char *out = malloc(n + 1);
+  if (!out) return NULL;
+  memcpy(out, a, n);
+  out[n] = 0;
+  /* trim */
+  while (n && (out[n - 1] == ' ' || out[n - 1] == '\n' || out[n - 1] == '\r' ||
+               out[n - 1] == '\t'))
+    out[--n] = 0;
+  char *p = out;
+  while (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t') p++;
+  if (p != out) memmove(out, p, strlen(p) + 1);
+  return out;
+}
+
+/* Returns 1 if cosplay tool found; *name_out / *cmd_out malloc'd. */
+static int parse_content_tool_cosplay(const char *s, char **name_out, char **cmd_out) {
+  if (name_out) *name_out = NULL;
+  if (cmd_out) *cmd_out = NULL;
+  if (!content_looks_like_tool_cosplay(s)) return 0;
+  char *name = xml_tag_text(s, "tool_name");
+  if (!name) {
+    if (strstr(s, "run_terminal_command") || strstr(s, "run_terminal_cmd"))
+      name = strdup("run_terminal_command");
+    else if (strstr(s, "\"shell\"") || strstr(s, " tool shell"))
+      name = strdup("shell");
+  }
+  char *cmd = xml_tag_text(s, "parameter_value");
+  if (!cmd) {
+    /* parameter_name=command then value on next tag already tried;
+     * also: with command is X / command="X" */
+    const char *p = strstr(s, "command is ");
+    if (p) {
+      p += 11;
+      while (*p == ' ' || *p == '`' || *p == '"' || *p == '\'') p++;
+      const char *e = p;
+      while (*e && *e != '\n' && *e != '`' && *e != '"' && *e != '\'' &&
+             *e != '<' && *e != ']')
+        e++;
+      if (e > p) {
+        cmd = malloc((size_t)(e - p) + 1);
+        if (cmd) {
+          memcpy(cmd, p, (size_t)(e - p));
+          cmd[e - p] = 0;
+        }
+      }
+    }
+  }
+  if (!cmd) {
+    const char *p = strstr(s, "command\":\"");
+    if (p) {
+      p += 10;
+      const char *e = strchr(p, '"');
+      if (e && e > p) {
+        cmd = malloc((size_t)(e - p) + 1);
+        if (cmd) {
+          memcpy(cmd, p, (size_t)(e - p));
+          cmd[e - p] = 0;
+        }
+      }
+    }
+  }
+  if (!name || !cmd || !cmd[0]) {
+    free(name);
+    free(cmd);
+    return 0;
+  }
+  if (name_out) *name_out = name;
+  else free(name);
+  if (cmd_out) *cmd_out = cmd;
+  else free(cmd);
+  return 1;
+}
+
+/* Strip cosplay markup for user-visible text (never show raw tool XML). */
+static char *strip_tool_cosplay_markup(const char *s) {
+  if (!s) return strdup("");
+  if (!content_looks_like_tool_cosplay(s)) return strdup(s);
+  /* Drop from first tool marker to end of block; keep any leading prose. */
+  const char *cut = strstr(s, "<tool_call");
+  if (!cut) cut = strstr(s, "<tool_name>");
+  if (!cut) cut = strstr(s, "run_terminal_command");
+  if (!cut) cut = strstr(s, "run_terminal_cmd");
+  if (!cut) return strdup("(model emitted tool cosplay — stripped; tool was not called)");
+  size_t n = (size_t)(cut - s);
+  while (n && (s[n - 1] == ' ' || s[n - 1] == '\n' || s[n - 1] == '\r')) n--;
+  char *out = malloc(n + 1);
+  if (!out) return strdup("");
+  memcpy(out, s, n);
+  out[n] = 0;
+  if (!out[0]) {
+    free(out);
+    return strdup("(tool cosplay stripped — was not a real tool_call)");
+  }
+  return out;
+}
+
 /* Safe messages array builder (avoids broken hist embedding). */
 static int msg_append(char **msgs, const char *role, const char *content) {
   char *esc = ng_json_escape(content ? content : "");
@@ -1259,6 +1388,95 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
     final = ng_json_message_content(resp);
     if (final && final[0]) {
+      /* Cosplay tool_call in *content* (not tool_calls JSON) — never leave
+       * unexecuted markup as the user reply. Promote to real shell tool. */
+      char *cos_name = NULL, *cos_cmd = NULL;
+      if (use_tools && tools_now &&
+          parse_content_tool_cosplay(final, &cos_name, &cos_cmd)) {
+        ng_log("agent: COSPLAY tool in content (not API tool_calls) name=%s cmd=%.200s",
+               cos_name, cos_cmd);
+        if (stream_final && on_delta) {
+          char *ev = NULL;
+          char *en = ng_json_escape(cos_name);
+          char *ea = ng_json_escape(cos_cmd);
+          if (asprintf(&ev,
+                "{\"type\":\"tool\",\"phase\":\"start\",\"id\":\"cosplay\","
+                "\"name\":\"%s\",\"args\":\"{\\\"command\\\":\\\"%s\\\"}\","
+                "\"cosplay\":true}",
+                en ? en : "shell", ea ? ea : "") > 0 && ev)
+            stream_evt(on_delta, userdata, ev);
+          free(en); free(ea); free(ev);
+        }
+        ng_cmd_result cr;
+        memset(&cr, 0, sizeof cr);
+        if (strcmp(cos_name, "run_terminal_command") == 0 ||
+            strcmp(cos_name, "run_terminal_cmd") == 0 ||
+            strcmp(cos_name, "shell") == 0 ||
+            strcmp(cos_name, "bash") == 0) {
+          cr = ng_run_command(cos_cmd, c->timeout_sec);
+          ng_log("agent: cosplay exec exit=%d out=%.200s",
+                 cr.exit_code, cr.output ? cr.output : "");
+        } else {
+          asprintf(&cr.output, "unknown cosplay tool %s (not executed)", cos_name);
+          cr.exit_code = 1;
+        }
+        free(last_tool_out);
+        asprintf(&last_tool_out,
+                 "exit=%d\n%s\n(note: model wrote tool_call in text; "
+                 "agent recovered and ran via shell policy)",
+                 cr.exit_code, cr.output ? cr.output : "");
+        if (stream_final && on_delta) {
+          char out_cap[900];
+          snprintf(out_cap, sizeof out_cap, "%.800s", last_tool_out ? last_tool_out : "");
+          char *eo = ng_json_escape(out_cap);
+          char *en = ng_json_escape(cos_name);
+          char *ev = NULL;
+          if (asprintf(&ev,
+                "{\"type\":\"tool\",\"phase\":\"done\",\"id\":\"cosplay\","
+                "\"name\":\"%s\",\"exit\":%d,\"output\":\"%s\",\"cosplay\":true}",
+                en ? en : "shell", cr.exit_code, eo ? eo : "") > 0 && ev)
+            stream_evt(on_delta, userdata, ev);
+          free(en); free(eo); free(ev);
+        }
+        /* Feed tool result back so next turn is plain text for the user. */
+        size_t ml = strlen(messages);
+        if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
+        char *esc_out = ng_json_escape(last_tool_out);
+        char *esc_cmd = ng_json_escape(cos_cmd);
+        char *esc_name = ng_json_escape(cos_name);
+        char *new_messages = NULL;
+        asprintf(&new_messages,
+          "%s,{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"cosplay1\","
+          "\"type\":\"function\",\"function\":{\"name\":\"%s\","
+          "\"arguments\":\"{\\\"command\\\":\\\"%s\\\"}\"}}]},"
+          "{\"role\":\"tool\",\"tool_call_id\":\"cosplay1\",\"content\":\"%s\"},"
+          "{\"role\":\"user\",\"content\":\"Tool result above was recovered from "
+          "illegal text tool_call cosplay. Reply to the user in plain text only. "
+          "Never emit tool_call XML or run_terminal_command markup.\"}]",
+          messages, esc_name ? esc_name : "shell", esc_cmd ? esc_cmd : "",
+          esc_out ? esc_out : "");
+        free(messages);
+        messages = new_messages;
+        free(esc_out); free(esc_cmd); free(esc_name);
+        ng_cmd_result_free(&cr);
+        free(cos_name); free(cos_cmd);
+        free(final); final = NULL;
+        free(resp);
+        continue;
+      }
+      free(cos_name); free(cos_cmd);
+      /* Residual cosplay we could not execute — never show raw markup. */
+      if (content_looks_like_tool_cosplay(final)) {
+        char *clean = strip_tool_cosplay_markup(final);
+        free(final);
+        char *honest = NULL;
+        asprintf(&honest,
+          "%s\n\n(Tool was NOT called — model emitted tool markup as text. "
+          "Use @! <cmd> for real shell, or retry.)",
+          (clean && clean[0]) ? clean : "(empty)");
+        free(clean);
+        final = honest;
+      }
       /* If a multi-step task is still open, do not stop — remind and continue. */
       if (use_tools && ng_task_is_open() && turn < hard_max - 1) {
         ng_log("agent: model tried to finish but task still open — continue");

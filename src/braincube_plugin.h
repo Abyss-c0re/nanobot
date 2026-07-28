@@ -27,6 +27,6 @@ int ng_bc_direct_io(void);
 int ng_bc_available(void);
 
 /* Plugin identity (for VCS / about). */
-#define NG_BC_PLUGIN_VERSION "0.2.0"
+#define NG_BC_PLUGIN_VERSION "0.3.0-crimson-law"
 
 #endif

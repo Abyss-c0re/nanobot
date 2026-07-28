@@ -399,6 +399,79 @@ static char *default_grok_cli_auth_path(char *buf, size_t n) {
   return buf;
 }
 
+/* Defined later — used by session_refresh_token_once. */
+static char *curl_form_post(const char *url, const char *form, const char **extra_headers);
+static int apply_token_response(ng_session *s, const char *body);
+
+/* Percent-encode for application/x-www-form-urlencoded (refresh tokens). */
+static char *url_encode_form(const char *s) {
+  static const char *hex = "0123456789ABCDEF";
+  size_t n = 0, i;
+  char *o;
+  if (!s) return NULL;
+  for (i = 0; s[i]; i++) {
+    unsigned char c = (unsigned char)s[i];
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
+      n += 1;
+    else
+      n += 3;
+  }
+  o = malloc(n + 1);
+  if (!o) return NULL;
+  n = 0;
+  for (i = 0; s[i]; i++) {
+    unsigned char c = (unsigned char)s[i];
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+      o[n++] = (char)c;
+    } else {
+      o[n++] = '%';
+      o[n++] = hex[c >> 4];
+      o[n++] = hex[c & 15];
+    }
+  }
+  o[n] = 0;
+  return o;
+}
+
+/* Single OAuth refresh attempt. Does not re-import (avoids recursion). */
+static int session_refresh_token_once(ng_session *s) {
+  char form[8192];
+  char *rt_enc;
+  char url[256];
+  char *body;
+  int rc;
+
+  if (!s || !s->refresh_token || !s->refresh_token[0]) {
+    if (s && s->access_token && s->access_token[0] && !s->expires_at) return 0;
+    return -1;
+  }
+  rt_enc = url_encode_form(s->refresh_token);
+  if (!rt_enc) return -1;
+  snprintf(form, sizeof form,
+           "grant_type=refresh_token&refresh_token=%s&client_id=%s",
+           rt_enc, NG_AUTH_CLIENT_ID);
+  free(rt_enc);
+  snprintf(url, sizeof url, "%s/oauth2/token", NG_AUTH_ISSUER);
+  ng_log("auth: refreshing access token (expires_at=%ld now=%ld)",
+         (long)s->expires_at, (long)time(NULL));
+  body = curl_form_post(url, form, NULL);
+  if (!body || !strstr(body, "access_token")) {
+    free(body);
+    ng_log("auth: refresh failed — keep sealed session on disk; will try CLI re-import");
+    return -1;
+  }
+  rc = apply_token_response(s, body);
+  free(body);
+  return rc;
+}
+
+static int import_force_env(void) {
+  const char *fe = getenv("NANOBOT_IMPORT_GROK_CLI");
+  return (fe && fe[0] && fe[0] != '0');
+}
+
 int ng_session_try_import_grok_cli(ng_session *s) {
   char path[700];
   size_t len = 0;
@@ -408,6 +481,7 @@ int ng_session_try_import_grok_cli(ng_session *s) {
   char *exs = NULL;
   char *email = NULL;
   time_t exp = 0;
+  int force = import_force_env();
 
   if (!s) return -1;
   default_grok_cli_auth_path(path, sizeof path);
@@ -421,7 +495,8 @@ int ng_session_try_import_grok_cli(ng_session *s) {
     ng_log("auth: Grok Build CLI auth empty (%s)", path);
     return 0;
   }
-  /* Grok Build stores access JWT under "key"; refresh under "refresh_token". */
+  /* Grok Build stores access JWT under "key"; refresh under "refresh_token".
+   * Nested maps (issuer::client_id) still contain these keys — string scan works. */
   key = ng_json_get_string(raw, "key");
   if (!key || !key[0]) {
     free(key);
@@ -448,6 +523,21 @@ int ng_session_try_import_grok_cli(ng_session *s) {
     return 0;
   }
 
+  /*
+   * Stability: do not clobber a still-valid sealed session with an older host
+   * access token. Shared OIDC refresh tokens rotate; blind re-import is a common
+   * cause of "auth is unstable" (host JWT ~30m, stale RT overwrites good seal).
+   * Force with --import-grok-cli / NANOBOT_IMPORT_GROK_CLI=1.
+   */
+  if (!force && ng_session_valid(s) && s->expires_at &&
+      (!exp || exp <= s->expires_at)) {
+    ng_log("auth: skip CLI import — sealed session still valid "
+           "(sealed_exp=%ld host_exp=%ld)",
+           (long)s->expires_at, (long)exp);
+    free(key); free(rt); free(email);
+    return 1;
+  }
+
   free(s->access_token);
   free(s->refresh_token);
   free(s->email);
@@ -466,9 +556,9 @@ int ng_session_try_import_grok_cli(ng_session *s) {
   }
   ng_log("auth: imported Grok Build CLI session (expires_at=%ld email=%s)",
          (long)s->expires_at, s->email ? s->email : "?");
-  /* If access near expiry, try refresh once. */
+  /* If access near expiry, try refresh once (no re-import recursion). */
   if (!ng_session_valid(s) && s->refresh_token) {
-    if (ng_session_ensure(s) != 0)
+    if (session_refresh_token_once(s) != 0)
       ng_log("auth: imported refresh failed — may need: grok auth / nanobot --login");
   }
   return 1;
@@ -651,6 +741,55 @@ int ng_session_start_device_login(ng_session *s) {
   return 0;
 }
 
+/* Write flat tokens for fleet re-import after OIDC refresh_token rotation.
+ * Never overwrite nested Grok Build ~/.grok/auth.json (issuer::client map). */
+static void write_back_flat_auth(const ng_session *s) {
+  char path[700];
+  char iso[64];
+  char buf[16384];
+  int n;
+  time_t exp;
+  struct tm tm;
+  const char *env;
+  size_t elen = 0;
+  char *existing = NULL;
+
+  if (!s || !s->access_token || !s->access_token[0]) return;
+  env = getenv("NANOBOT_GROK_AUTH_JSON");
+  /* Prefer explicit flat path; else NANOBOT_HOME/grok_auth.json (safe for Titan). */
+  if (env && env[0]) {
+    existing = ng_read_file(env, &elen);
+    if (existing && strstr(existing, "https://auth.x.ai::")) {
+      /* Nested Grok Build file — do not flatten in place. */
+      free(existing);
+      snprintf(path, sizeof path, "%s/grok_auth.json", ng_workdir());
+    } else {
+      free(existing);
+      snprintf(path, sizeof path, "%s", env);
+    }
+  } else {
+    snprintf(path, sizeof path, "%s/grok_auth.json", ng_workdir());
+  }
+  exp = s->expires_at ? s->expires_at : (time(NULL) + 3600);
+  if (!gmtime_r(&exp, &tm)) return;
+  strftime(iso, sizeof iso, "%Y-%m-%dT%H:%M:%SZ", &tm);
+  n = snprintf(buf, sizeof buf,
+               "{\n  \"key\": \"%s\",\n  \"refresh_token\": \"%s\",\n"
+               "  \"expires_at\": \"%s\",\n  \"email\": \"%s\"\n}\n",
+               s->access_token,
+               s->refresh_token ? s->refresh_token : "",
+               iso,
+               s->email ? s->email : "");
+  if (n <= 0 || (size_t)n >= sizeof buf) {
+    ng_log("auth: write-back flat auth skipped (token too large for buffer)");
+    return;
+  }
+  if (ng_write_file(path, buf, (size_t)n) == 0)
+    ng_log("auth: wrote rotated tokens to %s (fleet re-import path)", path);
+  else
+    ng_log("auth: warning — could not write-back flat auth to %s", path);
+}
+
 static int apply_token_response(ng_session *s, const char *body) {
   char *at = ng_json_get_string(body, "access_token");
   if (!at) return -1;
@@ -673,6 +812,9 @@ static int apply_token_response(ng_session *s, const char *body) {
   free(s->verification_uri_complete); s->verification_uri_complete = NULL;
   ng_session_clear_pending(); /* wipe device_code secret */
   ng_session_save(s);         /* access/refresh AEAD-sealed under peer_token KDF */
+  /* If OIDC rotated refresh_token, host ~/.grok/auth.json goes stale unless we
+   * export flat tokens for the next fleet import. */
+  write_back_flat_auth(s);
   ng_log("auth: browser session encrypted at rest (expires_at=%ld)", (long)s->expires_at);
   return 0;
 }
@@ -752,31 +894,30 @@ int ng_session_poll_login(ng_session *s) {
 
 int ng_session_ensure(ng_session *s) {
   if (ng_session_valid(s)) return 0;
-  /* Soft-expired access token: try refresh (normal every ~hours, not "lost login"). */
-  if (!s->refresh_token || !s->refresh_token[0]) {
-    if (s->access_token && s->access_token[0] && !s->expires_at) return 0; /* unknown expiry */
-    ng_log("auth: session not valid and no refresh_token (need Connect once)");
-    return -1;
+  /* Soft-expired access: refresh (JWT often ~30m; not "lost login"). */
+  if (s->refresh_token && s->refresh_token[0]) {
+    if (session_refresh_token_once(s) == 0) return 0;
+  } else if (s->access_token && s->access_token[0] && !s->expires_at) {
+    return 0; /* unknown expiry */
+  } else if (!s->refresh_token || !s->refresh_token[0]) {
+    ng_log("auth: session not valid and no refresh_token — try CLI import");
   }
 
-  char form[4096];
-  /* refresh_token may need url-encoding of special chars — assume token is url-safe */
-  snprintf(form, sizeof form,
-    "grant_type=refresh_token&refresh_token=%s&client_id=%s",
-    s->refresh_token, NG_AUTH_CLIENT_ID);
-  char url[256];
-  snprintf(url, sizeof url, "%s/oauth2/token", NG_AUTH_ISSUER);
-  ng_log("auth: refreshing access token (expires_at=%ld now=%ld)",
-         (long)s->expires_at, (long)time(NULL));
-  char *body = curl_form_post(url, form, NULL);
-  if (!body || !strstr(body, "access_token")) {
-    free(body);
-    ng_log("auth: refresh failed — keep sealed session on disk; user may retry or Connect");
-    return -1;
+  /*
+   * Stability path: sealed RT may be dead after host rotated the same OIDC
+   * refresh token. Re-import Grok Build CLI once, then refresh again.
+   */
+  {
+    int imp = ng_session_try_import_grok_cli(s);
+    if (imp == 1) {
+      if (ng_session_valid(s)) return 0;
+      if (s->refresh_token && s->refresh_token[0] &&
+          session_refresh_token_once(s) == 0)
+        return 0;
+    }
   }
-  int rc = apply_token_response(s, body);
-  free(body);
-  return rc;
+  ng_log("auth: ensure failed — need --import-grok-cli, --login, or browser /activate");
+  return -1;
 }
 
 int ng_session_login_blocking(ng_session *s) {
