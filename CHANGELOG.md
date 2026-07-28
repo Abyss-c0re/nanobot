@@ -1,10 +1,16 @@
-## 0.5.1 — light subagents + LLM serial
+## 0.5.1 — 2026-07-28
 
+### Auth / home SoT
+- **Shared-home continuity:** if `--home` / `NANOBOT_HOME` points at an empty app-private tree while a sealed `session` + `peer_token` already exist under `/data/local/tmp/nanobot_home`, redirect workdir to that shared seal (stops false `signed_in=false` over a live OAuth session).
+- **Empty HOME default:** when `NANOBOT_HOME` and `HOME` are unset/empty and the shared lab home is present, default there instead of `/tmp/nanobot`.
+- Access soft-expiry still refreshes via OAuth `refresh_token` (`ng_session_ensure`); browser device-code remains the product login path.
+
+### Subagents + sched (carry-forward)
 - Tiny libs: provider policy, LLM flock sched, subagent slots (max 8, share session)
 - Tools + peer `/api/subagents`; settings `SUBAGENTS*` / `LLM_SERIAL` (local serial default on, Grok off)
 - Docs: docs/SUBAGENTS.md
 
-## 0.5.0 (in progress — modular CMake + hub)
+## 0.5.0 — modular CMake + hub
 - **Docker tiny by default**: Alpine + static `nanobot`/`shell_server` (~4.6 MB layers vs ~45 MB python-slim); `make docker` / `VARIANT=fat` for openssl + MCP bridge
 - Modern CMake multi-lib build (`make host` / `make arm` / `make static` wrap CMake)
 - L0 libraries: `nanobot_crypto` (CSPRNG, ct_eq, hex), `nanobot_os`, `nanobot_json`
