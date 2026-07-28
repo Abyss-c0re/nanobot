@@ -1,15 +1,18 @@
 # syntax=docker/dockerfile:1
 # Tiny nanobot image: alpine + static binaries (no apt/apk, no python).
-# Host: make static && docker build -f Docker/Dockerfile -t nanobot:local .
+# Host: make docker            # tags nanobot:local nanobot:VERSION nanobot:latest
+# Fat:  make docker VARIANT=fat
 #
 # Sizes (approx): alpine ~4MB + nanobot ~1.2MB + shell_server ~0.8MB ≈ 6–8MB.
 # Fat variant (MCP bridge python, openssl): docker build --build-arg VARIANT=fat ...
 
 ARG VARIANT=tiny
 ARG RUNTIME_IMAGE=alpine:3.20
+ARG NB_VERSION=0.0.0
 
 # --- tiny (default) ---
 FROM ${RUNTIME_IMAGE} AS tiny
+ARG NB_VERSION
 # No apk: lab mirrors often offline. Busybox provides sh/tar/wget/nc/base64/comm.
 RUN mkdir -p /opt/nanobot/bin /opt/nanobot/scripts /opt/nanobot/modules \
       /home/nanobot/.nanobot /home/nanobot/workspace /run/sshd /etc/ssh /usr/local/bin \
@@ -27,11 +30,18 @@ RUN chmod 755 /opt/nanobot/bin/nanobot /opt/nanobot/bin/shell_server \
       /opt/nanobot/scripts/run.sh /usr/local/bin/http \
  && ln -sfn /opt/nanobot/bin/nanobot /usr/local/bin/nanobot \
  && ln -sfn /opt/nanobot/bin/nanobot /usr/local/bin/nanobot-mcp \
- && ln -sfn /usr/local/bin/http /usr/local/bin/curl
+ && ln -sfn /usr/local/bin/http /usr/local/bin/curl \
+ && printf '%s\n' "$NB_VERSION" > /opt/nanobot/VERSION
+LABEL org.opencontainers.image.title="nanobot" \
+      org.opencontainers.image.version="${NB_VERSION}" \
+      org.opencontainers.image.description="Tiny static nanobot peer (Alpine)" \
+      org.opencontainers.image.source="https://github.com/Abyss-c0re/nanobot"
 ENV HOME=/home/nanobot NANOBOT_HOME=/home/nanobot/.nanobot \
     PATH=/opt/nanobot/bin:/usr/local/bin:/usr/bin:/bin \
     NANOBOT_PORT=8787 NANOBOT_MODE=peer WORKSPACE=/home/nanobot/workspace \
-    SSH_ENABLE=1 SSH_PORT=22 SHELL_SERVER_SHELL=/bin/sh
+    SSH_ENABLE=1 SSH_PORT=22 SHELL_SERVER_SHELL=/bin/sh \
+    NANOBOT_LAN=1 \
+    NANOBOT_IMAGE_VERSION="${NB_VERSION}"
 WORKDIR /home/nanobot
 EXPOSE 8787 8788 22
 USER root
@@ -40,6 +50,7 @@ CMD ["peer"]
 
 # --- fat: python slim + openssl for bundles + mcp bridge ---
 FROM python:3.12-slim AS fat
+ARG NB_VERSION
 RUN mkdir -p /opt/nanobot/bin /opt/nanobot/scripts /opt/nanobot/modules \
       /home/nanobot/.nanobot /home/nanobot/workspace /run/sshd /etc/ssh \
  && ln -sfn python3 /usr/local/bin/python || true
@@ -58,11 +69,18 @@ RUN chmod 755 /opt/nanobot/bin/nanobot /opt/nanobot/entrypoint.sh \
       /opt/nanobot/bin/shell_server.py \
  && ln -sfn /opt/nanobot/bin/nanobot /usr/local/bin/nanobot \
  && ln -sfn /opt/nanobot/bin/nanobot /usr/local/bin/nanobot-mcp \
- && ln -sfn /usr/local/bin/http /usr/local/bin/curl
+ && ln -sfn /usr/local/bin/http /usr/local/bin/curl \
+ && printf '%s\n' "$NB_VERSION" > /opt/nanobot/VERSION
+LABEL org.opencontainers.image.title="nanobot" \
+      org.opencontainers.image.version="${NB_VERSION}" \
+      org.opencontainers.image.description="Fat nanobot peer (Python MCP bridge + openssl)" \
+      org.opencontainers.image.source="https://github.com/Abyss-c0re/nanobot"
 ENV HOME=/home/nanobot NANOBOT_HOME=/home/nanobot/.nanobot \
     PATH=/opt/nanobot/bin:/usr/local/bin:/usr/bin:/bin \
     NANOBOT_PORT=8787 NANOBOT_MODE=peer WORKSPACE=/home/nanobot/workspace \
-    SSH_ENABLE=1 SSH_PORT=22
+    SSH_ENABLE=1 SSH_PORT=22 \
+    NANOBOT_LAN=1 \
+    NANOBOT_IMAGE_VERSION="${NB_VERSION}"
 WORKDIR /home/nanobot
 EXPOSE 8787 8788 22
 USER root

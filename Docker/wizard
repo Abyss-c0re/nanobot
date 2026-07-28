@@ -86,11 +86,12 @@ ensure_image() {
 }
 
 do_build() {
-  make -C "$ROOT" static shell-server
-  docker build -f "$WIZ/Dockerfile" --build-arg VARIANT="${DOCKER_VARIANT:-tiny}" -t "$IMAGE" "$ROOT"
-  local sz
+  # Prefer Makefile targets so tags match VERSION (local/latest/0.x.y/0.x.y-variant).
+  make -C "$ROOT" docker VARIANT="${DOCKER_VARIANT:-tiny}"
+  local sz ver
+  ver=$(tr -d ' \n' < "$ROOT/VERSION" 2>/dev/null || echo '?')
   sz=$(docker image inspect "$IMAGE" --format '{{.Size}}' 2>/dev/null || echo '?')
-  log "built $IMAGE (${sz} bytes layers, VARIANT=${DOCKER_VARIANT:-tiny})"
+  log "built $IMAGE + nanobot:${ver} (${sz} bytes layers, VARIANT=${DOCKER_VARIANT:-tiny})"
 }
 
 do_config() {

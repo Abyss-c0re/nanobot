@@ -8,6 +8,14 @@ export WORKSPACE="${WORKSPACE:-$HOME/workspace}"
 export HOME_AGENT="${HOME_AGENT:-$HOME}"
 export NANOBOT_PORT="${NANOBOT_PORT:-8787}"
 export PATH="/opt/nanobot/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+# Docker publish (-p HOST:8787) needs 0.0.0.0 bind. Default ON in images;
+# set NANOBOT_LAN=0 for loopback-only (e.g. --network host + local tooling).
+# Mutate routes still require peer_token off-loopback.
+export NANOBOT_LAN="${NANOBOT_LAN:-1}"
+NB_LAN_ARGS=""
+case "${NANOBOT_LAN}" in
+  1|yes|true|on|ON) NB_LAN_ARGS="--lan" ;;
+esac
 
 # shellcheck disable=SC1091
 . /opt/nanobot/modules/auth_bundle.sh
@@ -74,7 +82,8 @@ trap cleanup_export EXIT
 case "$MODE" in
   peer|serve|server)
     if [ -n "${PROMPT:-}" ]; then
-      nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" &
+      # shellcheck disable=SC2086
+      nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" $NB_LAN_ARGS &
       NB_PID=$!
       i=0
       while [ "$i" -lt 40 ]; do
@@ -92,7 +101,8 @@ case "$MODE" in
       wait "$NB_PID" 2>/dev/null || true
       NB_PID=""
     else
-      nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" &
+      # shellcheck disable=SC2086
+      nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" $NB_LAN_ARGS &
       NB_PID=$!
       wait "$NB_PID" || true
       NB_PID=""
@@ -114,7 +124,8 @@ case "$MODE" in
   prompt)
     P="${PROMPT:-$*}"
     [ -n "$P" ] || { echo "PROMPT required" >&2; exit 2; }
-    nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" &
+    # shellcheck disable=SC2086
+    nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" $NB_LAN_ARGS &
     NB_PID=$!
     i=0
     while [ "$i" -lt 40 ]; do
@@ -130,7 +141,8 @@ case "$MODE" in
     ;;
   login|auth)
     echo "Auth: http://127.0.0.1:${NANOBOT_PORT}/activate" >&2
-    nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" --login &
+    # shellcheck disable=SC2086
+    nanobot --home "$NANOBOT_HOME" --port "$NANOBOT_PORT" $NB_LAN_ARGS --login &
     NB_PID=$!
     wait "$NB_PID" || true
     NB_PID=""

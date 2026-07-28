@@ -10,14 +10,30 @@ Default image is **Alpine + static binaries** (~4–5 MB layers, ~11× smaller
 ## build
 
 ```bash
-make docker              # tiny
-make docker VARIANT=fat  # fat
+make docker              # tiny  → nanobot:local nanobot:latest nanobot:VERSION nanobot:VERSION-tiny
+make docker VARIANT=fat  # fat   → same + nanobot:VERSION-fat
 # or
 make static shell-server
-docker build -f Docker/Dockerfile --build-arg VARIANT=tiny -t nanobot:local .
+docker build -f Docker/Dockerfile \
+  --build-arg VARIANT=tiny --build-arg NB_VERSION=$(cat VERSION) \
+  -t nanobot:local -t nanobot:$(cat VERSION) .
 ```
 
+Tags follow `VERSION` (e.g. **0.5.1**). Image labels: `org.opencontainers.image.version`.
+
 No package install at build time (apk/apt often offline in lab).
+
+## smoke (ready to deploy)
+
+```bash
+docker run --rm nanobot:0.5.1 version          # prints binary version
+docker run --rm -d --name nb-smoke -p 18787:8787 nanobot:0.5.1 peer
+# images default NANOBOT_LAN=1 so -p publish reaches the peer (--lan / 0.0.0.0)
+curl -sS -m 3 http://127.0.0.1:18787/peer/v1/health
+docker stop nb-smoke
+```
+
+Set `NANOBOT_LAN=0` only for loopback-only bind (breaks Docker port publish).
 
 ## fast path (wizard)
 

@@ -5,6 +5,11 @@
 - **Empty HOME default:** when `NANOBOT_HOME` and `HOME` are unset/empty and the shared lab home is present, default there instead of `/tmp/nanobot`.
 - Access soft-expiry still refreshes via OAuth `refresh_token` (`ng_session_ensure`); browser device-code remains the product login path.
 
+### Docker
+- Image tags: `nanobot:VERSION`, `VERSION-tiny`, `VERSION-fat`, `local`, `latest` (tiny is default product)
+- Default `NANOBOT_LAN=1` so `docker run -p …:8787` reaches the peer (`--lan`); set `NANOBOT_LAN=0` for loopback-only
+- OCI labels + `/opt/nanobot/VERSION` stamped from tree `VERSION`
+
 ### Subagents + sched (carry-forward)
 - Tiny libs: provider policy, LLM flock sched, subagent slots (max 8, share session)
 - Tools + peer `/api/subagents`; settings `SUBAGENTS*` / `LLM_SERIAL` (local serial default on, Grok off)

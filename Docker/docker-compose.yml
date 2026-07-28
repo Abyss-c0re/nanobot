@@ -5,6 +5,9 @@ services:
     build:
       context: ..
       dockerfile: Docker/Dockerfile
+      args:
+        VARIANT: ${DOCKER_VARIANT:-tiny}
+        NB_VERSION: ${NB_VERSION:-0.5.1}
     user: "0:0"
     environment:
       NANOBOT_HOME: /home/nanobot/.nanobot

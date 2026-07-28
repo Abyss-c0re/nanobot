@@ -70,10 +70,26 @@ deploy-ssh:
 	./scripts/deploy.sh ssh --host "$(HOST)" --dir "$(DIR)" --arch "$(ARCH)"
 
 # default docker = tiny alpine (~6–10MB). fat: make docker VARIANT=fat
+# Tiny (default product): nanobot:local nanobot:latest nanobot:VERSION nanobot:VERSION-tiny
+# Fat: only nanobot:VERSION-fat (never clobber latest/local/VERSION)
 VARIANT ?= tiny
+NB_VERSION := $(shell tr -d ' \n' < "$(ROOT)/VERSION" 2>/dev/null || echo 0.0.0)
 docker: static shell-server
-	docker build -f Docker/Dockerfile --build-arg VARIANT=$(VARIANT) -t nanobot:local .
-	@docker image inspect nanobot:local --format 'image nanobot:local {{.Size}} bytes (variant=$(VARIANT))'
+	@set -e; \
+	tags="-t nanobot:$(NB_VERSION)-$(VARIANT)"; \
+	if [ "$(VARIANT)" = "tiny" ]; then \
+	  tags="$$tags -t nanobot:local -t nanobot:latest -t nanobot:$(NB_VERSION)"; \
+	fi; \
+	docker build -f Docker/Dockerfile \
+	  --build-arg VARIANT=$(VARIANT) \
+	  --build-arg NB_VERSION=$(NB_VERSION) \
+	  --label org.opencontainers.image.version=$(NB_VERSION) \
+	  --label org.opencontainers.image.title=nanobot \
+	  --label org.opencontainers.image.source=https://github.com/Abyss-c0re/nanobot \
+	  $$tags \
+	  .
+	@docker image inspect nanobot:$(NB_VERSION)-$(VARIANT) \
+	  --format 'image nanobot:$(NB_VERSION)-$(VARIANT) {{.Size}} bytes (VARIANT=$(VARIANT) VERSION=$(NB_VERSION))'
 
 docker-fat:
 	$(MAKE) docker VARIANT=fat
