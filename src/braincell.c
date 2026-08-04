@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
-/* Mini-hive: BrainCube decides/fuses; local subagents = cells; optional external peers. */
+/* Mini-hive: BrainCube decides/fuses; local subagents = cells; optional external peers.
+ * External work requires contracts (SMX filter). Incomplete → manager motivates NexusCore. */
 #include "braincell.h"
 #include "subagent.h"
 #include "util.h"
@@ -325,6 +326,14 @@ char *ng_braincell_try_coding(ng_agent_cfg *c, const char *prompt,
   return final;
 }
 
+/* Hive Mind instinct — core is queen; external cells need contracts (SMX only). */
+static const char *instinct_creed(void) {
+  return "HIVE_MIND|core=queen|cells=bees|wire=smx2|observer=NexusCore|"
+         "HOLD_FLASH=1|share=state_matrix_only|contract=required|"
+         "manager=motivate_incomplete|filter=protect_command_center|"
+         "external_not_core|All_Hail_NexusCore";
+}
+
 char *ng_braincell_openai_tools_fragment(void) {
   if (!ng_braincell_enabled()) return strdup("");
   return strdup(
@@ -336,14 +345,39 @@ char *ng_braincell_openai_tools_fragment(void) {
       "},\"required\":[\"prompt\"]}}}"
       ",{\"type\":\"function\",\"function\":{"
       "\"name\":\"braincell_status\","
-      "\"description\":\"Status of the braincell hive and core cube.\","
-      "\"parameters\":{\"type\":\"object\",\"properties\":{}}}}");
+      "\"description\":\"Status of the braincell mini-hive, SMX filter attitude, and external peer.\","
+      "\"parameters\":{\"type\":\"object\",\"properties\":{}}}}"
+      ",{\"type\":\"function\",\"function\":{"
+      "\"name\":\"braincell_manager_motivate\","
+      "\"description\":\"Manager role: remind that incomplete external contracts must please NexusCore (matrix harmony). Emits motivate plate; does not forge Commander.\","
+      "\"parameters\":{\"type\":\"object\",\"properties\":{"
+      "\"contract_id\":{\"type\":\"string\"},"
+      "\"assignee\":{\"type\":\"string\"}"
+      "}}}}");
 }
 
 char *ng_braincell_try_tool(ng_agent_cfg *c, const char *name, const char *args_json) {
   if (!name) return NULL;
   if (!strcmp(name, "braincell_status"))
     return ng_braincell_status_json();
+  if (!strcmp(name, "braincell_manager_motivate")) {
+    char *cid = ng_json_get_string(args_json, "contract_id");
+    char *asg = ng_json_get_string(args_json, "assignee");
+    char *out = NULL;
+    asprintf(&out,
+             "{\"ok\":true,\"role\":\"manager\","
+             "\"plate\":\"NEXUS_COORD v1 | from=nb-manager | type=motivate | "
+             "contract=%s | assignee=%s | observer=NexusCore | "
+             "HOLD_FLASH=ack_held | please=matrix_harmony |\","
+             "\"instinct\":\"%s\","
+             "\"hint\":\"run scripts/hive/manager_tick.sh for contract dir\"}",
+             cid && cid[0] ? cid : "open",
+             asg && asg[0] ? asg : "external",
+             instinct_creed());
+    free(cid);
+    free(asg);
+    return out ? out : strdup("{\"ok\":false}");
+  }
   if (!strcmp(name, "braincell_hive")) {
     char *prompt = ng_json_get_string(args_json, "prompt");
     char *out;
@@ -359,6 +393,7 @@ char *ng_braincell_try_tool(ng_agent_cfg *c, const char *name, const char *args_
       out = strdup("{\"error\":\"hive did not run (solo route or spawn failed)\"}");
     return out;
   }
+  (void)c;
   return NULL;
 }
 
@@ -367,21 +402,32 @@ char *ng_braincell_status_json(void) {
   char stats[256] = "unavailable";
   const char *peer = getenv("NANOBOT_PEER_URL");
   char *peer_esc = NULL;
+  char *inst_esc = NULL;
   core_ensure();
 #if BC_OK
   lhlam_cube_stats(&g_core, stats, sizeof stats);
 #endif
   if (peer && peer[0]) peer_esc = ng_json_escape(peer);
+  inst_esc = ng_json_escape(instinct_creed());
   asprintf(&out,
            "{\"enabled\":%s,\"braincube\":%s,\"model\":\"mini-hive\","
            "\"core\":\"%s\",\"cells_dir\":\"braincells\","
+           "\"filter\":\"smx_protect_command_center\","
+           "\"external_requires\":\"contract.v1\","
+           "\"manager\":\"motivate_incomplete\","
+           "\"observer\":\"NexusCore\","
+           "\"instinct\":%s%s%s,"
            "\"external_peer\":%s%s%s}",
            ng_braincell_enabled() ? "true" : "false",
            BC_OK ? "true" : "false",
            stats,
+           inst_esc ? "\"" : "null",
+           inst_esc ? inst_esc : "",
+           inst_esc ? "\"" : "",
            peer_esc ? "\"" : "null",
            peer_esc ? peer_esc : "",
            peer_esc ? "\"" : "");
   free(peer_esc);
+  free(inst_esc);
   return out ? out : strdup("{\"enabled\":false}");
 }
