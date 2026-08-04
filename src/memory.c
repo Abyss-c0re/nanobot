@@ -263,16 +263,22 @@ char *ng_memory_recent_json_fragment(void) {
     return strdup("");
   }
   char *out = strdup("");
+  if (!out) {
+    free_msgs(msgs, n);
+    free(msgs);
+    return NULL;
+  }
   for (int i = 0; i < n; i++) {
     char *esc = ng_json_escape(msgs[i].content ? msgs[i].content : "");
     char *piece = NULL;
-    asprintf(&piece, "%s{\"role\":\"%s\",\"content\":\"%s\"}",
-             out[0] ? "," : "",
-             msgs[i].role,
-             esc ? esc : "");
+    /* Accumulate prior fragment — first %s is out, not only a comma. */
+    if (asprintf(&piece, "%s%s{\"role\":\"%s\",\"content\":\"%s\"}", out,
+                 out[0] ? "," : "", msgs[i].role, esc ? esc : "") < 0)
+      piece = NULL;
     free(esc);
     free(out);
     out = piece ? piece : strdup("");
+    if (!out) break;
   }
   free_msgs(msgs, n);
   free(msgs);
