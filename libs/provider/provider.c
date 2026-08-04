@@ -57,7 +57,7 @@ void ng_provider_policy_defaults(ng_provider_policy *p, const char *backend_kind
     p->max_ctx_chars = 32000;
     p->max_sub_prompt_chars = 4000;
     p->max_sub_reply_chars = 8000;
-    p->max_turns = 12;
+    p->max_turns = 48; /* long multi-tool desktop runs */
   } else {
     p->subagents_enabled = 0;
     p->subagents_max = 0;
@@ -78,6 +78,8 @@ void ng_provider_policy_load_settings(ng_provider_policy *p) {
   if (s) { p->subagents_max = parse_int(s, p->subagents_max, 0, 8); free(s); }
   s = ng_settings_get("LLM_SERIAL");
   if (s) { p->llm_serial = parse_bool(s, p->llm_serial); free(s); }
+  s = ng_settings_get("MAX_TURNS");
+  if (s) { p->max_turns = parse_int(s, p->max_turns, 2, 128); free(s); }
   s = ng_settings_get("MAX_CTX_CHARS");
   if (s) { p->max_ctx_chars = parse_int(s, p->max_ctx_chars, 2000, 200000); free(s); }
   s = ng_settings_get("MAX_SUB_PROMPT");

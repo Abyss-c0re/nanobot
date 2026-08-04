@@ -496,7 +496,18 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
       return r;
     }
   }
-  if (timeout_sec <= 0) timeout_sec = NG_CMD_TIMEOUT_SEC;
+  if (timeout_sec <= 0) timeout_sec = ng_cmd_timeout_sec();
+  /* Background jobs (trailing & / nohup … &) return when the shell exits —
+   * use a short wait; the real work continues detached. */
+  {
+    const char *s = command;
+    while (*s) s++;
+    while (s > command && (s[-1] == ' ' || s[-1] == '\t' || s[-1] == '\n')) s--;
+    int bg = (s > command && s[-1] == '&');
+    if (!bg && strstr(command, "nohup ") && strstr(command, "&"))
+      bg = 1;
+    if (bg && timeout_sec > 30) timeout_sec = 30;
+  }
 
   int pipefd[2];
   if (pipe(pipefd) != 0) {
@@ -516,6 +527,17 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
     dup2(pipefd[1], STDERR_FILENO);
     close(pipefd[1]);
     setenv("NANOBOT", "1", 1);
+    /* GUI apps need a session bus / display — inherit, never clear */
+    {
+      const char *d = getenv("DISPLAY");
+      if (d && d[0]) setenv("DISPLAY", d, 1);
+      const char *w = getenv("WAYLAND_DISPLAY");
+      if (w && w[0]) setenv("WAYLAND_DISPLAY", w, 1);
+      const char *x = getenv("XDG_RUNTIME_DIR");
+      if (x && x[0]) setenv("XDG_RUNTIME_DIR", x, 1);
+      const char *db = getenv("DBUS_SESSION_BUS_ADDRESS");
+      if (db && db[0]) setenv("DBUS_SESSION_BUS_ADDRESS", db, 1);
+    }
     {
       /* Unix-first PATH: $NANOBOT_HOME/bin, standard bins, then inherited PATH.
        * Hosts that need extra dirs set PATH before launch (no product OS prefixes). */

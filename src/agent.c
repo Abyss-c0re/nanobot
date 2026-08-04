@@ -7,6 +7,7 @@
 #include "provider.h"
 #include "ng_sched.h"
 #include "subagent.h"
+#include "braincell.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,9 +27,31 @@ void ng_agent_apply_provider_policy(ng_agent_cfg *c) {
   ng_provider_policy_defaults(&pol, ng_agent_backend_kind(c));
   ng_provider_policy_load_settings(&pol);
   ng_llm_sched_set_enabled(pol.llm_serial);
+  /* Optional concurrency (llama parallel slots). Shared lock path by default. */
+  {
+    char *slots = ng_settings_get("LLM_SLOTS");
+    if (slots) {
+      ng_llm_sched_set_slots(atoi(slots));
+      free(slots);
+    }
+    char *lp = ng_settings_get("LLM_LOCK");
+    if (lp) {
+      ng_llm_sched_set_path(lp);
+      free(lp);
+    }
+  }
   ng_subagent_configure(pol.subagents_enabled, pol.subagents_max);
-  if (c && pol.max_turns > 0 && c->max_turns > pol.max_turns)
-    c->max_turns = pol.max_turns;
+  /* Cap down to provider default only when host did not set NANOBOT_MAX_TURNS */
+  if (c && pol.max_turns > 0 && !getenv("NANOBOT_MAX_TURNS")) {
+    if (c->max_turns > pol.max_turns)
+      c->max_turns = pol.max_turns;
+  }
+  if (c) {
+    if (c->timeout_sec <= 0 || c->timeout_sec == NG_CMD_TIMEOUT_SEC)
+      c->timeout_sec = ng_cmd_timeout_sec();
+    if (c->max_turns <= 0)
+      c->max_turns = ng_max_turns();
+  }
 }
 
 char *ng_agent_subagent_spawn(ng_agent_cfg *c, const char *type, const char *desc,
@@ -43,7 +66,7 @@ void ng_agent_cfg_init(ng_agent_cfg *c) {
   c->base_url = strdup(NG_DEFAULT_BASE);
   c->model = strdup(NG_DEFAULT_MODEL);
   c->max_turns = ng_max_turns();
-  c->timeout_sec = NG_CMD_TIMEOUT_SEC;
+  c->timeout_sec = ng_cmd_timeout_sec();
 }
 
 void ng_agent_cfg_free(ng_agent_cfg *c) {
@@ -178,9 +201,9 @@ static char *curl_post_json_unlocked(const char *url, const char *bearer, const 
     argv[a++] = "curl";
     argv[a++] = "-sS";
     argv[a++] = "--max-time";
-    argv[a++] = "45";
+    argv[a++] = (char *)ng_http_timeout_arg();
     argv[a++] = "--connect-timeout";
-    argv[a++] = "12";
+    argv[a++] = "30";
     argv[a++] = "-H";
     argv[a++] = "Content-Type: application/json";
     if (bearer && bearer[0]) {
@@ -275,9 +298,9 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
     argv[a++] = "curl";
     argv[a++] = "-sS";
     argv[a++] = "--max-time";
-    argv[a++] = "30";
+    argv[a++] = (char *)ng_http_timeout_arg();
     argv[a++] = "--connect-timeout";
-    argv[a++] = "12";
+    argv[a++] = "30";
     if (bearer && bearer[0]) {
       argv[a++] = "-H";
       argv[a++] = auth;
@@ -503,17 +526,27 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
   return acc;
 }
 
-/* Streaming POST (curl -N). Used for final text turns only. */
+/* Streaming POST (curl -N). Holds LLM sched lock for the whole stream so
+ * fleet/hub peers cannot stampede llama while tokens are in flight. */
 static char *curl_post_json_stream(const char *url, const char *bearer, const char *body,
                                    ng_stream_fn on_delta, void *ud) {
+  ng_llm_sched_acquire();
+
   char tmpl[640];
   int fd = ng_mkstemp_home(tmpl, sizeof tmpl, "ng_req_");
-  if (fd < 0) return strdup("mkstemp failed");
+  if (fd < 0) {
+    ng_llm_sched_release();
+    return strdup("mkstemp failed");
+  }
   write(fd, body, strlen(body));
   close(fd);
 
   int pipefd[2];
-  if (pipe(pipefd) != 0) { unlink(tmpl); return strdup("pipe failed"); }
+  if (pipe(pipefd) != 0) {
+    unlink(tmpl);
+    ng_llm_sched_release();
+    return strdup("pipe failed");
+  }
 
   char auth[1600];
   if (bearer && bearer[0])
@@ -531,6 +564,7 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   pid_t p2 = fork();
   if (p2 < 0) {
     close(pipefd[0]); close(pipefd[1]); unlink(tmpl);
+    ng_llm_sched_release();
     return strdup("curl fork failed (process limit?)");
   }
   if (p2 == 0) {
@@ -545,9 +579,9 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
     argv[a++] = "-sS";
     argv[a++] = "-N"; /* no buffer */
     argv[a++] = "--max-time";
-    argv[a++] = "120";
+    argv[a++] = (char *)ng_http_timeout_arg();
     argv[a++] = "--connect-timeout";
-    argv[a++] = "12";
+    argv[a++] = "30";
     argv[a++] = "-H";
     argv[a++] = "Content-Type: application/json";
     argv[a++] = "-H";
@@ -591,9 +625,11 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   if (waitpid(p2, &st, 0) < 0) {
     unlink(tmpl);
     free(acc);
+    ng_llm_sched_release();
     return NULL;
   }
   unlink(tmpl);
+  ng_llm_sched_release();
   if (!acc || !acc[0]) {
     free(acc);
     /* fallback: empty stream — caller may retry non-stream */
@@ -1053,26 +1089,42 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   else
     mem_user = strdup(user_prompt);
 
-  /* Tools: OpenAI-style. Default ON for cloud backends.
-   * Disable with NANOBOT_TOOLS=0 (env file wins over process getenv).
-   * Localhost llama: tools thrash tiny models and mangle short prompts
-   * (e.g. "a a a" → junk / single token). Prefer pure chat offline. */
+  /* Tools: OpenAI-style.
+   * Explicit NANOBOT_TOOLS=0/1 (env or $NANOBOT_HOME/env) always wins.
+   * Local llama default: tools ON when NANOBOT_TOOLS=1 or NANOBOT_LOCAL_TOOLS=1
+   * (desktop hosts like Grokium set this). Otherwise local defaults OFF so
+   * tiny embedded peers stay pure-chat unless opted in.
+   * Cloud: tools ON by default. */
   int use_tools = 1;
+  int tools_explicit = 0;
   {
     char ep[640];
     snprintf(ep, sizeof ep, "%s/env", ng_workdir());
     char *from_file = ng_slurp_env_file(ep, "NANOBOT_TOOLS");
     const char *t = from_file;
     if (!t || !t[0]) t = getenv("NANOBOT_TOOLS");
-    if (t && (t[0] == '0' || t[0] == 'n' || t[0] == 'N' || t[0] == 'f' || t[0] == 'F'))
-      use_tools = 0;
+    if (t && t[0]) {
+      tools_explicit = 1;
+      if (t[0] == '0' || t[0] == 'n' || t[0] == 'N' || t[0] == 'f' || t[0] == 'F')
+        use_tools = 0;
+      else if (t[0] == '1' || t[0] == 'y' || t[0] == 'Y' || t[0] == 't' || t[0] == 'T')
+        use_tools = 1;
+    }
     free(from_file);
   }
-  if (c && c->base_url && (strstr(c->base_url, "127.0.0.1") || strstr(c->base_url, "localhost")))
-    use_tools = 0;
+  int is_local = c && c->base_url &&
+                 (strstr(c->base_url, "127.0.0.1") || strstr(c->base_url, "localhost") ||
+                  strstr(c->base_url, "0.0.0.0"));
+  if (is_local && !tools_explicit) {
+    const char *lt = getenv("NANOBOT_LOCAL_TOOLS");
+    if (lt && (lt[0] == '1' || lt[0] == 'y' || lt[0] == 'Y'))
+      use_tools = 1;
+    else
+      use_tools = 0; /* embedded/local pure-chat unless host opts in */
+  }
   if (has_image) use_tools = 0; /* vision turn: answer image first, no tool thrash */
-  /* Short social / trivial prompts: no tool thrash */
-  {
+  /* Short social / trivial prompts: no tool thrash (even if tools enabled) */
+  if (use_tools) {
     const char *p = user_prompt;
     while (*p == ' ' || *p == '\t') p++;
     size_t pl = strlen(p);
@@ -1088,7 +1140,6 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
           !strcmp(low, "thanks") || !strcmp(low, "thank you") || !strcmp(low, "ping") ||
           !strcmp(low, "ok") || !strcmp(low, "yes") || !strcmp(low, "no") ||
           !strncmp(low, "hello ", 6) || !strncmp(low, "hi ", 3) ||
-          /* single letters / spaced letters: pure chat, preserve spaces */
           (pl <= 16 && strspn(p, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ") == pl))
         use_tools = 0;
     }
@@ -1100,24 +1151,45 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
    * spawn further subagents / heavy task board / MCP fan-out. */
   int is_subworker = getenv("NANOBOT_SUBAGENT") != NULL;
 
-  /* Base shell tool + task board + light subagents + optional MCP. */
+  /* BrainCube core + braincell hive for coding (skip inside subagents). */
+  if (!is_subworker && !has_image && use_tools && ng_braincell_enabled()) {
+    char *hive = ng_braincell_try_coding(c, user_prompt, stream_final, on_delta,
+                                         userdata);
+    if (hive) {
+      if (hive[0] && strncmp(hive, "API ", 4) != 0)
+        ng_memory_record_exchange(mem_user ? mem_user : user_prompt, hive);
+      free(mem_user);
+      return hive;
+    }
+  }
+
+  /* Base shell tool + task board + light subagents + braincells + optional MCP. */
   char *mcp_frag = is_subworker ? strdup("") : ng_mcp_openai_tools_fragment();
   char *task_frag = is_subworker ? strdup("") : ng_task_openai_tools_fragment();
   char *sub_frag = is_subworker ? strdup("") : ng_subagent_openai_tools_fragment();
+  char *bc_frag = is_subworker ? strdup("") : ng_braincell_openai_tools_fragment();
   char *tools = NULL;
   asprintf(&tools,
     "[{\"type\":\"function\",\"function\":{"
     "\"name\":\"run_terminal_command\","
-    "\"description\":\"Run ONE shell command when you need live device data. Prefer short answers without tools for greetings.\","
+    "\"description\":\"Run ONE shell command on the user's machine. "
+    "Use for real actions: open apps/terminals, edit files, git, builds, tests, "
+    "systemctl --user, list dirs. "
+    "Long jobs: prefer nohup … >log 2>&1 & then poll with tail/log, or a single "
+    "foreground command that may take many minutes (timeout is generous). "
+    "GUI: nohup alacritty >/dev/null 2>&1 &. "
+    "Prefer short answers without tools for greets.\","
     "\"parameters\":{\"type\":\"object\",\"properties\":{"
     "\"command\":{\"type\":\"string\",\"description\":\"shell command\"}"
-    "},\"required\":[\"command\"]}}}%s%s%s]",
+    "},\"required\":[\"command\"]}}}%s%s%s%s]",
     task_frag && task_frag[0] ? task_frag : "",
     sub_frag && sub_frag[0] ? sub_frag : "",
+    bc_frag && bc_frag[0] ? bc_frag : "",
     mcp_frag && mcp_frag[0] ? mcp_frag : "");
   free(mcp_frag);
   free(task_frag);
   free(sub_frag);
+  free(bc_frag);
   /* Subworkers need a few tool rounds to actually inspect the environment. */
   if (is_subworker && c->max_turns < 8)
     c->max_turns = 8;
@@ -1309,7 +1381,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       char *task_out = ng_task_try_tool(tname, targs);
       char *sub_out = task_out ? NULL
         : ng_subagent_try_tool(c, subagent_run_adapter, tname, targs);
-      char *mcp_out = (task_out || sub_out) ? NULL : ng_mcp_try_tool(tname, targs);
+      char *bc_out = (task_out || sub_out) ? NULL : ng_braincell_try_tool(c, tname, targs);
+      char *mcp_out = (task_out || sub_out || bc_out) ? NULL : ng_mcp_try_tool(tname, targs);
       ng_cmd_result cr;
       memset(&cr, 0, sizeof cr);
       if (task_out) {
@@ -1325,6 +1398,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         cr.exit_code = 0;
         cr.output = sub_out;
         ng_log("agent: subagent tool %s out=%.200s", tname, sub_out);
+      } else if (bc_out) {
+        cr.exit_code = 0;
+        cr.output = bc_out;
+        ng_log("agent: braincell tool %s out=%.200s", tname, bc_out);
       } else if (mcp_out) {
         cr.exit_code = 0;
         cr.output = mcp_out; /* owned; free via ng_cmd_result_free or manual */
@@ -1344,15 +1421,29 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
       free(last_tool_out);
       asprintf(&last_tool_out, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
-      char *esc_out = ng_json_escape(last_tool_out);
+      /* Cap what the model sees (keep head+tail of large dumps) */
+      char *tool_for_model = NULL;
+      {
+        size_t L = last_tool_out ? strlen(last_tool_out) : 0;
+        if (L <= 6000)
+          tool_for_model = strdup(last_tool_out ? last_tool_out : "");
+        else {
+          asprintf(&tool_for_model,
+                   "%.2500s\n\n…[%zu bytes total, middle omitted]…\n\n%s",
+                   last_tool_out, L, last_tool_out + L - 2500);
+        }
+      }
+      char *esc_out = ng_json_escape(tool_for_model ? tool_for_model : "");
       char *esc_args = ng_json_escape(targs);
+      char *esc_tid = ng_json_escape(tid ? tid : "call");
+      char *esc_tname = ng_json_escape(tname ? tname : "run_terminal_command");
 
       if (stream_final && on_delta) {
         char *en = ng_json_escape(tname ? tname : "tool");
         char *ei = ng_json_escape(tid ? tid : "");
         /* Cap tool output in SSE so UI stays light */
-        char out_cap[900];
-        snprintf(out_cap, sizeof out_cap, "%.800s", last_tool_out ? last_tool_out : "");
+        char out_cap[2400];
+        snprintf(out_cap, sizeof out_cap, "%.2200s", last_tool_out ? last_tool_out : "");
         char *eo = ng_json_escape(out_cap);
         char *ev = NULL;
         if (asprintf(&ev,
@@ -1366,23 +1457,41 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       size_t ml = strlen(messages);
       if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
       char *new_messages = NULL;
+      /* role=tool content = real stdout/stderr. Extra user nudge forces the model
+       * to present results on the next turn instead of going silent. */
       asprintf(&new_messages,
         "%s,{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"%s\","
         "\"type\":\"function\",\"function\":{\"name\":\"%s\",\"arguments\":\"%s\"}}]},"
-        "{\"role\":\"tool\",\"tool_call_id\":\"%s\",\"content\":\"%s\"}]",
-        messages, tid, tname, esc_args, tid, esc_out);
+        "{\"role\":\"tool\",\"tool_call_id\":\"%s\",\"content\":\"%s\"},"
+        "{\"role\":\"user\",\"content\":\"Tool finished (exit code in content above). "
+        "Present the results to the user in plain text now: summarize what happened, "
+        "quote important output lines, and answer their request. "
+        "Do not claim you cannot run commands. Only call another tool if still needed.\"}]",
+        messages,
+        esc_tid ? esc_tid : "call",
+        esc_tname ? esc_tname : "run_terminal_command",
+        esc_args ? esc_args : "{}",
+        esc_tid ? esc_tid : "call",
+        esc_out ? esc_out : "");
       free(messages);
       messages = new_messages;
-      free(esc_args); free(esc_out);
+      free(esc_args); free(esc_out); free(esc_tid); free(esc_tname);
+      free(tool_for_model);
       free(tname); free(targs); free(tid); free(cmd);
-      if (task_out || mcp_out) {
-        /* cr.output owned by task/mcp string; free without cmd_result_free double free */
+      if (task_out || mcp_out || bc_out) {
+        /* cr.output owned by task/mcp/braincell string; free without cmd_result_free double free */
         free(cr.output);
         cr.output = NULL;
       } else {
         ng_cmd_result_free(&cr);
       }
       free(resp);
+      /* Prefer a presentation turn next if budget is tight; grow for long work */
+      if (turn >= max_turns - 2 && max_turns < hard_max) {
+        max_turns += 4;
+        if (max_turns > hard_max) max_turns = hard_max;
+        ng_log("agent: extend max_turns to %d (tool loop)", max_turns);
+      }
       continue;
     }
 
@@ -1531,17 +1640,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   if (!final || !final[0]) {
     free(final);
     if (last_tool_out && last_tool_out[0]) {
+      /* Model skipped the presentation turn — still surface the command result. */
       asprintf(&final,
-               "%s",
+               "Command finished. Output:\n\n```\n%.4000s\n```\n",
                last_tool_out);
-      /* trim huge tool dumps */
-      if (final && strlen(final) > 1200) {
-        final[1200] = 0;
-        char *f2 = NULL;
-        asprintf(&f2, "%s…", final);
-        free(final);
-        final = f2;
-      }
       ng_log("agent: final from last tool output (model never wrote text)");
     } else {
       ng_log("agent: empty final after %d turns (check curl/session/network)", max_turns);

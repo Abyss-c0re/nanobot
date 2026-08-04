@@ -15,6 +15,7 @@
 
 static char g_logpath[576] = "/tmp/nanobot/nanobot.log";
 static FILE *g_logf;
+static int g_log_stderr = 1;
 
 void ng_set_workdir(const char *dir) {
   nb_set_workdir(dir);
@@ -167,6 +168,9 @@ static void ng_log_maybe_rotate(void) {
   g_logf = fopen(g_logpath, "a");
 }
 
+void ng_log_set_stderr(int enabled) { g_log_stderr = enabled ? 1 : 0; }
+int ng_log_stderr_enabled(void) { return g_log_stderr; }
+
 void ng_log(const char *fmt, ...) {
   time_t t = time(NULL);
   struct tm tm;
@@ -174,11 +178,13 @@ void ng_log(const char *fmt, ...) {
   char ts[32];
   strftime(ts, sizeof ts, "%H:%M:%S", &tm);
   va_list ap;
-  va_start(ap, fmt);
-  fprintf(stderr, "[%s] ", ts);
-  vfprintf(stderr, fmt, ap);
-  fprintf(stderr, "\n");
-  va_end(ap);
+  if (g_log_stderr) {
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s] ", ts);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+  }
   if (!g_logf) g_logf = fopen(g_logpath, "a");
   if (g_logf) {
     va_start(ap, fmt);
@@ -319,7 +325,42 @@ int ng_is_lean(void) {
 }
 
 int ng_max_turns(void) {
+  const char *e = getenv("NANOBOT_MAX_TURNS");
+  if (e && e[0]) {
+    int n = atoi(e);
+    if (n < 2) n = 2;
+    if (n > 128) n = 128;
+    return n;
+  }
   return ng_is_lean() ? NG_LEAN_MAX_TURNS : NG_MAX_TURNS;
+}
+
+int ng_cmd_timeout_sec(void) {
+  const char *e = getenv("NANOBOT_CMD_TIMEOUT");
+  if (e && e[0]) {
+    int n = atoi(e);
+    if (n < 5) n = 5;
+    if (n > 7200) n = 7200; /* 2h hard cap per foreground shell */
+    return n;
+  }
+  return ng_is_lean() ? NG_LEAN_CMD_TIMEOUT_SEC : NG_CMD_TIMEOUT_SEC;
+}
+
+int ng_http_timeout_sec(void) {
+  const char *e = getenv("NANOBOT_HTTP_TIMEOUT");
+  if (e && e[0]) {
+    int n = atoi(e);
+    if (n < 15) n = 15;
+    if (n > 3600) n = 3600;
+    return n;
+  }
+  return ng_is_lean() ? NG_LEAN_HTTP_TIMEOUT_SEC : NG_HTTP_TIMEOUT_SEC;
+}
+
+const char *ng_http_timeout_arg(void) {
+  static char buf[16];
+  snprintf(buf, sizeof buf, "%d", ng_http_timeout_sec());
+  return buf;
 }
 
 int ng_http_max_children(void) {
@@ -368,17 +409,26 @@ char *ng_resources_json(void) {
     data_free_kb = (long)((sv.f_bavail * (unsigned long long)sv.f_frsize) / 1024ULL);
   }
   long avail = mem_free + buffers + cached;
+  char *llm = NULL;
+  {
+    /* optional — linked with nanobot_sched */
+    extern char *ng_llm_sched_status_json(void);
+    llm = ng_llm_sched_status_json();
+  }
   char *out = NULL;
   asprintf(&out,
     "{\"ok\":true,\"lean\":%s,\"mem_total_kb\":%ld,\"mem_free_kb\":%ld,"
     "\"mem_avail_kb\":%ld,\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,"
     "\"disk_path\":\"%s\",\"disk_total_kb\":%ld,\"disk_free_kb\":%ld,"
     "\"limits\":{\"max_turns\":%d,\"http_children\":%d,\"out_max\":%zu,\"log_max\":%zu},"
+    "\"llm_sched\":%s,"
     "\"version\":\"%s\"}",
     ng_is_lean() ? "true" : "false",
     mem_total, mem_free, avail, load1, load5, load15,
     dp, data_total_kb, data_free_kb,
     ng_max_turns(), ng_http_max_children(), ng_out_max(), ng_log_max(),
+    llm && llm[0] ? llm : "{}",
     NG_VERSION);
+  free(llm);
   return out ? out : strdup("{\"ok\":false}");
 }

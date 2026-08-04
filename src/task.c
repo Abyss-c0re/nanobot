@@ -12,8 +12,8 @@
 #define TASK_ACTIVE "active.json"
 #define TASK_MAX_STEPS 24
 #define TASK_MAX_NOTE 400
-#define TASK_EXTRA_TURNS 12
-#define TASK_HARD_MAX 36
+#define TASK_EXTRA_TURNS 32
+#define TASK_HARD_MAX 96
 
 static void tasks_dir(char *out, size_t n) {
   snprintf(out, n, "%s/%s", ng_workdir(), TASK_DIR_REL);
