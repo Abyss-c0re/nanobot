@@ -1,11 +1,12 @@
 #ifndef NANOBOT_BRAINCELL_H
 #define NANOBOT_BRAINCELL_H
 /*
- * Braincells — nanobots as specialized cells under a BrainCube decision core.
+ * Braincells — specialized cells under BrainCube's internal mini-hive.
  *
- * Coding hive:
- *   prompt → core.decide → SOLO (one agent) | HIVE (explore+plan+implement cells)
- *   cells communicate via $NANOBOT_HOME/braincells JSON files (+ optional peer bus)
+ * BrainCube is a mini-hive (route/fuse lattice), not a full fleet:
+ *   prompt → core.decide → SOLO | HIVE (explore+plan+implement local cells)
+ *   local cells: $NANOBOT_HOME/braincells/*.json
+ *   external nanobots: optional NANOBOT_PEER_URL peer bus (signal / remote capacity)
  *   core fuses reports and chooses the next step
  *
  * Enabled when NANOBOT_BRAINCELLS=1 (Grokium sets this for desktop coding).

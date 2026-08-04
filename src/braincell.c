@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
-/* Braincell hive: BrainCube decides; nanobot subagents are the cells. */
+/* Mini-hive: BrainCube decides/fuses; local subagents = cells; optional external peers. */
 #include "braincell.h"
 #include "subagent.h"
 #include "util.h"
@@ -145,16 +145,28 @@ static void publish_cell(const char *role, const char *id, const char *body) {
     free(esc);
   }
   fclose(f);
-  /* optional peer bus: best-effort fire-and-forget */
+  /* External nanobots: best-effort signal on peer bus (mini-hive → remote cells).
+   * Does not block the internal hive; peer must accept token-gated routes. */
   {
     const char *peer = getenv("NANOBOT_PEER_URL");
     if (peer && peer[0]) {
       char cmd[900];
-      snprintf(cmd, sizeof cmd,
-               "curl -sS -m 2 -X POST '%s/peer/v1/braincube' "
-               "-H 'Content-Type: application/json' "
-               "-d '{\"action\":\"cell\",\"role\":\"%s\"}' >/dev/null 2>&1 &",
-               peer, role);
+      const char *tok = getenv("NANOBOT_PEER_TOKEN");
+      if (tok && tok[0])
+        snprintf(cmd, sizeof cmd,
+                 "curl -sS -m 2 -X POST '%s/peer/v1/braincube' "
+                 "-H 'Content-Type: application/json' "
+                 "-H 'X-Nanobot-Peer-Token: %s' "
+                 "-d '{\"action\":\"cell\",\"role\":\"%s\",\"scope\":\"external\"}' "
+                 ">/dev/null 2>&1 &",
+                 peer, tok, role);
+      else
+        snprintf(cmd, sizeof cmd,
+                 "curl -sS -m 2 -X POST '%s/peer/v1/braincube' "
+                 "-H 'Content-Type: application/json' "
+                 "-d '{\"action\":\"cell\",\"role\":\"%s\",\"scope\":\"external\"}' "
+                 ">/dev/null 2>&1 &",
+                 peer, role);
       system(cmd);
     }
   }
@@ -353,14 +365,23 @@ char *ng_braincell_try_tool(ng_agent_cfg *c, const char *name, const char *args_
 char *ng_braincell_status_json(void) {
   char *out = NULL;
   char stats[256] = "unavailable";
+  const char *peer = getenv("NANOBOT_PEER_URL");
+  char *peer_esc = NULL;
   core_ensure();
 #if BC_OK
   lhlam_cube_stats(&g_core, stats, sizeof stats);
 #endif
+  if (peer && peer[0]) peer_esc = ng_json_escape(peer);
   asprintf(&out,
-           "{\"enabled\":%s,\"braincube\":%s,\"core\":\"%s\",\"cells_dir\":\"braincells\"}",
+           "{\"enabled\":%s,\"braincube\":%s,\"model\":\"mini-hive\","
+           "\"core\":\"%s\",\"cells_dir\":\"braincells\","
+           "\"external_peer\":%s%s%s}",
            ng_braincell_enabled() ? "true" : "false",
            BC_OK ? "true" : "false",
-           stats);
+           stats,
+           peer_esc ? "\"" : "null",
+           peer_esc ? peer_esc : "",
+           peer_esc ? "\"" : "");
+  free(peer_esc);
   return out ? out : strdup("{\"enabled\":false}");
 }
