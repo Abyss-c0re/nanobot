@@ -492,12 +492,18 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
         free(think);
         think = ng_json_get_string(s, "reasoning_content");
       }
+      /* Thinking spam: only emit structured events when NANOBOT_SHOW_THINKING=1.
+       * Default: suppress entirely (models still reason server-side). */
       if (think && think[0]) {
-        char *esc = ng_json_escape(think);
-        char *ev = NULL;
-        if (esc && asprintf(&ev, "{\"type\":\"thinking\",\"text\":\"%s\"}", esc) > 0 && ev)
-          stream_evt(on_delta, ud, ev);
-        free(esc); free(ev);
+        const char *st = getenv("NANOBOT_SHOW_THINKING");
+        int show = st && (st[0] == '1' || st[0] == 'y' || st[0] == 'Y' || st[0] == 't');
+        if (show) {
+          char *esc = ng_json_escape(think);
+          char *ev = NULL;
+          if (esc && asprintf(&ev, "{\"type\":\"thinking\",\"text\":\"%s\"}", esc) > 0 && ev)
+            stream_evt(on_delta, ud, ev);
+          free(esc); free(ev);
+        }
       }
       free(think);
     }
@@ -508,6 +514,32 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
       free(piece);
       const char *d = strstr(s, "\"delta\"");
       piece = d ? ng_json_get_string(d, "content") : NULL;
+    }
+    /* Strip common model thinking tags leaking into content (configurable via env). */
+    if (piece && piece[0]) {
+      static const char *tags[] = {
+        "think", "thinking", "reasoning", "redacted_reasoning", "redacted_thinking",
+        NULL
+      };
+      char *clean = piece;
+      int i;
+      for (i = 0; tags[i]; i++) {
+        char open[48], close[48];
+        snprintf(open, sizeof open, "<%s>", tags[i]);
+        snprintf(close, sizeof close, "</%s>", tags[i]);
+        char *a = strstr(clean, open);
+        while (a) {
+          char *b = strstr(a, close);
+          if (!b) break;
+          b += strlen(close);
+          memmove(a, b, strlen(b) + 1);
+          a = strstr(clean, open);
+        }
+        /* also ... style some models use */
+        snprintf(open, sizeof open, "<%s>", tags[i]);
+      }
+      /* drop pure whitespace-only after strip */
+      piece = clean;
     }
     /* Keep space-only deltas (" ") — piece[0]==0 would skip them and glue words. */
     if (piece) {

@@ -82,10 +82,30 @@ fi
 BIN=nanobot
 command -v nanobot >/dev/null 2>&1 || BIN="$HOME_DIR/bin/nanobot"
 
+# Clanker / phone Commander: bind LAN so Titan can hit :8787 (peer_token gates mutate).
+# Loopback-only if LAN=off in settings or NANOBOT_LOOPBACK=1.
+LAN=on
+if [ -f "$SETTINGS" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) continue ;; esac
+    key=${line%%=*}; val=${line#*=}
+    key=$(echo "$key" | tr -d ' \t\r')
+    val=$(echo "$val" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    case "$key" in LAN|lan|BIND_LAN|bind_lan) LAN=$val ;; esac
+  done < "$SETTINGS"
+fi
+[ -n "${NANOBOT_LAN:-}" ] && LAN="$NANOBOT_LAN"
+case "$LAN" in 0|false|FALSE|no|NO|off|OFF) LAN=off ;; *) LAN=on ;; esac
+[ "${NANOBOT_LOOPBACK:-0}" = "1" ] && LAN=off
+LAN_FLAG=
+[ "$LAN" = "on" ] && LAN_FLAG=--lan
+
 if [ "$UI" = "on" ] && [ -n "$WWW" ]; then
   export NANOBOT_WWW="$WWW"
-  exec "$BIN" --home "$HOME_DIR" --port "$PORT" --www "$WWW"
+  # shellcheck disable=SC2086
+  exec "$BIN" --home "$HOME_DIR" --port "$PORT" --www "$WWW" $LAN_FLAG
 else
   unset NANOBOT_WWW
-  exec "$BIN" --home "$HOME_DIR" --port "$PORT"
+  # shellcheck disable=SC2086
+  exec "$BIN" --home "$HOME_DIR" --port "$PORT" $LAN_FLAG
 fi
