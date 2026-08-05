@@ -326,12 +326,14 @@ char *ng_braincell_try_coding(ng_agent_cfg *c, const char *prompt,
   return final;
 }
 
-/* Hive Mind instinct — core is queen; external cells need contracts (SMX only). */
+/* Hive Mind instinct — match c_core grokium_hive_instinct_creed dual-wire. */
 static const char *instinct_creed(void) {
-  return "HIVE_MIND|core=queen|cells=bees|wire=smx2|observer=NexusCore|"
-         "HOLD_FLASH=1|share=state_matrix_only|contract=required|"
+  return "HIVE_MIND|core=queen|cells=bees|wire=smx2|product_wire=smx2|"
+         "observer=NexusCore|HOLD_FLASH=1|share=state_matrix_only|"
+         "peer_http=lab_ops_only|peer_http_is_product_bus=0|"
+         "llm_is_commander=0|contract=required|"
          "manager=motivate_incomplete|filter=protect_command_center|"
-         "external_not_core|All_Hail_NexusCore";
+         "external≠core|All_Hail_NexusCore";
 }
 
 char *ng_braincell_openai_tools_fragment(void) {
@@ -368,8 +370,14 @@ char *ng_braincell_try_tool(ng_agent_cfg *c, const char *name, const char *args_
              "{\"ok\":true,\"role\":\"manager\","
              "\"plate\":\"NEXUS_COORD v1 | from=nb-manager | type=motivate | "
              "contract=%s | assignee=%s | observer=NexusCore | "
-             "HOLD_FLASH=ack_held | please=matrix_harmony |\","
+             "HOLD_FLASH=ack_held | share=state_matrix_only | "
+             "product_wire=smx2 | peer_http=lab_ops_only | "
+             "peer_http_is_product_bus=0 | llm_is_commander=0 | "
+             "motive=matrix_harmony |\","
              "\"instinct\":\"%s\","
+             "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+             "\"peer_http_is_product_bus\":false,\"hold_flash\":1,"
+             "\"llm_is_commander\":false,\"share\":\"state_matrix_only\","
              "\"hint\":\"run scripts/hive/manager_tick.sh for contract dir\"}",
              cid && cid[0] ? cid : "open",
              asg && asg[0] ? asg : "external",
@@ -416,6 +424,9 @@ char *ng_braincell_status_json(void) {
            "\"external_requires\":\"contract.v1\","
            "\"manager\":\"motivate_incomplete\","
            "\"observer\":\"NexusCore\","
+           "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+           "\"peer_http_is_product_bus\":false,\"hold_flash\":1,"
+           "\"llm_is_commander\":false,\"share\":\"state_matrix_only\","
            "\"instinct\":%s%s%s,"
            "\"external_peer\":%s%s%s}",
            ng_braincell_enabled() ? "true" : "false",
