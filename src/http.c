@@ -1077,14 +1077,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *prompt = ng_json_get_string(body, "prompt");
     char *cmd = ng_json_get_string(body, "command");
     if (!cmd) cmd = ng_json_get_string(body, "cmd");
-    char *kind = ng_json_get_string(body, "kind"); /* prompt|shell|watcher */
-    if (!kind) {
-      if (prompt) kind = strdup("prompt");
-      else if (cmd) kind = strdup("shell");
-      else kind = strdup("prompt");
-    }
+    char *kind_raw = ng_json_get_string(body, "kind"); /* prompt|shell|watcher */
+    /* Machine kind token only — never free-text inject into job meta. */
+    const char *kind = "prompt";
+    if (kind_raw && !strcmp(kind_raw, "shell")) kind = "shell";
+    else if (kind_raw && !strcmp(kind_raw, "watcher")) kind = "watcher";
+    else if (kind_raw && !strcmp(kind_raw, "prompt")) kind = "prompt";
+    else if (!kind_raw && cmd && (!prompt || !prompt[0])) kind = "shell";
+    free(kind_raw);
     if ((!prompt || !prompt[0]) && (!cmd || !cmd[0])) {
-      free(prompt); free(cmd); free(kind);
+      free(prompt); free(cmd);
       http_peer_err(cfd, 400, "need_prompt_or_command");
       free(req); close(cfd); return;
     }
@@ -1093,9 +1095,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     mkdir(jdir, 0755);
     char id[32];
     snprintf(id, sizeof id, "%ld%04d", (long)time(NULL), (int)(getpid() % 10000));
+    /* Dual-wire job meta — polled via GET /peer/v1/jobs/{id}. */
     char meta[768];
     int mn = snprintf(meta, sizeof meta,
-      "{\"id\":\"%s\",\"status\":\"queued\",\"kind\":\"%s\"}\n", id, kind);
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job\","
+      "\"id\":\"%s\",\"status\":\"queued\",\"kind\":\"%s\","
+      NG_PEER_HTTP_DUAL_WIRE "}\n", id, kind);
     char mpath[700], rpath[700], pp[700];
     snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, id);
     snprintf(rpath, sizeof rpath, "%s/%s.out", jdir, id);
@@ -1110,9 +1115,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (w == 0) {
       close(cfd);
       /* mark running */
-      char runm[256];
+      char runm[512];
       int rn = snprintf(runm, sizeof runm,
-        "{\"id\":\"%s\",\"status\":\"running\",\"kind\":\"%s\"}\n", id, kind);
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job\","
+        "\"id\":\"%s\",\"status\":\"running\",\"kind\":\"%s\","
+        NG_PEER_HTTP_DUAL_WIRE "}\n", id, kind);
       ng_write_file(mpath, runm, (size_t)rn);
       ng_hub_event("job.running", "id", id, "kind", kind);
       char *payload = ng_read_file(pp, NULL);
@@ -1122,7 +1129,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         char *esc = ng_json_escape(cr.output ? cr.output : "");
         char *jb = NULL;
         asprintf(&jb,
-          "{\"id\":\"%s\",\"status\":\"done\",\"kind\":\"shell\",\"exit\":%d,\"output\":\"%s\"}",
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,\"action\":\"job\","
+          "\"id\":\"%s\",\"status\":\"done\",\"kind\":\"shell\",\"exit\":%d,"
+          "\"output\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
+          cr.exit_code == 0 ? "true" : "false",
           id, cr.exit_code, esc ? esc : "");
         if (jb) { ng_write_file(mpath, jb, strlen(jb)); free(jb); }
         free(esc);
@@ -1136,7 +1146,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         char *esc = ng_json_escape(payload ? payload : "");
         char *jb = NULL;
         asprintf(&jb,
-          "{\"id\":\"%s\",\"status\":\"done\",\"kind\":\"watcher\",\"enabled\":true,\"prompt\":\"%s\"}",
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job\","
+          "\"id\":\"%s\",\"status\":\"done\",\"kind\":\"watcher\","
+          "\"enabled\":true,\"prompt\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
           id, esc ? esc : "");
         if (jb) { ng_write_file(mpath, jb, strlen(jb)); free(jb); }
         free(esc);
@@ -1147,7 +1159,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         char *esc = ng_json_escape(reply ? reply : "");
         char *jb = NULL;
         asprintf(&jb,
-          "{\"id\":\"%s\",\"status\":\"done\",\"kind\":\"prompt\",\"reply\":\"%s\"}",
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job\","
+          "\"id\":\"%s\",\"status\":\"done\",\"kind\":\"prompt\",\"reply\":\"%s\","
+          NG_PEER_HTTP_DUAL_WIRE "}",
           id, esc ? esc : "");
         if (jb) { ng_write_file(mpath, jb, strlen(jb)); free(jb); }
         free(esc); free(reply); free(payload);
@@ -1164,7 +1178,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       id_esc ? id_esc : "", id_esc ? id_esc : "");
     free(id_esc);
     http_response(cfd, 202, "application/json", ack ? ack : "{}", ack ? strlen(ack) : 2);
-    free(prompt); free(cmd); free(kind); free(ack);
+    free(prompt); free(cmd); free(ack);
     free(req); close(cfd); return;
   }
 
