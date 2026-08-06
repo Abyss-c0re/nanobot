@@ -1251,13 +1251,16 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   const char *bearer = NULL;
   if (grok) {
     if (!c->session || ng_session_ensure(c->session) != 0) {
-      return strdup("Not signed in. Open the activation link nanobot printed "
-                    "(open Connect Grok / activation link in a browser) to attach a session. "
-                    "Or use --offline / @! <cmd> without Grok.");
+      /* Machine plate — no free-text sign-in prose banner. */
+      return strdup("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
+                    "\"error\":\"not_signed_in\","
+                    "\"hint\":\"device_auth_or_offline\",\"python\":0}");
     }
     bearer = ng_session_bearer(c->session);
     if (!bearer) {
-      return strdup("No Grok session. Re-run nanobot and open the browser activation link.");
+      return strdup("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
+                    "\"error\":\"no_session\",\"hint\":\"device_auth\","
+                    "\"python\":0}");
     }
   } else {
     /* llama.cpp / OpenAI: optional API key from env file or env */
@@ -1470,7 +1473,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     if (grok) {
       if (ng_session_ensure(c->session) != 0) {
         free(messages); free(last_tool_out); free(tools); free(mem_user);
-        return strdup("Grok session expired. Restart nanobot and re-activate in the browser.");
+        /* Machine plate — no free-text session-expired banner. */
+        return strdup("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
+                      "\"error\":\"session_expired\","
+                      "\"hint\":\"device_auth\",\"python\":0}");
       }
       bearer = ng_session_bearer(c->session);
     }
@@ -1589,14 +1595,15 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       use_tools = 0;
       continue;
     }
-    /* Surface curl/fork failures that returned as plain text (not JSON) */
+    /* Surface curl/fork failures that returned as plain text (not JSON).
+     * Dual-wire plate only — free-text curl body stays in logs, not UI. */
     if (!strchr(resp, '{') &&
         (strstr(resp, "curl ") || strstr(resp, "fork failed") ||
          strstr(resp, "mkstemp") || strstr(resp, "waitpid"))) {
-      char *out = NULL;
-      asprintf(&out, "API transport error: %.400s", resp);
+      ng_log("agent: API transport error: %.200s", resp);
       free(resp); free(messages); free(last_tool_out); free(tools); free(mem_user);
-      return out ? out : strdup("API transport error");
+      return strdup("{\"schema\":\"nanobot.transport.v1\",\"ok\":false,"
+                    "\"error\":\"api_transport\",\"python\":0}");
     }
 
     if (strstr(resp, "\"error\"") || strstr(resp, "Failed to parse")) {
