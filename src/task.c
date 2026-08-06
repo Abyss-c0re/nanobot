@@ -39,6 +39,22 @@ static char *task_err(const char *error, const char *hint) {
                             "\"error\":\"oom\",\"python\":0}");
 }
 
+/* Dual-wire task tool success — action + next + embedded task body (no free-text). */
+static char *task_ok(const char *action, const char *next, const char *id,
+                     int steps_n, int done_n, const char *task_json) {
+  char *out = NULL;
+  const char *a = action && action[0] ? action : "ok";
+  const char *n = next && next[0] ? next : "task_status";
+  const char *i = id && id[0] ? id : "task";
+  const char *t = task_json && task_json[0] ? task_json : "{}";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.task.v1\",\"ok\":true,\"action\":\"%s\","
+           "\"id\":\"%s\",\"steps\":%d,\"done\":%d,\"next\":\"%s\","
+           "\"python\":0,\"task\":%s}",
+           a, i, steps_n, done_n, n, t);
+  return out ? out : task_err("oom", a);
+}
+
 static char *load_active(void) {
   char p[700];
   active_path(p, sizeof p);
@@ -257,12 +273,13 @@ static char *tool_plan(const char *args) {
                 "],\"updated\":%ld,\"notes\":[]}", (long)time(NULL));
   (void)o;
   save_active(json);
-  char *reply = NULL;
-  asprintf(&reply,
-           "ok: planned task %s with %d steps (status=planned). Call task_start next.\n%s",
-           id, n, json);
-  free(json); free(goal); free(steps);
-  return reply ? reply : strdup("ok planned");
+  {
+    char *reply = task_ok("planned", "task_start", id, n, 0, json);
+    free(json);
+    free(goal);
+    free(steps);
+    return reply;
+  }
 }
 
 static char *extract_steps_array(const char *j) {
@@ -324,14 +341,15 @@ static char *tool_start(void) {
     return task_err("oom", "task_start");
   }
   save_active(out);
-  char *reply = NULL;
-  asprintf(&reply,
-    "ok: task ACTIVE. Execute steps in order; after each real action call "
-    "task_step_done. When goal met call task_done; if impossible call task_block.\n"
-    "goal: %s\n%s",
-    goal ? goal : "?", out);
-  free(out); free(goal); free(id);
-  return reply ? reply : strdup("ok active");
+  {
+    int tot = 0, done = 0;
+    count_steps(out, &tot, &done);
+    char *reply = task_ok("active", "task_step_done", id, tot, done, out);
+    free(out);
+    free(goal);
+    free(id);
+    return reply;
+  }
 }
 
 static char *tool_step_done(const char *args) {
@@ -403,13 +421,18 @@ static char *tool_step_done(const char *args) {
   free(steps);
   char *out = rebuild_task(id, "active", goal, rebuilt, ",\"notes\":[]");
   if (out) save_active(out);
-  char *reply = NULL;
-  asprintf(&reply,
-           "ok: step %d marked done (%d/%d complete). note=%s\n"
-           "If more steps remain, keep working. If goal fully met, call task_done.",
-           idx, done_n, tot, note ? note : "");
-  free(out); free(goal); free(id); free(note);
-  return reply ? reply : strdup("ok step");
+  {
+    const char *next =
+        (tot > 0 && done_n >= tot) ? "task_done" : "task_step_done";
+    char *reply =
+        task_ok("step_done", next, id, tot, done_n, out ? out : "{}");
+    free(out);
+    free(goal);
+    free(id);
+    free(note);
+    (void)idx;
+    return reply;
+  }
 }
 
 static char *tool_done(const char *args) {
@@ -434,10 +457,15 @@ static char *tool_done(const char *args) {
     active_path(p, sizeof p);
     unlink(p);
   }
-  char *reply = NULL;
-  asprintf(&reply, "ok: task DONE. summary=%s", summary ? summary : "");
-  free(j); free(summary); free(id); free(goal); free(out);
-  return reply ? reply : strdup("ok done");
+  {
+    char *reply = task_ok("done", "none", id, 0, 0, out ? out : "{}");
+    free(j);
+    free(summary);
+    free(id);
+    free(goal);
+    free(out);
+    return reply;
+  }
 }
 
 static char *tool_block(const char *args) {
@@ -461,10 +489,15 @@ static char *tool_block(const char *args) {
     active_path(p, sizeof p);
     unlink(p);
   }
-  char *reply = NULL;
-  asprintf(&reply, "ok: task BLOCKED (dead end). reason=%s", reason ? reason : "");
-  free(j); free(reason); free(id); free(goal); free(out);
-  return reply ? reply : strdup("ok blocked");
+  {
+    char *reply = task_ok("blocked", "task_plan", id, 0, 0, out ? out : "{}");
+    free(j);
+    free(reason);
+    free(id);
+    free(goal);
+    free(out);
+    return reply;
+  }
 }
 
 static char *tool_status(void) {
@@ -476,12 +509,14 @@ static char *tool_status(void) {
   int tot = 0, done = 0;
   count_steps(j, &tot, &done);
   char *st = field_str(j, "status");
-  char *goal = field_str(j, "goal");
-  char *reply = NULL;
-  asprintf(&reply, "status=%s steps=%d/%d goal=%s\n%s",
-           st ? st : "?", done, tot, goal ? goal : "?", j);
-  free(j); free(st); free(goal);
-  return reply ? reply : strdup("?");
+  char *id = field_str(j, "id");
+  const char *next =
+      (st && !strcmp(st, "planned")) ? "task_start" : "task_step_done";
+  char *reply = task_ok("status", next, id, tot, done, j);
+  free(j);
+  free(st);
+  free(id);
+  return reply;
 }
 
 char *ng_task_try_tool(const char *name, const char *args_json) {
