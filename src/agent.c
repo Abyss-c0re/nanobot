@@ -1232,12 +1232,15 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                                int stream_final, ng_stream_fn on_delta, void *userdata) {
   int has_image = (image_b64 && image_b64[0])
                || (images_json && images_json[0] == '[' && strstr(images_json, "base64"));
-  if ((!user_prompt || !user_prompt[0]) && !has_image)
-    return strdup("(empty prompt)");
+  if ((!user_prompt || !user_prompt[0]) && !has_image) {
+    /* Machine plate — no free-text (empty prompt) banner. */
+    return strdup("{\"schema\":\"nanobot.empty_prompt.v1\",\"ok\":false,"
+                  "\"error\":\"empty_prompt\",\"python\":0}");
+  }
   if (!user_prompt) user_prompt = "";
 
   /* Direct shell: @! command  (offline, no LLM, works without an LLM) */
-  if (user_prompt[0] == '@' && user_prompt[1] == '!' && !has_image) {
+  if (!has_image && strncmp(user_prompt, "@!", 2) == 0) {
     char *r = run_shell_direct(c, user_prompt + 2);
     /* lightweight memory of shell for context */
     if (r) ng_memory_record_exchange(user_prompt, r);

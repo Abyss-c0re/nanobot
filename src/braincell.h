@@ -5,7 +5,7 @@
  *
  * BrainCube is a mini-hive (route/fuse lattice), not a full fleet:
  *   prompt → core.decide → SOLO | HIVE (explore+plan+implement local cells)
- *   local cells: $NANOBOT_HOME/braincells/*.json
+ *   local cells: $NANOBOT_HOME/braincells JSON files
  *   external nanobots: optional NANOBOT_PEER_URL peer bus (signal / remote capacity)
  *   core fuses reports and chooses the next step
  *
