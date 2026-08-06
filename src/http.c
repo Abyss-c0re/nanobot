@@ -427,32 +427,40 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (session->user_code) uc = ng_json_escape(session->user_code);
     }
     if (agent && agent->base_url) base_esc = ng_json_escape(agent->base_url);
-    char body[2560];
+    char *model_esc = ng_json_escape(agent && agent->model ? agent->model : "");
+    char *wd_esc = ng_json_escape(ng_workdir());
+    char *ver_esc = ng_json_escape(NG_VERSION);
+    char *be_esc = ng_json_escape(backend);
+    char body[3072];
     /* needs_browser = backend TYPE uses browser OAuth (always true for Grok).
      * login_required = user must complete Connect (not signed in). Clients must
-     * use login_required / signed_in — not needs_browser — or they thrash Connect. */
+     * use login_required / signed_in — not needs_browser — or they thrash Connect.
+     * Dual-wire nanobot.auth.v1 — machine fields only (no free-text essays). */
     int login_required = need_browser && !signed_in;
     int n = snprintf(body, sizeof body,
-      "{\"ok\":true,\"version\":\"%s\",\"model\":\"%s\",\"signed_in\":%s,"
+      "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"action\":\"status\","
+      "\"version\":\"%s\",\"model\":\"%s\",\"signed_in\":%s,"
       "\"login_pending\":%s,\"login_required\":%s,\"user_code\":\"%s\","
       "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
       "\"workdir\":\"%s\",\"auth\":\"%s\",\"backend\":\"%s\","
-      "\"base_url\":\"%s\",\"needs_browser\":%s}",
-      NG_VERSION,
-      agent && agent->model ? agent->model : "",
+      "\"base_url\":\"%s\",\"needs_browser\":%s,\"transport\":\"http\","
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ver_esc ? ver_esc : "",
+      model_esc ? model_esc : "",
       signed_in ? "true" : "false",
       (need_browser && session && session->login_pending) ? "true" : "false",
       login_required ? "true" : "false",
       uc ? uc : "",
       vu ? vu : "",
       vuc ? vuc : "",
-      ng_workdir(),
+      wd_esc ? wd_esc : "",
       auth_mode,
-      backend,
+      be_esc ? be_esc : "",
       base_esc ? base_esc : "",
       need_browser ? "true" : "false");
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(vu); free(vuc); free(uc); free(base_esc);
+    free(model_esc); free(wd_esc); free(ver_esc); free(be_esc);
     free(req); close(cfd); return;
   }
 
@@ -487,9 +495,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
     }
     if (ng_session_valid(session)) {
-      http_response(cfd, 200, "application/json",
-        "{\"ok\":true,\"signed_in\":true,\"login_pending\":false,"
-        "\"backend\":\"grok\",\"message\":\"already connected\"}", 95);
+      /* Dual-wire — machine action token only (no free-text "already connected"). */
+      http_json(cfd, 200,
+        "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"action\":\"already_signed_in\","
+        "\"signed_in\":true,\"login_pending\":false,\"backend\":\"grok\","
+        "\"transport\":\"http\","
+        "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}");
       free(req); close(cfd); return;
     }
     char *vuc = session->verification_uri_complete
@@ -498,14 +511,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *vu = session->verification_uri ? ng_json_escape(session->verification_uri) : NULL;
     char *uc = ng_json_escape(session->user_code ? session->user_code : "");
     char *body = NULL;
+    /* Dual-wire device-login start — no free-text coaching message. */
     asprintf(&body,
-      "{\"ok\":true,\"signed_in\":false,\"login_pending\":true,"
+      "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"action\":\"device_login_pending\","
+      "\"signed_in\":false,\"login_pending\":true,"
       "\"backend\":\"grok\",\"needs_browser\":true,"
       "\"user_code\":\"%s\","
       "\"verification_uri\":\"%s\","
       "\"verification_uri_complete\":\"%s\","
-      "\"activate_path\":\"/activate\","
-      "\"message\":\"Open the link to authorize Grok in your browser\"}",
+      "\"activate_path\":\"/activate\",\"transport\":\"http\","
+      NG_PEER_HTTP_DUAL_WIRE "}",
       uc ? uc : "",
       vu ? vu : "",
       vuc ? vuc : "");
