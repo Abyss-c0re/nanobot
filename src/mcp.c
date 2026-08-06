@@ -150,18 +150,53 @@ static int text_result(char **out, const char *text, int is_err) {
   return rc < 0 ? -1 : 0;
 }
 
+/* Dual-wire local MCP plates — machine tokens only (no free-text essays).
+ * Envelope stays MCP content[]; plate body is nanobot.mcp.v1 (stdio transport). */
+static char *mcp_err(const char *error) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "mcp_failed";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.mcp.v1\",\"ok\":false,\"error\":\"%s\","
+           "\"transport\":\"stdio\",\"python\":0}",
+           e);
+  return out ? out
+             : strdup("{\"schema\":\"nanobot.mcp.v1\",\"ok\":false,"
+                      "\"error\":\"oom\",\"transport\":\"stdio\",\"python\":0}");
+}
+
+static char *mcp_ok(const char *action) {
+  char *out = NULL;
+  const char *a = action && action[0] ? action : "ok";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.mcp.v1\",\"ok\":true,\"action\":\"%s\","
+           "\"transport\":\"stdio\",\"python\":0}",
+           a);
+  return out ? out : mcp_err("oom");
+}
+
+/* Wrap dual-wire plate into MCP tools/call content envelope; frees plate. */
+static int plate_result(char **out, char *plate, int is_err) {
+  int rc;
+  if (!plate) {
+    plate = mcp_err("oom");
+    is_err = 1;
+  }
+  rc = text_result(out, plate, is_err);
+  free(plate);
+  return rc;
+}
+
 static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_result) {
   char *name = tool_name(json);
   if (!name) {
-    *out_result = strdup("{\"content\":[{\"type\":\"text\",\"text\":\"missing tool name\"}],\"isError\":true}");
-    return -1;
+    return plate_result(out_result, mcp_err("missing_tool_name"), 1);
   }
 
   if (strcmp(name, "run_terminal_command") == 0 || strcmp(name, "shell") == 0) {
     char *cmd = tool_arg(json, "command");
     if (!cmd) {
       free(name);
-      return text_result(out_result, "missing command", 1);
+      return plate_result(out_result, mcp_err("missing_command"), 1);
     }
     ng_log("mcp tools/call shell: %.200s", cmd);
     ng_cmd_result cr = ng_run_command(cmd, agent->timeout_sec > 0 ? agent->timeout_sec : 60);
@@ -177,11 +212,14 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     char *prompt = tool_arg(json, "prompt");
     if (!prompt) {
       free(name);
-      return text_result(out_result, "missing prompt", 1);
+      return plate_result(out_result, mcp_err("missing_prompt"), 1);
     }
     ng_log("mcp tools/call nanobot_ask: %.200s", prompt);
     char *reply = ng_agent_run(agent, prompt);
-    text_result(out_result, reply ? reply : "(no reply)", 0);
+    if (reply)
+      text_result(out_result, reply, 0);
+    else
+      plate_result(out_result, mcp_err("no_reply"), 1);
     free(reply); free(prompt); free(name);
     return 0;
   }
@@ -192,7 +230,7 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     /* only allow safe basenames */
     if (strchr(which, '/') || strchr(which, '\\') || strstr(which, "..")) {
       free(which); free(name);
-      return text_result(out_result, "invalid memory name", 1);
+      return plate_result(out_result, mcp_err("invalid_memory_name"), 1);
     }
     char path[700];
     snprintf(path, sizeof path, "%s/memory/%s", ng_workdir(), which);
@@ -206,7 +244,7 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     char *body = ng_read_file(path, &len);
     if (!body) {
       free(which); free(name);
-      return text_result(out_result, "(missing or empty)", 0);
+      return plate_result(out_result, mcp_ok("memory_missing"), 0);
     }
     text_result(out_result, body, 0);
     free(body); free(which); free(name);
@@ -218,26 +256,36 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     if (!line) line = tool_arg(json, "text");
     if (!line) {
       free(name);
-      return text_result(out_result, "missing line", 1);
+      return plate_result(out_result, mcp_err("missing_line"), 1);
     }
     ng_memory_note_profile(line);
-    text_result(out_result, "ok: profile note stored", 0);
+    plate_result(out_result, mcp_ok("memory_note"), 0);
     free(line); free(name);
     return 0;
   }
 
   if (strcmp(name, "home_info") == 0) {
     char *info = NULL;
+    char *wd = ng_json_escape(ng_workdir());
+    char *be = ng_json_escape(ng_agent_backend_kind(agent));
+    char *md = ng_json_escape(agent->model ? agent->model : "");
+    char *bu = ng_json_escape(agent->base_url ? agent->base_url : "");
+    char *ver = ng_json_escape(NG_VERSION);
     asprintf(&info,
-      "nanobot %s\nworkdir=%s\nbackend=%s\nmodel=%s\nbase=%s\nlean=%s\n"
-      "MCP: shell, ask, memory_*, self_improve_*, home_info\n",
-      NG_VERSION, ng_workdir(),
-      ng_agent_backend_kind(agent),
-      agent->model ? agent->model : "?",
-      agent->base_url ? agent->base_url : "?",
-      ng_is_lean() ? "yes" : "no");
-    text_result(out_result, info, 0);
-    free(info); free(name);
+             "{\"schema\":\"nanobot.mcp.v1\",\"ok\":true,\"action\":\"home_info\","
+             "\"transport\":\"stdio\",\"version\":\"%s\",\"workdir\":\"%s\","
+             "\"backend\":\"%s\",\"model\":\"%s\",\"base_url\":\"%s\","
+             "\"lean\":%s,\"tools\":[\"shell\",\"ask\",\"memory\","
+             "\"self_improve\",\"home_info\"],\"python\":0}",
+             ver ? ver : "",
+             wd ? wd : "",
+             be ? be : "",
+             md ? md : "",
+             bu ? bu : "",
+             ng_is_lean() ? "true" : "false");
+    free(wd); free(be); free(md); free(bu); free(ver);
+    plate_result(out_result, info ? info : mcp_err("oom"), info ? 0 : 1);
+    free(name);
     return 0;
   }
 
@@ -259,7 +307,10 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     char *reply = n == 1
       ? ng_improve_run_cycle(agent, focus)
       : ng_improve_run_n(agent, n, focus);
-    text_result(out_result, reply ? reply : "(no reply)", 0);
+    if (reply)
+      text_result(out_result, reply, 0);
+    else
+      plate_result(out_result, mcp_err("no_reply"), 1);
     free(reply); free(focus); free(name);
     return 0;
   }
@@ -269,7 +320,10 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
       strcmp(name, "train_status") == 0 ||
       strcmp(name, "cubechain_status") == 0) {
     char *rep = ng_bc_train_status_report();
-    text_result(out_result, rep ? rep : "unavailable", 0);
+    if (rep)
+      text_result(out_result, rep, 0);
+    else
+      plate_result(out_result, mcp_err("unavailable"), 1);
     free(rep); free(name);
     return 0;
   }
@@ -300,11 +354,18 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     return 0;
   }
 
-  char *esc = ng_json_escape(name);
-  char *msg = NULL;
-  asprintf(&msg, "unknown tool: %s", esc ? esc : "?");
-  text_result(out_result, msg, 1);
-  free(esc); free(msg); free(name);
+  {
+    char *esc = ng_json_escape(name);
+    char *plate = NULL;
+    asprintf(&plate,
+             "{\"schema\":\"nanobot.mcp.v1\",\"ok\":false,"
+             "\"error\":\"unknown_tool\",\"tool\":\"%s\","
+             "\"transport\":\"stdio\",\"python\":0}",
+             esc ? esc : "");
+    free(esc);
+    plate_result(out_result, plate ? plate : mcp_err("unknown_tool"), 1);
+  }
+  free(name);
   return -1;
 }
 
