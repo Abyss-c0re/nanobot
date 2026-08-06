@@ -147,6 +147,19 @@ int ng_agent_save_env(const ng_agent_cfg *c) {
 /* OpenAI-compatible POST. Grok cloud headers when needed; plain Bearer for llama.cpp. */
 static char *curl_post_json_unlocked(const char *url, const char *bearer, const char *body);
 
+/* Dual-wire transport deny — machine error token only (no free-text curl essays). */
+static char *transport_err(const char *error) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "api_transport";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.transport.v1\",\"ok\":false,"
+           "\"error\":\"%s\",\"python\":0}",
+           e);
+  return out ? out
+             : strdup("{\"schema\":\"nanobot.transport.v1\",\"ok\":false,"
+                      "\"error\":\"oom\",\"python\":0}");
+}
+
 typedef struct { const char *url; const char *bearer; const char *body; } curl_job_t;
 static char *curl_post_json_job(void *ud) {
   curl_job_t *j = (curl_job_t *)ud;
@@ -161,16 +174,20 @@ static char *curl_post_json(const char *url, const char *bearer, const char *bod
 static char *curl_post_json_unlocked(const char *url, const char *bearer, const char *body) {
   char tmpl[640], outtmpl[640], errtmpl[640];
   int fd = ng_mkstemp_home(tmpl, sizeof tmpl, "ng_req_");
-  if (fd < 0) return strdup("mkstemp failed (home/tmp)");
+  if (fd < 0) return transport_err("mkstemp");
   write(fd, body, strlen(body));
   close(fd);
 
   int ofd = ng_mkstemp_home(outtmpl, sizeof outtmpl, "ng_resp_");
-  if (ofd < 0) { unlink(tmpl); return strdup("mkstemp out failed"); }
+  if (ofd < 0) { unlink(tmpl); return transport_err("mkstemp_out"); }
   close(ofd);
 
   int efd = ng_mkstemp_home(errtmpl, sizeof errtmpl, "ng_cerr_");
-  if (efd < 0) { unlink(tmpl); unlink(outtmpl); return strdup("mkstemp err failed"); }
+  if (efd < 0) {
+    unlink(tmpl);
+    unlink(outtmpl);
+    return transport_err("mkstemp_err");
+  }
   close(efd);
 
   char auth[1600];
@@ -191,7 +208,7 @@ static char *curl_post_json_unlocked(const char *url, const char *bearer, const 
   if (p2 < 0) {
     unlink(tmpl); unlink(outtmpl); unlink(errtmpl);
     ng_log("agent: curl fork failed: %s", strerror(errno));
-    return strdup("curl fork failed (too many processes/zombies?) — restart peer");
+    return transport_err("curl_fork");
   }
   if (p2 == 0) {
     int er = open(errtmpl, O_WRONLY | O_TRUNC);
@@ -238,7 +255,7 @@ static char *curl_post_json_unlocked(const char *url, const char *bearer, const 
   int st = 0;
   if (waitpid(p2, &st, 0) < 0) {
     unlink(tmpl); unlink(outtmpl); unlink(errtmpl);
-    return strdup("curl waitpid failed");
+    return transport_err("curl_waitpid");
   }
   unlink(tmpl);
   if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) {
@@ -248,14 +265,11 @@ static char *curl_post_json_unlocked(const char *url, const char *bearer, const 
     unlink(errtmpl);
     if (err && err[0]) { free(cerr); return err; }
     free(err);
-    if (cerr && cerr[0]) {
-      char *out = NULL;
-      asprintf(&out, "curl failed: %s", cerr);
-      free(cerr);
-      return out ? out : strdup("curl failed talking to API");
-    }
+    /* Log curl stderr free-text; never surface it on the product wire. */
+    if (cerr && cerr[0])
+      ng_log("agent: curl stderr: %.200s", cerr);
     free(cerr);
-    return strdup("curl failed talking to API");
+    return transport_err("curl_failed");
   }
   unlink(errtmpl);
   char *resp = ng_read_file(outtmpl, NULL);
@@ -269,10 +283,13 @@ static char *curl_post_json_unlocked(const char *url, const char *bearer, const 
 static char *curl_get_url(const char *url, const char *bearer, int grok_headers) {
   char outtmpl[640], errtmpl[640];
   int ofd = ng_mkstemp_home(outtmpl, sizeof outtmpl, "ng_get_");
-  if (ofd < 0) return strdup("mkstemp out failed");
+  if (ofd < 0) return transport_err("mkstemp_out");
   close(ofd);
   int efd = ng_mkstemp_home(errtmpl, sizeof errtmpl, "ng_gerr_");
-  if (efd < 0) { unlink(outtmpl); return strdup("mkstemp err failed"); }
+  if (efd < 0) {
+    unlink(outtmpl);
+    return transport_err("mkstemp_err");
+  }
   close(efd);
 
   char auth[1600];
@@ -288,7 +305,7 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
   pid_t p2 = fork();
   if (p2 < 0) {
     unlink(outtmpl); unlink(errtmpl);
-    return strdup("curl fork failed (process limit?)");
+    return transport_err("curl_fork");
   }
   if (p2 == 0) {
     int er = open(errtmpl, O_WRONLY | O_TRUNC);
@@ -330,7 +347,7 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
   int st = 0;
   if (waitpid(p2, &st, 0) < 0) {
     unlink(outtmpl); unlink(errtmpl);
-    return strdup("curl waitpid failed");
+    return transport_err("curl_waitpid");
   }
   if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) {
     char *err = ng_read_file(outtmpl, NULL);
@@ -338,14 +355,10 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
     unlink(outtmpl); unlink(errtmpl);
     if (err && err[0]) { free(cerr); return err; }
     free(err);
-    if (cerr && cerr[0]) {
-      char *out = NULL;
-      asprintf(&out, "curl failed: %s", cerr);
-      free(cerr);
-      return out ? out : strdup("curl failed listing models");
-    }
+    if (cerr && cerr[0])
+      ng_log("agent: models curl stderr: %.200s", cerr);
     free(cerr);
-    return strdup("curl failed listing models");
+    return transport_err("curl_failed");
   }
   unlink(errtmpl);
   char *resp = ng_read_file(outtmpl, NULL);
@@ -355,7 +368,7 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
 
 char *ng_agent_fetch_models_json(ng_agent_cfg *c) {
   if (!c || !c->base_url || !c->base_url[0])
-    return strdup("{\"error\":\"no base_url\"}");
+    return transport_err("no_base_url");
   char url[768];
   /* Allow override list URL (grok-build: GROK_MODELS_LIST_URL) */
   const char *list = getenv("NANOBOT_MODELS_LIST_URL");
@@ -785,7 +798,7 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   int fd = ng_mkstemp_home(tmpl, sizeof tmpl, "ng_req_");
   if (fd < 0) {
     ng_llm_sched_release();
-    return strdup("mkstemp failed");
+    return transport_err("mkstemp");
   }
   write(fd, body, strlen(body));
   close(fd);
@@ -794,7 +807,7 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   if (pipe(pipefd) != 0) {
     unlink(tmpl);
     ng_llm_sched_release();
-    return strdup("pipe failed");
+    return transport_err("pipe_failed");
   }
 
   char auth[1600];
@@ -814,7 +827,7 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   if (p2 < 0) {
     close(pipefd[0]); close(pipefd[1]); unlink(tmpl);
     ng_llm_sched_release();
-    return strdup("curl fork failed (process limit?)");
+    return transport_err("curl_fork");
   }
   if (p2 == 0) {
     close(pipefd[0]);
@@ -1590,7 +1603,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
     if (!resp) {
       free(messages); free(last_tool_out); free(tools); free(mem_user);
-      return strdup("no response from API");
+      return transport_err("no_response");
     }
     if (!resp[0]) {
       ng_log("agent: empty API body turn %d/%d tools=%d", turn + 1, max_turns, tools_now);
@@ -1598,15 +1611,17 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       use_tools = 0;
       continue;
     }
-    /* Surface curl/fork failures that returned as plain text (not JSON).
-     * Dual-wire plate only — free-text curl body stays in logs, not UI. */
+    /* Transport plates already dual-wire; legacy free-text curl bodies → plate. */
+    if (strstr(resp, "\"schema\":\"nanobot.transport.v1\"")) {
+      free(messages); free(last_tool_out); free(tools); free(mem_user);
+      return resp;
+    }
     if (!strchr(resp, '{') &&
         (strstr(resp, "curl ") || strstr(resp, "fork failed") ||
          strstr(resp, "mkstemp") || strstr(resp, "waitpid"))) {
       ng_log("agent: API transport error: %.200s", resp);
       free(resp); free(messages); free(last_tool_out); free(tools); free(mem_user);
-      return strdup("{\"schema\":\"nanobot.transport.v1\",\"ok\":false,"
-                    "\"error\":\"api_transport\",\"python\":0}");
+      return transport_err("api_transport");
     }
 
     if (strstr(resp, "\"error\"") || strstr(resp, "Failed to parse")) {
@@ -1626,10 +1641,11 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       }
       char *em = ng_json_get_string(resp, "message");
       if (!em) em = ng_json_get_string(resp, "error");
-      char *out = NULL;
-      asprintf(&out, "API error: %s\n%.600s", em ? em : "?", resp);
+      /* Dual-wire API error — free-text body stays in logs only. */
+      ng_log("agent: API error: %.120s body=%.200s", em ? em : "?", resp);
       free(em); free(resp); free(messages); free(last_tool_out); free(tools); free(mem_user);
-      return out;
+      return strdup("{\"schema\":\"nanobot.api_error.v1\",\"ok\":false,"
+                    "\"error\":\"api_error\",\"python\":0}");
     }
 
     char *tname = NULL, *targs = NULL, *tid = NULL;
@@ -1918,9 +1934,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       ng_log("agent: final from last tool output (model never wrote text)");
     } else {
       ng_log("agent: empty final after %d turns (check curl/session/network)", max_turns);
-      final = strdup(
-        "(no reply from model — peer may be process-starved or API empty; "
-        "restart peer, then retry. Or @! shell.)");
+      /* Dual-wire empty reply — no free-text peer/restart essay. */
+      final = transport_err("empty_reply");
     }
   }
 
@@ -1930,7 +1945,9 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   if (final && strncmp(final, "API error:", 10) != 0 &&
       strncmp(final, "(no content)", 12) != 0 &&
       strncmp(final, "curl failed", 11) != 0 &&
-      strncmp(final, "(no reply", 9) != 0) {
+      strncmp(final, "(no reply", 9) != 0 &&
+      !strstr(final, "\"schema\":\"nanobot.transport.v1\"") &&
+      !strstr(final, "\"schema\":\"nanobot.api_error.v1\"")) {
     ng_memory_record_exchange(mem_user ? mem_user : user_prompt, final);
   }
   ng_log("agent: final: %.300s", final);
