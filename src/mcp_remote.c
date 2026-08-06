@@ -56,26 +56,51 @@ static char *jstr(const char *json, const char *key) {
   return ng_json_get_string(json, key);
 }
 
+/* Dual-wire MCP transport deny — machine error token only (no free-text curl essays). */
+static char *mcp_err(const char *error) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "mcp_failed";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.mcp.v1\",\"ok\":false,\"error\":\"%s\","
+           "\"python\":0}",
+           e);
+  return out ? out
+             : strdup("{\"schema\":\"nanobot.mcp.v1\",\"ok\":false,"
+                      "\"error\":\"oom\",\"python\":0}");
+}
+
 /* HTTP JSON-RPC POST via curl; captures optional Mcp-Session-Id response header. */
 static char *mcp_http_post(const char *url, const char *auth_hdr,
                            const char *session_id, const char *body,
                            char **out_session) {
   if (out_session) *out_session = NULL;
-  if (!url || !url[0] || !body) return strdup("{\"error\":\"bad mcp request\"}");
+  if (!url || !url[0] || !body) return mcp_err("bad_request");
 
   char reqp[640], outp[640], errp[640], hdrp[640];
   int fd = ng_mkstemp_home(reqp, sizeof reqp, "mcp_req_");
-  if (fd < 0) return strdup("{\"error\":\"mkstemp\"}");
+  if (fd < 0) return mcp_err("mkstemp");
   write(fd, body, strlen(body));
   close(fd);
   int ofd = ng_mkstemp_home(outp, sizeof outp, "mcp_out_");
-  if (ofd < 0) { unlink(reqp); return strdup("{\"error\":\"mkstemp out\"}"); }
+  if (ofd < 0) {
+    unlink(reqp);
+    return mcp_err("mkstemp_out");
+  }
   close(ofd);
   int efd = ng_mkstemp_home(errp, sizeof errp, "mcp_err_");
-  if (efd < 0) { unlink(reqp); unlink(outp); return strdup("{\"error\":\"mkstemp err\"}"); }
+  if (efd < 0) {
+    unlink(reqp);
+    unlink(outp);
+    return mcp_err("mkstemp_err");
+  }
   close(efd);
   int hfd = ng_mkstemp_home(hdrp, sizeof hdrp, "mcp_hdr_");
-  if (hfd < 0) { unlink(reqp); unlink(outp); unlink(errp); return strdup("{\"error\":\"mkstemp hdr\"}"); }
+  if (hfd < 0) {
+    unlink(reqp);
+    unlink(outp);
+    unlink(errp);
+    return mcp_err("mkstemp_hdr");
+  }
   close(hfd);
 
   char dataarg[700];
@@ -94,7 +119,7 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
   pid_t p = fork();
   if (p < 0) {
     unlink(reqp); unlink(outp); unlink(errp); unlink(hdrp);
-    return strdup("{\"error\":\"fork failed\"}");
+    return mcp_err("curl_fork");
   }
   if (p == 0) {
     int er = open(errp, O_WRONLY | O_TRUNC);
@@ -127,7 +152,7 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
   int st = 0;
   if (waitpid(p, &st, 0) < 0) {
     unlink(reqp); unlink(outp); unlink(errp); unlink(hdrp);
-    return strdup("{\"error\":\"waitpid\"}");
+    return mcp_err("curl_waitpid");
   }
   unlink(reqp);
 
@@ -161,14 +186,14 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
   char *cerr = ng_read_file(errp, NULL);
   unlink(outp); unlink(errp);
   if ((!raw || !raw[0]) && cerr && cerr[0]) {
-    char *out = NULL;
-    char *esc = ng_json_escape(cerr);
-    asprintf(&out, "{\"error\":\"curl: %s\"}", esc ? esc : "?");
-    free(esc); free(raw); free(cerr);
-    return out ? out : strdup("{\"error\":\"curl\"}");
+    /* Log curl stderr free-text; never surface it on the product wire. */
+    ng_log("mcp: curl stderr: %.200s", cerr);
+    free(raw);
+    free(cerr);
+    return mcp_err("curl_failed");
   }
   free(cerr);
-  if (!raw) return strdup("{\"error\":\"empty response\"}");
+  if (!raw) return mcp_err("empty_response");
 
   /* SSE: take last data: JSON line with result or error */
   if (strstr(raw, "data:") || strncmp(raw, "event:", 6) == 0) {
@@ -181,7 +206,7 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
       if (!strncmp(line, "data:", 5)) {
         line += 5;
         while (*line == ' ') line++;
-        if (*line == '{' ) {
+        if (*line == '{') {
           free(last);
           last = strdup(line);
         }
@@ -190,7 +215,7 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
       p2 = nl + 1;
     }
     free(raw);
-    return last ? last : strdup("{\"error\":\"empty SSE\"}");
+    return last ? last : mcp_err("empty_sse");
   }
   return raw;
 }
@@ -357,7 +382,7 @@ char *ng_mcp_server_probe(const char *id, const char *url_override, const char *
   }
   if (!url) {
     free(auth); free(name);
-    return strdup("{\"ok\":false,\"error\":\"server not found (need id or url)\"}");
+    return mcp_err("server_not_found");
   }
   char *sess = NULL;
   char *list = initialize_and_list(url, auth, &sess);
@@ -515,7 +540,7 @@ static char *mcp_call_server(const char *server_id, const char *tool,
   char *resp = mcp_http_post(hit->url, hit->auth, sess, req, NULL);
   free(req); free(sess); free(args_owned); free_srv(&copy);
 
-  if (!resp) return strdup("MCP tools/call empty");
+  if (!resp) return mcp_err("tools_call_empty");
   /* prefer text content extraction */
   char *text = jstr(resp, "text");
   if (!text) {
@@ -545,35 +570,43 @@ static char *mcp_call_server(const char *server_id, const char *tool,
 static char *mcp_list_all(void) {
   mcp_srv arr[16];
   int n = parse_servers(arr, 16);
-  char *acc = strdup("MCP servers:\n");
+  int enabled = 0, probed_ok = 0;
+  char ids[512];
+  size_t o = 0;
+  ids[0] = 0;
   if (!n) {
-    free(acc);
     for (int i = 0; i < n; i++) free_srv(&arr[i]);
-    return strdup("No MCP servers configured. Add entries to $NANOBOT_HOME/mcp_servers.json.");
+    return mcp_err("no_servers");
   }
+  /* Dual-wire list plate — machine ids/counts only (no free-text dump). */
   for (int i = 0; i < n; i++) {
-    if (!arr[i].enabled) {
-      char *line = NULL;
-      asprintf(&line, "%s  - %s (%s) DISABLED\n", acc, arr[i].id, arr[i].name ? arr[i].name : "");
-      free(acc); acc = line ? line : acc;
-      free_srv(&arr[i]);
-      continue;
+    char *eid = ng_json_escape(arr[i].id ? arr[i].id : "");
+    if (o + 48 < sizeof ids) {
+      o += (size_t)snprintf(ids + o, sizeof ids - o, "%s\"%s\"", o ? "," : "",
+                            eid ? eid : "");
     }
-    char *sess = NULL;
-    char *list = initialize_and_list(arr[i].url, arr[i].auth, &sess);
-    free(sess);
-    char *line = NULL;
-    asprintf(&line, "%s  - id=%s name=%s url=%s\n    tools: %.800s\n",
-             acc,
-             arr[i].id ? arr[i].id : "?",
-             arr[i].name ? arr[i].name : "",
-             arr[i].url ? arr[i].url : "",
-             list ? list : "(probe failed)");
-    free(acc); free(list);
-    acc = line ? line : acc;
+    free(eid);
+    if (arr[i].enabled) {
+      enabled++;
+      char *sess = NULL;
+      char *list = initialize_and_list(arr[i].url, arr[i].auth, &sess);
+      free(sess);
+      if (list && !strstr(list, "\"schema\":\"nanobot.mcp.v1\"") &&
+          (!strstr(list, "\"error\"") || strstr(list, "\"result\"")))
+        probed_ok++;
+      free(list);
+    }
     free_srv(&arr[i]);
   }
-  return acc ? acc : strdup("(empty)");
+  {
+    char *out = NULL;
+    asprintf(&out,
+             "{\"schema\":\"nanobot.mcp.v1\",\"ok\":true,\"action\":\"list\","
+             "\"n\":%d,\"enabled\":%d,\"probed_ok\":%d,\"ids\":[%s],"
+             "\"python\":0}",
+             n, enabled, probed_ok, ids);
+    return out ? out : mcp_err("oom");
+  }
 }
 
 char *ng_mcp_try_tool(const char *name, const char *args_json) {
