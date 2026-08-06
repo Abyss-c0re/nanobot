@@ -622,7 +622,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (policy_only) {
         if (agent) ng_agent_apply_provider_policy(agent);
         free(backend); free(base); free(model);
-        http_json(cfd, 200, "{\"ok\":true,\"saved\":\"policy\"}");
+        http_json(cfd, 200,
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "\"action\":\"settings_policy\","
+          NG_PEER_HTTP_DUAL_WIRE "}");
         free(req); close(cfd); return;
       }
       free(backend); free(base); free(model);
@@ -653,12 +656,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
            agent->model ? agent->model : "?");
     char *be = ng_json_escape(agent->base_url ? agent->base_url : "");
     char *me = ng_json_escape(agent->model ? agent->model : "");
+    char *bk = ng_json_escape(ng_agent_backend_kind(agent));
     char *out = NULL;
     asprintf(&out,
-      "{\"ok\":true,\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"settings\","
+      "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
       "\"needs_browser\":%s,\"signed_in\":%s,"
-      "\"subagents\":%s,\"subagents_max\":%d,\"llm_serial\":%s}",
-      ng_agent_backend_kind(agent),
+      "\"subagents\":%s,\"subagents_max\":%d,\"llm_serial\":%s,"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      bk ? bk : "",
       be ? be : "",
       me ? me : "",
       ng_agent_needs_browser_session(agent) ? "true" : "false",
@@ -668,7 +674,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       ng_subagent_max(),
       ng_llm_sched_enabled() ? "true" : "false");
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
-    free(out); free(be); free(me);
+    free(out); free(be); free(me); free(bk);
     free(backend); free(base); free(model);
     free(req); close(cfd); return;
   }
@@ -698,13 +704,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     const char *kind = ng_agent_backend_kind(agent);
     char *be = ng_json_escape(agent->base_url ? agent->base_url : "");
     char *me = ng_json_escape(agent->model ? agent->model : "");
-    char body[768];
+    char *ke = ng_json_escape(kind);
+    char body[900];
     int n = snprintf(body, sizeof body,
-      "{\"ok\":true,\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\",\"needs_browser\":%s}",
-      kind, be ? be : "", me ? me : "",
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"backend\","
+      "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\",\"needs_browser\":%s,"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ke ? ke : "", be ? be : "", me ? me : "",
       ng_agent_needs_browser_session(agent) ? "true" : "false");
     http_response(cfd, 200, "application/json", body, (size_t)n);
-    free(be); free(me);
+    free(be); free(me); free(ke);
     free(req); close(cfd); return;
   }
 
@@ -712,7 +721,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *tail = ng_read_log_tail(16 * 1024);
     char *esc = ng_json_escape(tail ? tail : "");
     char *body = NULL;
-    asprintf(&body, "{\"log\":\"%s\"}", esc ? esc : "");
+    asprintf(&body,
+             "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"log\","
+             "\"log\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
+             esc ? esc : "");
     http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
     free(tail); free(esc); free(body);
     free(req); close(cfd); return;
@@ -726,10 +738,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *raw = ng_read_file(tpath, NULL);
     if (!raw || !raw[0]) {
       free(raw);
-      http_json(cfd, 200, "{\"ok\":true,\"open\":false,\"task\":null}");
+      http_json(cfd, 200,
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"task\","
+        "\"open\":false,\"task\":null," NG_PEER_HTTP_DUAL_WIRE "}");
     } else {
       char *body = NULL;
-      asprintf(&body, "{\"ok\":true,\"open\":true,\"task\":%s}", raw);
+      asprintf(&body,
+               "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"task\","
+               "\"open\":true,\"task\":%s," NG_PEER_HTTP_DUAL_WIRE "}",
+               raw);
       http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
       free(body);
       free(raw);
@@ -861,7 +878,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                                              images_json, 1, chat_sse_delta, &ud);
       char *esc = ng_json_escape(reply ? reply : "");
       char *fin = NULL;
-      if (asprintf(&fin, "data: {\"done\":true,\"reply\":\"%s\"}\n\n", esc ? esc : "") > 0 && fin) {
+      if (asprintf(&fin,
+                   "data: {\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+                   "\"action\":\"chat\",\"done\":true,\"reply\":\"%s\","
+                   NG_PEER_HTTP_DUAL_WIRE "}\n\n",
+                   esc ? esc : "") > 0 && fin) {
         send_all(cfd, fin, strlen(fin));
         free(fin);
       }
@@ -873,7 +894,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                                            images_json, 0, NULL, NULL);
     char *esc = ng_json_escape(reply ? reply : "");
     char *jb = NULL;
-    asprintf(&jb, "{\"reply\":\"%s\"}", esc ? esc : "");
+    asprintf(&jb,
+             "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"chat\","
+             "\"reply\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
+             esc ? esc : "");
     http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
     free(prompt); free(image_b64); free(image_mime); free(images_json);
     free(reply); free(esc); free(jb);
@@ -1132,9 +1156,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       _exit(0);
     }
     char *ack = NULL;
+    char *id_esc = ng_json_escape(id);
     asprintf(&ack,
-      "{\"ok\":true,\"id\":\"%s\",\"status\":\"queued\",\"poll\":\"/peer/v1/jobs/%s\"}",
-      id, id);
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job_queued\","
+      "\"id\":\"%s\",\"status\":\"queued\",\"poll\":\"/peer/v1/jobs/%s\","
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      id_esc ? id_esc : "", id_esc ? id_esc : "");
+    free(id_esc);
     http_response(cfd, 202, "application/json", ack ? ack : "{}", ack ? strlen(ack) : 2);
     free(prompt); free(cmd); free(kind); free(ack);
     free(req); close(cfd); return;
@@ -1211,8 +1239,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *list = ng_subagent_list_json();
     char *jb = NULL;
     asprintf(&jb,
-      "{\"ok\":true,\"enabled\":%s,\"max\":%d,\"running\":%d,"
-      "\"llm_serial\":%s,\"subagents\":%s}",
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"subagent_list\","
+      "\"enabled\":%s,\"max\":%d,\"running\":%d,"
+      "\"llm_serial\":%s,\"subagents\":%s,"
+      NG_PEER_HTTP_DUAL_WIRE "}",
       ng_subagent_enabled() ? "true" : "false",
       ng_subagent_max(), ng_subagent_running_count(),
       ng_llm_sched_enabled() ? "true" : "false",
@@ -1234,7 +1264,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       int rc = ng_subagent_cancel(id ? id : "");
       free(id); free(action);
       if (rc == 0)
-        http_json(cfd, 200, "{\"ok\":true,\"cancelled\":true}");
+        http_json(cfd, 200,
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "\"action\":\"subagent_cancel\",\"cancelled\":true,"
+          NG_PEER_HTTP_DUAL_WIRE "}");
       else
         http_peer_err(cfd, 400, "cancel_failed");
       free(req); close(cfd); return;
@@ -1381,7 +1414,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *list = ng_shell_approval_list_json();
     char *out = NULL;
-    asprintf(&out, "{\"ok\":true,\"gate_configured\":%s,\"pending\":%s}",
+    asprintf(&out,
+             "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+             "\"action\":\"shell_approvals\",\"gate_configured\":%s,\"pending\":%s,"
+             NG_PEER_HTTP_DUAL_WIRE "}",
              ng_shell_gate_configured() ? "true" : "false",
              list ? list : "[]");
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
@@ -1398,12 +1434,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (action && !strcmp(action, "set") && pw) {
       int rc = ng_shell_gate_set_password(pw);
       if (rc == 0)
-        http_json(cfd, 200, "{\"ok\":true,\"gate\":\"set\"}");
+        http_json(cfd, 200,
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "\"action\":\"gate_set\"," NG_PEER_HTTP_DUAL_WIRE "}");
       else
         http_peer_err(cfd, 400, "gate_set_failed");
     } else if (action && !strcmp(action, "verify") && pw) {
       int ok = ng_shell_gate_verify_password(pw);
-      http_json(cfd, 200, ok ? "{\"ok\":true,\"valid\":true}" : "{\"ok\":true,\"valid\":false}");
+      char plate[256];
+      snprintf(plate, sizeof plate,
+               "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+               "\"action\":\"gate_verify\",\"valid\":%s,"
+               NG_PEER_HTTP_DUAL_WIRE "}",
+               ok ? "true" : "false");
+      http_json(cfd, 200, plate);
     } else {
       http_peer_err(cfd, 400, "need_gate_action");
     }
@@ -1421,7 +1465,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *action = ng_json_get_string(body, "action");
     if (action && !strcmp(action, "reject") && id) {
       ng_shell_approval_reject(id);
-      http_json(cfd, 200, "{\"ok\":true,\"status\":\"rejected\"}");
+      http_json(cfd, 200,
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+        "\"action\":\"shell_reject\",\"status\":\"rejected\","
+        NG_PEER_HTTP_DUAL_WIRE "}");
       free(id); free(pw); free(action);
       free(req); close(cfd); return;
     }
@@ -1431,13 +1478,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       ng_cmd_result cr = ng_run_command_approved(cmd,
           agent && agent->timeout_sec > 0 ? agent->timeout_sec : 60);
       char *esc = ng_json_escape(cr.output ? cr.output : "");
+      char *cmd_esc = ng_json_escape(cmd);
       char *jb = NULL;
       asprintf(&jb,
-        "{\"ok\":%s,\"exit\":%d,\"output\":\"%s\",\"approved\":true,\"command\":\"%s\"}",
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,\"action\":\"shell_approve\","
+        "\"exit\":%d,\"output\":\"%s\",\"approved\":true,\"command\":\"%s\","
+        NG_PEER_HTTP_DUAL_WIRE "}",
         cr.exit_code == 0 ? "true" : "false", cr.exit_code,
-        esc ? esc : "", cmd);
+        esc ? esc : "", cmd_esc ? cmd_esc : "");
       http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
-      free(esc); free(jb);
+      free(esc); free(cmd_esc); free(jb);
       ng_cmd_result_free(&cr);
     } else {
       const char *err = rc == -3 ? "gate_password_not_configured"
