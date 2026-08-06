@@ -379,12 +379,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         free(req); close(cfd); return;
       }
     }
+    /* Dual-wire root plate — machine endpoints only (no free-text hint essay). */
     const char *body =
-      "{\"ok\":true,\"service\":\"nanobot\",\"role\":\"cli-api\","
-      "\"hint\":\"CLI + peer/JSON API + optional MCP; optional --www for static files\","
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"root\","
+      "\"service\":\"nanobot\",\"role\":\"cli-api\","
       "\"endpoints\":[\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
       "\"/peer/v1/task\",\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/task\","
-      "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/subagents\"]}";
+      "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/subagents\"],"
+      "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}";
     http_response(cfd, 200, "application/json", body, strlen(body));
     free(req); close(cfd); return;
   }
@@ -884,33 +888,43 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* ---- Peer bus for other agents / sessions ---- */
+  /* ---- Peer bus for other agents / sessions (lab/ops; product bus = SMX2) ---- */
   if (is_get && strcmp(path, "/peer/v1/health") == 0) {
-    char body[256];
+    char body[384];
+    char *ver = ng_json_escape(NG_VERSION);
     int n = snprintf(body, sizeof body,
-      "{\"ok\":true,\"service\":\"nanobot-peer\",\"version\":\"%s\","
-      "\"role\":\"session-bus\"}", NG_VERSION);
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"health\","
+      "\"service\":\"nanobot-peer\",\"version\":\"%s\",\"role\":\"session-bus\","
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ver ? ver : "");
+    free(ver);
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
   }
 
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0)) {
     int signed_in = session && ng_session_valid(session);
-    char body[512];
+    char body[768];
+    char *ver = ng_json_escape(NG_VERSION);
+    char *md = ng_json_escape(agent && agent->model ? agent->model : "");
+    char *wd = ng_json_escape(ng_workdir());
     int n = snprintf(body, sizeof body,
-      "{\"ok\":true,\"service\":\"nanobot-peer\",\"version\":\"%s\","
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"info\","
+      "\"service\":\"nanobot-peer\",\"version\":\"%s\","
       "\"signed_in\":%s,\"model\":\"%s\",\"workdir\":\"%s\","
       "\"tools\":[\"prompt\",\"shell\"],"
       "\"endpoints\":["
-      "\"GET /peer/v1/health\","
-      "\"GET /peer/v1/info\","
-      "\"POST /peer/v1/prompt\","
-      "\"POST /peer/v1/shell\""
-      "]}",
-      NG_VERSION,
+      "\"/peer/v1/health\","
+      "\"/peer/v1/info\","
+      "\"/peer/v1/prompt\","
+      "\"/peer/v1/shell\""
+      "],"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ver ? ver : "",
       signed_in ? "true" : "false",
-      agent->model ? agent->model : "",
-      ng_workdir());
+      md ? md : "",
+      wd ? wd : "");
+    free(ver); free(md); free(wd);
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
   }
@@ -1018,10 +1032,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       free(req); close(cfd); return;
     }
     char *jb = NULL;
+    char *sp = ng_json_escape(ng_settings_path());
     asprintf(&jb,
-      "{\"ok\":%s,\"service\":\"%s\",\"action\":\"%s\",\"persist\":true,"
-      "\"settings\":\"%s\",\"note\":\"reboot uses run.sh + settings file\"}",
-      ok ? "true" : "false", svc, act, ng_settings_path());
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,"
+      "\"service\":\"%s\",\"action\":\"%s\",\"persist\":true,"
+      "\"settings\":\"%s\","
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ok ? "true" : "false", svc, act, sp ? sp : "");
+    free(sp);
     http_response(cfd, ok ? 200 : 400, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
     free(svc); free(act); free(jb);
     free(req); close(cfd); return;
@@ -1249,8 +1267,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       free(req); close(cfd); return;
     }
     char *jb = NULL;
-    asprintf(&jb, "{\"ok\":true,\"id\":\"%s\",\"status\":\"running\"}", id);
-    free(id);
+    char *id_esc = ng_json_escape(id);
+    asprintf(&jb,
+             "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+             "\"action\":\"subagent_spawn\",\"id\":\"%s\",\"status\":\"running\","
+             NG_PEER_HTTP_DUAL_WIRE "}",
+             id_esc ? id_esc : "");
+    free(id); free(id_esc);
     http_response(cfd, 202, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
     free(jb); free(req); close(cfd); return;
   }
@@ -1285,7 +1308,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *reply = ng_agent_run(agent, prompt);
     char *esc = ng_json_escape(reply ? reply : "");
     char *jb = NULL;
-    asprintf(&jb, "{\"ok\":true,\"reply\":\"%s\",\"source\":\"nanobot-peer\"}", esc ? esc : "");
+    asprintf(&jb,
+             "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+             "\"action\":\"prompt\",\"reply\":\"%s\",\"source\":\"nanobot-peer\","
+             NG_PEER_HTTP_DUAL_WIRE "}",
+             esc ? esc : "");
     http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
     free(prompt); free(reply); free(esc); free(jb);
     free(req); close(cfd); return;
@@ -1326,13 +1353,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
     }
     if (need_appr) {
+      char *aid_esc = ng_json_escape(aid ? aid : "");
       asprintf(&jb,
-        "{\"ok\":false,\"exit\":425,\"need_approval\":true,\"approval_id\":\"%s\","
-        "\"output\":\"%s\",\"source\":\"nanobot-peer\"}",
-        aid ? aid : "", esc ? esc : "");
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+        "\"action\":\"shell\",\"exit\":425,\"need_approval\":true,"
+        "\"approval_id\":\"%s\",\"output\":\"%s\",\"source\":\"nanobot-peer\","
+        NG_PEER_HTTP_DUAL_WIRE "}",
+        aid_esc ? aid_esc : "", esc ? esc : "");
+      free(aid_esc);
     } else {
       asprintf(&jb,
-        "{\"ok\":%s,\"exit\":%d,\"output\":\"%s\",\"source\":\"nanobot-peer\"}",
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,"
+        "\"action\":\"shell\",\"exit\":%d,\"output\":\"%s\","
+        "\"source\":\"nanobot-peer\","
+        NG_PEER_HTTP_DUAL_WIRE "}",
         cr.exit_code == 0 ? "true" : "false", cr.exit_code, esc ? esc : "");
     }
     http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
