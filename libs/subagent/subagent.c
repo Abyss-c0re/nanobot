@@ -23,6 +23,29 @@ extern char *ng_settings_get(const char *key);
 static int g_en = 0;
 static int g_max = 8;
 
+/* Dual-wire subagent tool plate — machine error/action tokens only. */
+static char *sub_err(const char *error, const char *extra_json) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "subagent_failed";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.subagent.v1\",\"ok\":false,\"error\":\"%s\","
+           "\"python\":0%s}",
+           e, extra_json ? extra_json : "");
+  return out ? out
+             : strdup("{\"schema\":\"nanobot.subagent.v1\",\"ok\":false,"
+                      "\"error\":\"oom\",\"python\":0}");
+}
+
+static char *sub_ok(const char *action, const char *extra_json) {
+  char *out = NULL;
+  const char *a = action && action[0] ? action : "ok";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.subagent.v1\",\"ok\":true,\"action\":\"%s\","
+           "\"python\":0%s}",
+           a, extra_json ? extra_json : "");
+  return out ? out : sub_err("oom", NULL);
+}
+
 void ng_subagent_configure(int enabled, int max_slots) {
   g_en = enabled ? 1 : 0;
   g_max = max_slots;
@@ -219,14 +242,14 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
    */
   int pipefd[2];
   if (pipe(pipefd) != 0) {
-    write_meta(id, t, desc, "error", 0, "pipe failed");
+    write_meta(id, t, desc, "error", 0, "pipe_failed");
     return NULL;
   }
   pid_t p = fork();
   if (p < 0) {
     close(pipefd[0]);
     close(pipefd[1]);
-    write_meta(id, t, desc, "error", 0, "fork failed");
+    write_meta(id, t, desc, "error", 0, "fork_failed");
     return NULL;
   }
   if (p == 0) {
@@ -257,21 +280,22 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
     write_meta(id, t, desc, "running", mypid, NULL);
     char *pr = ng_read_file(ip, NULL);
     char *full = pr;
-    if (pr && !strcmp(t, "explore")) {
+    /* Dual-wire role plate prefix — machine must/forbid tokens (no free-text essay). */
+    if (pr) {
+      const char *must = "complete_and_stop";
+      const char *forbid = "invent";
+      if (!strcmp(t, "explore")) {
+        must = "facts_via_shell";
+        forbid = "invent|destructive";
+      } else if (!strcmp(t, "plan")) {
+        must = "structure_and_summary";
+        forbid = "invent";
+      }
       asprintf(&full,
-        "[subagent type=explore — USE run_terminal_command to gather facts, "
-        "then write a short factual report. Do not invent numbers. "
-        "No destructive changes. When done, STOP.]\n%s", pr);
-      free(pr);
-    } else if (pr && !strcmp(t, "plan")) {
-      asprintf(&full,
-        "[subagent type=plan — reason and structure; use shell only if needed "
-        "for a quick check. End with a clear summary. Then STOP.]\n%s", pr);
-      free(pr);
-    } else if (pr) {
-      asprintf(&full,
-        "[subagent type=general — complete the assigned part; use shell when "
-        "facts are needed; end with a concise summary. Then STOP.]\n%s", pr);
+               "{\"schema\":\"nanobot.subagent.v1\",\"ok\":true,"
+               "\"role\":\"%s\",\"must\":\"%s\",\"forbid\":\"%s\","
+               "\"next\":\"stop\",\"python\":0}\n%s",
+               t, must, forbid, pr);
       free(pr);
     }
     char *reply = run_fn(agent_cfg, full ? full : "");
@@ -288,7 +312,7 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
     if (reply) ng_write_file(op, reply, strlen(reply));
     else ng_write_file(op, "", 0);
     write_meta(id, t, desc, reply ? "done" : "error", mypid,
-               reply ? NULL : "empty reply");
+               reply ? NULL : "empty_reply");
     free(reply);
     /* hard exit — do not return into parent agent stack */
     _exit(reply ? 0 : 1);
@@ -307,7 +331,7 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
     waitpid(p, &st, 0);
   }
   if (real_pid <= 1) {
-    write_meta(id, t, desc, "error", 0, "worker pid unknown");
+    write_meta(id, t, desc, "error", 0, "worker_pid_unknown");
     return NULL;
   }
   write_meta(id, t, desc, "running", real_pid, NULL);
@@ -315,23 +339,26 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
 }
 
 char *ng_subagent_status_json(const char *id) {
-  if (!valid_id(id)) return strdup("{\"error\":\"bad id\"}");
+  if (!valid_id(id)) return sub_err("bad_id", NULL);
   char path[600], op[600];
   meta_path(path, sizeof path, id);
   /* reap this id if dead */
   reap_meta_file(path, id);
   char *meta = ng_read_file(path, NULL);
-  if (!meta) return strdup("{\"error\":\"not found\"}");
+  if (!meta) return sub_err("not_found", NULL);
   out_path(op, sizeof op, id);
   char *out = ng_read_file(op, NULL);
   char *esc = ng_json_escape(out ? out : "");
-  /* splice result into meta roughly */
+  /* splice dual-wire schema + result into meta object */
   size_t ml = strlen(meta);
   if (ml && meta[ml - 1] == '}') meta[ml - 1] = 0;
   char *j = NULL;
-  asprintf(&j, "%s,\"result\":\"%s\"}", meta, esc ? esc : "");
+  asprintf(&j,
+           "%s,\"schema\":\"nanobot.subagent.v1\",\"ok\":true,"
+           "\"action\":\"status\",\"python\":0,\"result\":\"%s\"}",
+           meta, esc ? esc : "");
   free(meta); free(out); free(esc);
-  return j ? j : strdup("{\"error\":\"oom\"}");
+  return j ? j : sub_err("oom", NULL);
 }
 
 char *ng_subagent_list_json(void) {
@@ -419,22 +446,28 @@ char *ng_subagent_try_tool(void *agent_cfg, ng_subagent_run_fn run_fn,
     if (!type) type = ng_json_get_string(args_json, "subagent_type");
     if (!prompt || !prompt[0]) {
       free(prompt); free(desc); free(type);
-      return strdup("{\"error\":\"need prompt\"}");
+      return sub_err("need_prompt", NULL);
     }
     if (ng_subagent_running_count() >= g_max) {
+      char extra[48];
       free(prompt); free(desc); free(type);
-      char *e = NULL;
-      asprintf(&e, "{\"error\":\"subagent limit %d (share session)\",\"max\":%d}",
-               g_max, g_max);
-      return e ? e : strdup("{\"error\":\"limit\"}");
+      snprintf(extra, sizeof extra, ",\"max\":%d", g_max);
+      return sub_err("limit", extra);
     }
     char *id = ng_subagent_spawn(agent_cfg, run_fn, type, desc, prompt);
     free(prompt); free(desc); free(type);
-    if (!id) return strdup("{\"error\":\"spawn failed\"}");
-    char *j = NULL;
-    asprintf(&j, "{\"ok\":true,\"id\":\"%s\",\"poll\":\"subagent_status\"}", id);
-    free(id);
-    return j ? j : strdup("{\"ok\":true}");
+    if (!id) return sub_err("spawn_failed", NULL);
+    {
+      char *eid = ng_json_escape(id);
+      char extra[120];
+      char *j;
+      snprintf(extra, sizeof extra, ",\"id\":\"%s\",\"poll\":\"subagent_status\"",
+               eid ? eid : "");
+      j = sub_ok("spawned", extra);
+      free(eid);
+      free(id);
+      return j;
+    }
   }
   if (!strcmp(name, "subagent_status")) {
     char *id = ng_json_get_string(args_json, "id");
@@ -449,8 +482,7 @@ char *ng_subagent_try_tool(void *agent_cfg, ng_subagent_run_fn run_fn,
     char *id = ng_json_get_string(args_json, "id");
     int rc = ng_subagent_cancel(id ? id : "");
     free(id);
-    return rc == 0 ? strdup("{\"ok\":true,\"cancelled\":true}")
-                   : strdup("{\"error\":\"cancel failed\"}");
+    return rc == 0 ? sub_ok("cancelled", NULL) : sub_err("cancel_failed", NULL);
   }
   return NULL;
 }
