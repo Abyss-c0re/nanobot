@@ -160,6 +160,30 @@ static char *transport_err(const char *error) {
                       "\"error\":\"oom\",\"python\":0}");
 }
 
+/* Dual-wire task continue / budget-low nudge (no free-text coaching essays).
+ * Prefer live ng_task_reminder_text when available. */
+static char *task_nudge_plate(const char *phase) {
+  char *rem = ng_task_reminder_text();
+  if (rem && rem[0] && (!phase || strcmp(phase, "continue") == 0))
+    return rem;
+  free(rem);
+  if (phase && strcmp(phase, "budget_low") == 0)
+    return strdup("{\"schema\":\"nanobot.task_reminder.v1\",\"ok\":true,"
+                  "\"phase\":\"budget_low\",\"must\":\"finish_or_block\","
+                  "\"next\":\"last_tool|task_done|task_block\","
+                  "\"forbid\":\"leave_open\",\"python\":0}");
+  return strdup("{\"schema\":\"nanobot.task_reminder.v1\",\"ok\":true,"
+                "\"must\":\"continue\","
+                "\"next\":\"run_tools|task_step_done|task_done|task_block\","
+                "\"python\":0}");
+}
+
+/* Dual-wire plain-text finalize nudge after tools (no free-text essay). */
+static char *finalize_nudge_plate(void) {
+  return strdup("{\"schema\":\"nanobot.finalize.v1\",\"ok\":true,"
+                "\"must\":\"plain_text_reply\",\"tools\":false,\"python\":0}");
+}
+
 typedef struct { const char *url; const char *bearer; const char *body; } curl_job_t;
 static char *curl_post_json_job(void *ud) {
   curl_job_t *j = (curl_job_t *)ud;
@@ -1550,24 +1574,20 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         "\"stream\":false}",
         c->model, messages, tools);
     } else {
-      /* Nudge finalization after tools */
+      /* Nudge finalization after tools — dual-wire plates only (no free-text). */
       if (last_tool_out && (turn >= max_turns - 1 || !open_task)) {
         size_t ml = strlen(messages);
         if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
+        char *plate = open_task ? task_nudge_plate("budget_low")
+                                : finalize_nudge_plate();
+        char *esc = ng_json_escape(plate ? plate : "");
         char *nudge = NULL;
-        if (open_task) {
-          asprintf(&nudge,
-            "%s,{\"role\":\"user\",\"content\":\"Turn budget nearly exhausted and task still open. "
-            "Either make one last tool attempt, call task_block with why you are stuck, "
-            "or if the goal is met call task_done. Then reply to the user in plain text.\"}]",
-            messages);
-        } else {
-          asprintf(&nudge,
-            "%s,{\"role\":\"user\",\"content\":\"Using the tool results above, reply to the user now in plain text. No more tools.\"}]",
-            messages);
-        }
+        asprintf(&nudge, "%s,{\"role\":\"user\",\"content\":\"%s\"}]", messages,
+                 esc ? esc : "");
         free(messages);
         messages = nudge;
+        free(esc);
+        free(plate);
       }
       int want_stream = stream_final && on_delta;
       /* Cap completion length so a looping local model cannot pin llama forever.
@@ -1902,21 +1922,24 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                                 ",\"hint\":\"shell_or_retry\"");
         }
       }
-      /* If a multi-step task is still open, do not stop — remind and continue. */
+      /* If a multi-step task is still open, do not stop — dual-wire continue. */
       if (use_tools && ng_task_is_open() && turn < hard_max - 1) {
         ng_log("agent: model tried to finish but task still open — continue");
         size_t ml = strlen(messages);
         if (ml && messages[ml - 1] == ']') messages[ml - 1] = 0;
         char *esc = ng_json_escape(final);
+        char *plate = task_nudge_plate("continue");
+        char *esc_plate = ng_json_escape(plate ? plate : "");
         char *nmsg = NULL;
         asprintf(&nmsg,
-          "%s,{\"role\":\"assistant\",\"content\":\"%s\"},"
-          "{\"role\":\"user\",\"content\":\"Task is still OPEN (not task_done / task_block). "
-          "Continue working: tools, task_step_done, then task_done or task_block.\"}]",
-          messages, esc ? esc : "");
+                 "%s,{\"role\":\"assistant\",\"content\":\"%s\"},"
+                 "{\"role\":\"user\",\"content\":\"%s\"}]",
+                 messages, esc ? esc : "", esc_plate ? esc_plate : "");
         free(messages);
         messages = nmsg;
         free(esc);
+        free(esc_plate);
+        free(plate);
         free(final);
         final = NULL;
         free(resp);
