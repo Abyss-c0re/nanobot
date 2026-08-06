@@ -267,9 +267,11 @@ static int run_order_cli(const char *target, const char *text) {
 #endif
 }
 
-/* Machine-readable auth for UI / app CLI wrapper (stdout = one JSON line).
+/* Dual-wire auth plate for UI / app CLI wrapper (stdout = one JSON line).
+ * schema nanobot.auth.v1 — machine fields only (no free-text essays).
  * poll_state: none|pending|signed_in|expired|denied|error|throttled
- * Cross-device browser approval is normal — pending until token, not "cancelled". */
+ * Cross-device browser approval is normal — pending until token, not "cancelled".
+ * Product bus remains SMX2; CLI auth transport is lab/ops only. */
 static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent,
                             const char *poll_state, const char *poll_error) {
   int need_browser = agent && ng_agent_needs_browser_session(agent);
@@ -283,7 +285,7 @@ static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent,
     else state = "none";
   }
   char *vu = NULL, *vuc = NULL, *uc = NULL, *base_esc = NULL, *model_esc = NULL;
-  char *err_esc = NULL;
+  char *err_esc = NULL, *wd_esc = NULL, *ver_esc = NULL, *be_esc = NULL;
   long deadline = (s && s->device_deadline) ? (long)s->device_deadline : 0;
   if (s && need_browser) {
     if (s->verification_uri) vu = ng_json_escape(s->verification_uri);
@@ -293,15 +295,22 @@ static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent,
   if (agent && agent->base_url) base_esc = ng_json_escape(agent->base_url);
   if (agent && agent->model) model_esc = ng_json_escape(agent->model);
   if (poll_error && poll_error[0]) err_esc = ng_json_escape(poll_error);
+  wd_esc = ng_json_escape(ng_workdir());
+  ver_esc = ng_json_escape(NG_VERSION);
+  be_esc = ng_json_escape(backend);
   printf(
-    "{\"ok\":true,\"version\":\"%s\",\"signed_in\":%s,\"login_pending\":%s,"
+    "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"version\":\"%s\","
+    "\"signed_in\":%s,\"login_pending\":%s,"
     "\"login_required\":%s,\"needs_browser\":%s,\"user_code\":\"%s\","
     "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
     "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
     "\"auth\":\"%s\",\"workdir\":\"%s\",\"transport\":\"cli\","
     "\"poll_state\":\"%s\",\"error\":\"%s\",\"device_deadline\":%ld,"
-    "\"cross_device_ok\":true}\n",
-    NG_VERSION,
+    "\"cross_device_ok\":true,"
+    "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+    "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+    "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n",
+    ver_esc ? ver_esc : "",
     signed_in ? "true" : "false",
     pending ? "true" : "false",
     (need_browser && !signed_in) ? "true" : "false",
@@ -309,15 +318,16 @@ static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent,
     uc ? uc : "",
     vu ? vu : "",
     vuc ? vuc : "",
-    backend,
+    be_esc ? be_esc : "",
     base_esc ? base_esc : "",
     model_esc ? model_esc : "",
     need_browser ? "browser_device_code" : "local_openai_compatible",
-    ng_workdir(),
+    wd_esc ? wd_esc : "",
     state,
     err_esc ? err_esc : "",
     deadline);
   free(vu); free(vuc); free(uc); free(base_esc); free(model_esc); free(err_esc);
+  free(wd_esc); free(ver_esc); free(be_esc);
   fflush(stdout);
 }
 
@@ -649,8 +659,14 @@ int main(int argc, char **argv) {
           else ng_session_load_pending(&session);
           if (!session.login_pending || auth_force) {
             if (ng_session_start_device_login(&session) != 0) {
-              printf("{\"ok\":false,\"error\":\"device login failed (network/DNS?)\","
-                     "\"poll_state\":\"error\",\"cross_device_ok\":true}\n");
+              /* Dual-wire deny — machine token only (no free-text network essay). */
+              printf("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
+                     "\"error\":\"device_login_failed\",\"poll_state\":\"error\","
+                     "\"cross_device_ok\":true,\"transport\":\"cli\","
+                     "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+                     "\"peer_http_is_product_bus\":false,"
+                     "\"share\":\"state_matrix_only\",\"hold_flash\":1,"
+                     "\"llm_is_commander\":false,\"python\":0}\n");
               ng_session_free(&session);
               ng_agent_cfg_free(&agent);
               return 1;
