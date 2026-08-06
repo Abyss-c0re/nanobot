@@ -25,6 +25,22 @@ static int g_bc_inited;
 static lhlam_cube g_core;
 #endif
 
+/* Dual-wire braincell deny — machine error token only (no free-text essays). */
+static char *bc_err(const char *error) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "braincell_failed";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.braincell.v1\",\"ok\":false,\"error\":\"%s\","
+           "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+           "\"peer_http_is_product_bus\":false,\"hold_flash\":1,"
+           "\"llm_is_commander\":false,\"share\":\"state_matrix_only\","
+           "\"python\":0}",
+           e);
+  return out ? out
+             : strdup("{\"schema\":\"nanobot.braincell.v1\",\"ok\":false,"
+                      "\"error\":\"oom\",\"python\":0}");
+}
+
 static void cells_dir(char *out, size_t n) {
   snprintf(out, n, "%s/braincells", ng_workdir());
   mkdir(out, 0755);
@@ -197,7 +213,7 @@ static char *wait_sub_result(const char *id, int timeout_sec) {
     ng_subagent_reap_all();
     usleep(200000);
   }
-  return strdup("(braincell timeout — no result)");
+  return bc_err("timeout");
 }
 
 static char *sub_run(void *cfg, const char *prompt) {
@@ -366,39 +382,42 @@ char *ng_braincell_try_tool(ng_agent_cfg *c, const char *name, const char *args_
     char *cid = ng_json_get_string(args_json, "contract_id");
     char *asg = ng_json_get_string(args_json, "assignee");
     char *out = NULL;
+    char *cid_tok = ng_json_escape(cid && cid[0] ? cid : "open");
+    char *asg_tok = ng_json_escape(asg && asg[0] ? asg : "external");
     asprintf(&out,
-             "{\"ok\":true,\"role\":\"manager\","
+             "{\"schema\":\"nanobot.braincell.v1\",\"ok\":true,"
+             "\"action\":\"motivate\",\"role\":\"manager\","
+             "\"contract\":\"%s\",\"assignee\":\"%s\","
              "\"plate\":\"NEXUS_COORD v1 | from=nb-manager | type=motivate | "
              "contract=%s | assignee=%s | observer=NexusCore | "
              "HOLD_FLASH=ack_held | share=state_matrix_only | "
              "product_wire=smx2 | peer_http=lab_ops_only | "
              "peer_http_is_product_bus=0 | llm_is_commander=0 | "
              "motive=matrix_harmony |\","
-             "\"instinct\":\"%s\","
              "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
              "\"peer_http_is_product_bus\":false,\"hold_flash\":1,"
              "\"llm_is_commander\":false,\"share\":\"state_matrix_only\","
-             "\"hint\":\"run scripts/hive/manager_tick.sh for contract dir\"}",
-             cid && cid[0] ? cid : "open",
-             asg && asg[0] ? asg : "external",
-             instinct_creed());
+             "\"python\":0,\"hint\":\"manager_tick\"}",
+             cid_tok ? cid_tok : "open", asg_tok ? asg_tok : "external",
+             cid_tok ? cid_tok : "open", asg_tok ? asg_tok : "external");
+    free(cid_tok);
+    free(asg_tok);
     free(cid);
     free(asg);
-    return out ? out : strdup("{\"ok\":false}");
+    return out ? out : bc_err("oom");
   }
   if (!strcmp(name, "braincell_hive")) {
     char *prompt = ng_json_get_string(args_json, "prompt");
     char *out;
     if (!prompt || !prompt[0]) {
       free(prompt);
-      return strdup("{\"error\":\"prompt required\"}");
+      return bc_err("need_prompt");
     }
     /* force hive path */
     setenv("NANOBOT_BRAINCELLS", "1", 1);
     out = ng_braincell_try_coding(c, prompt, 0, NULL, NULL);
     free(prompt);
-    if (!out)
-      out = strdup("{\"error\":\"hive did not run (solo route or spawn failed)\"}");
+    if (!out) out = bc_err("hive_solo_or_spawn_failed");
     return out;
   }
   (void)c;
@@ -418,8 +437,9 @@ char *ng_braincell_status_json(void) {
   if (peer && peer[0]) peer_esc = ng_json_escape(peer);
   inst_esc = ng_json_escape(instinct_creed());
   asprintf(&out,
-           "{\"enabled\":%s,\"braincube\":%s,\"model\":\"mini-hive\","
-           "\"core\":\"%s\",\"cells_dir\":\"braincells\","
+           "{\"schema\":\"nanobot.braincell.v1\",\"ok\":true,"
+           "\"action\":\"status\",\"enabled\":%s,\"braincube\":%s,"
+           "\"model\":\"mini-hive\",\"core\":\"%s\",\"cells_dir\":\"braincells\","
            "\"filter\":\"smx_protect_command_center\","
            "\"external_requires\":\"contract.v1\","
            "\"manager\":\"motivate_incomplete\","
@@ -427,6 +447,7 @@ char *ng_braincell_status_json(void) {
            "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
            "\"peer_http_is_product_bus\":false,\"hold_flash\":1,"
            "\"llm_is_commander\":false,\"share\":\"state_matrix_only\","
+           "\"python\":0,"
            "\"instinct\":%s%s%s,"
            "\"external_peer\":%s%s%s}",
            ng_braincell_enabled() ? "true" : "false",
@@ -440,5 +461,5 @@ char *ng_braincell_status_json(void) {
            peer_esc ? "\"" : "");
   free(peer_esc);
   free(inst_esc);
-  return out ? out : strdup("{\"enabled\":false}");
+  return out ? out : bc_err("status_failed");
 }
