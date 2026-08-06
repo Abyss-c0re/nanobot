@@ -328,19 +328,16 @@ static int personal_files_blocked(const char *command, char **why) {
       ng_log("shell: personal ACL allowlisted: %.160s", command);
     } else if (allowed && cmd_mutates(command)) {
       block = 1;
-      reason = "personal files ACL=deny — allowlist is read-only for listed paths.\n";
+      /* Machine reason token only — no free-text ACL essay. */
+      reason = "allowlist_readonly";
     } else {
       block = 1;
-      reason =
-        "personal files ACL=deny — personal paths blocked.\n"
-        "Set files_acl to read|full under NANOBOT_HOME, or add path to files_acl_allow.\n";
+      reason = "deny";
     }
   } else if (!strcmp(acl, "read")) {
     if (cmd_mutates(command)) {
       block = 1;
-      reason =
-        "personal files ACL=read — view only; write/delete/move blocked.\n"
-        "Set files_acl=full under NANOBOT_HOME for edits.\n";
+      reason = "read_only";
     }
   }
   if (block && why && reason) *why = strdup(reason);
@@ -449,24 +446,37 @@ void ng_shell_ensure_policy_files(void) {
   }
 }
 
+/* Dual-wire shell gate deny — machine error/reason tokens only (no free-text essays). */
+static char *shell_err(const char *error, const char *extra_json) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "shell_failed";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.shell.v1\",\"ok\":false,\"error\":\"%s\","
+           "\"python\":0%s}",
+           e, extra_json ? extra_json : "");
+  return out ? out
+             : strdup("{\"schema\":\"nanobot.shell.v1\",\"ok\":false,"
+                      "\"error\":\"oom\",\"python\":0}");
+}
+
 static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int skip_dangerous) {
   ng_cmd_result r = { .exit_code = -1, .output = NULL };
   ng_shell_ensure_policy_files();
   ng_shell_ensure_dangerous_file();
   if (!ng_shell_is_enabled()) {
     r.exit_code = 403;
-    r.output = strdup("shell disabled (shell_enabled=0 under NANOBOT_HOME)\n");
+    r.output = shell_err("shell_disabled", ",\"hint\":\"shell_enabled\"");
     return r;
   }
-  /* Personal files ACL first (explicit message) */
+  /* Personal files ACL first (dual-wire reason token). */
   {
     char *why = NULL;
     if (personal_files_blocked(command, &why)) {
+      char extra[96];
       r.exit_code = 126;
-      char *msg = NULL;
-      asprintf(&msg, "nanobot: blocked by personal files privacy\n%s\n",
-               why ? why : "files_acl=deny");
-      r.output = msg ? msg : strdup("nanobot: personal files blocked\n");
+      snprintf(extra, sizeof extra, ",\"reason\":\"%s\",\"hint\":\"files_acl\"",
+               why && why[0] ? why : "deny");
+      r.output = shell_err("personal_acl", extra);
       free(why);
       ng_log("shell: personal ACL blocked: %.120s", command);
       return r;
@@ -475,23 +485,22 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
   /* hard denylist always */
   if (ng_command_denied(command)) {
     r.exit_code = 126;
-    r.output = strdup(
-      "nanobot: command blocked by denylist policy (hard deny)\n"
-      "hint: edit $NANOBOT_HOME/shell_denylist or shell_allow exception\n");
+    r.output = shell_err("denylist", ",\"hint\":\"shell_allow\"");
     return r;
   }
   if (!skip_dangerous) {
     ng_shell_class cls = ng_shell_classify(command);
     if (cls == NG_SHELL_DANGEROUS) {
       char *aid = ng_shell_approval_create(command, "shell");
+      char *ea = ng_json_escape(aid ? aid : "");
+      char extra[160];
       r.exit_code = 425;
-      char *msg = NULL;
-      asprintf(&msg,
-        "nanobot: dangerous command — approval required\n"
-        "approval_id=%s\n"
-        "Approve via UI or POST /api/shell/approve {\"id\":\"%s\",\"password\":\"…\"}\n",
-        aid ? aid : "?", aid ? aid : "?");
-      r.output = msg ? msg : strdup("dangerous: approval required\n");
+      snprintf(extra, sizeof extra,
+               ",\"need_approval\":true,\"approval_id\":\"%s\","
+               "\"hint\":\"shell_approve\"",
+               ea ? ea : "");
+      r.output = shell_err("approval_required", extra);
+      free(ea);
       free(aid);
       return r;
     }
@@ -511,14 +520,14 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
 
   int pipefd[2];
   if (pipe(pipefd) != 0) {
-    r.output = strdup("pipe failed\n");
+    r.output = shell_err("pipe_failed", NULL);
     return r;
   }
 
   pid_t pid = fork();
   if (pid < 0) {
     close(pipefd[0]); close(pipefd[1]);
-    r.output = strdup("fork failed\n");
+    r.output = shell_err("fork_failed", NULL);
     return r;
   }
   if (pid == 0) {
@@ -570,7 +579,13 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
 
   size_t cap = 4096, len = 0;
   char *buf = malloc(cap);
-  if (!buf) { kill(pid, SIGKILL); waitpid(pid, NULL, 0); close(pipefd[0]); r.output = strdup("oom\n"); return r; }
+  if (!buf) {
+    kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
+    close(pipefd[0]);
+    r.output = shell_err("oom", NULL);
+    return r;
+  }
   buf[0] = 0;
 
   time_t deadline = time(NULL) + timeout_sec;

@@ -1270,12 +1270,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     int need_appr = (cr.exit_code == 425);
     char *aid = NULL;
     if (need_appr && cr.output) {
-      const char *p = strstr(cr.output, "approval_id=");
-      if (p) {
-        p += 12;
-        size_t n = 0;
-        while (p[n] && p[n] != '\n' && p[n] != '\r' && n < 32) n++;
-        aid = malloc(n+1); if(aid){memcpy(aid,p,n);aid[n]=0;}
+      /* Dual-wire plate first; legacy free-text approval_id= fallback. */
+      aid = ng_json_get_string(cr.output, "approval_id");
+      if (!aid) {
+        const char *p = strstr(cr.output, "approval_id=");
+        if (p) {
+          p += 12;
+          size_t n = 0;
+          while (p[n] && p[n] != '\n' && p[n] != '\r' && n < 32) n++;
+          aid = malloc(n + 1);
+          if (aid) {
+            memcpy(aid, p, n);
+            aid[n] = 0;
+          }
+        }
       }
     }
     if (need_appr) {
