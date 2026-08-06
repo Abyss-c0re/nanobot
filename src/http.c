@@ -93,6 +93,40 @@ static void http_text(int fd, int code, const char *body) {
   http_response(fd, code, "text/plain", body, body ? strlen(body) : 0);
 }
 
+/*
+ * Dual-wire lab/ops peer HTTP deny plate (schema nanobot.peer_http.v1).
+ * Product bus remains SMX2; this HTTP surface is lab/ops only.
+ * error must be a short machine token (caller-controlled; no free-text essays).
+ */
+#define NG_PEER_HTTP_DUAL_WIRE                                                 \
+  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","                  \
+  "\"peer_http_is_product_bus\":false,"                                        \
+  "\"share\":\"state_matrix_only\",\"hold_flash\":1,"                          \
+  "\"llm_is_commander\":false,\"python\":0"
+
+static void http_peer_err(int fd, int code, const char *error) {
+  char body[384];
+  const char *e = (error && error[0]) ? error : "peer_failed";
+  snprintf(body, sizeof body,
+           "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"error\":\"%s\","
+           NG_PEER_HTTP_DUAL_WIRE "}",
+           e);
+  http_json(fd, code, body);
+}
+
+/* Same plate with one boolean flag leaf (need_peer_token / need_login). */
+static void http_peer_err_flag(int fd, int code, const char *error,
+                               const char *flag_key) {
+  char body[420];
+  const char *e = (error && error[0]) ? error : "peer_failed";
+  const char *f = (flag_key && flag_key[0]) ? flag_key : "flag";
+  snprintf(body, sizeof body,
+           "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"error\":\"%s\","
+           "\"%s\":true," NG_PEER_HTTP_DUAL_WIRE "}",
+           e, f);
+  http_json(fd, code, body);
+}
+
 static int client_is_loopback(int cfd) {
   struct sockaddr_storage ss;
   socklen_t sl = sizeof ss;
@@ -144,8 +178,7 @@ static int require_peer_auth(int cfd, const char *req, int allow_loopback) {
   if (!need || !need[0]) {
     free(need);
     /* Fail closed on mutating routes if token missing */
-    http_json(cfd, 503,
-      "{\"error\":\"peer_token not configured\",\"need_peer_token\":true}");
+    http_peer_err_flag(cfd, 503, "peer_token_not_configured", "need_peer_token");
     return 0;
   }
   int ok = 0;
@@ -169,9 +202,7 @@ static int require_peer_auth(int cfd, const char *req, int allow_loopback) {
   }
   free(need);
   if (!ok) {
-    http_json(cfd, 401,
-      "{\"error\":\"invalid or missing peer token\",\"need_peer_token\":true,"
-      "\"hint\":\"Header X-Nanobot-Peer-Token or body peer_token\"}");
+    http_peer_err_flag(cfd, 401, "peer_token_invalid", "need_peer_token");
     return 0;
   }
   return 1;
@@ -329,7 +360,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (!strcmp(rel, "/index.html")) {
         /* missing assets: fall through to JSON notice */
       } else {
-        http_text(cfd, 404, "not found\n");
+        http_peer_err(cfd, 404, "not_found");
         free(req); close(cfd); return;
       }
     }
@@ -372,7 +403,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", u);
       send_all(cfd, hdr, (size_t)n);
     } else {
-      http_text(cfd, 503, "login not ready\n");
+      http_peer_err(cfd, 503, "login_not_ready");
     }
     free(req); close(cfd); return;
   }
@@ -428,7 +459,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_post && strcmp(path, "/api/auth/start") == 0) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!session || !agent) {
-      http_json(cfd, 500, "{\"error\":\"no session\"}");
+      http_peer_err(cfd, 500, "no_session");
       free(req); close(cfd); return;
     }
     /* Connect Grok: ensure Grok backend, then device-code login link. */
@@ -450,7 +481,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
       if (!session->login_pending || force) {
         if (ng_session_start_device_login(session) != 0) {
-          http_json(cfd, 500, "{\"error\":\"device login failed (network/DNS?)\"}");
+          http_peer_err(cfd, 500, "device_login_failed");
           free(req); close(cfd); return;
         }
       }
@@ -486,7 +517,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* List models: GET {base}/models (OpenAI-compatible; Grok session or local). */
   if (is_get && (strcmp(path, "/api/models") == 0 || strcmp(path, "/peer/v1/models") == 0)) {
     if (!agent) {
-      http_json(cfd, 500, "{\"error\":\"no agent\"}");
+      http_peer_err(cfd, 500, "no_agent");
       free(req); close(cfd); return;
     }
     if (session && ng_agent_needs_browser_session(agent) && ng_session_valid(session))
@@ -502,47 +533,39 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       /* upstream returned object but no ids parsed — still ok with empty list */
       ok = 1;
     }
-    /* Surface upstream error/auth failure when list is empty so UIs can explain. */
-    char *hint = NULL;
+    /* Machine token only when list empty — never surface upstream free-text. */
+    const char *hint_tok = NULL;
     if (!nonempty && raw && raw[0]) {
-      if (strstr(raw, "Unauthenticated") || strstr(raw, "auth") || strstr(raw, "expired")
-          || strstr(raw, "Invalid") || strstr(raw, "error")) {
-        /* short escape: prefer JSON "error" string if present */
-        char *e = ng_json_get_string(raw, "error");
-        if (e && e[0]) {
-          hint = ng_json_escape(e);
-          free(e);
-        } else {
-          char trunc[180];
-          size_t n = strlen(raw);
-          if (n > 160) n = 160;
-          memcpy(trunc, raw, n);
-          trunc[n] = 0;
-          hint = ng_json_escape(trunc);
-        }
-      }
+      if (strstr(raw, "Unauthenticated") || strstr(raw, "expired") ||
+          strstr(raw, "auth"))
+        hint_tok = "auth_failed";
+      else if (strstr(raw, "Invalid") || strstr(raw, "error"))
+        hint_tok = "upstream_error";
     }
     if (ok) {
-      if (hint && hint[0]) {
+      if (hint_tok) {
         asprintf(&out,
-          "{\"ok\":true,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s,\"error\":\"%s\"}",
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s,\"error\":\"%s\","
+          NG_PEER_HTTP_DUAL_WIRE "}",
           base_e ? base_e : "", cur ? cur : "",
-          ids && ids[0] == '[' ? ids : "[]", hint);
+          ids && ids[0] == '[' ? ids : "[]", hint_tok);
       } else {
         asprintf(&out,
-          "{\"ok\":true,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s}",
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s,"
+          NG_PEER_HTTP_DUAL_WIRE "}",
           base_e ? base_e : "", cur ? cur : "",
           ids && ids[0] == '[' ? ids : "[]");
       }
     } else {
-      char *err = hint ? hint : ng_json_escape(raw ? raw : "fetch failed");
-      hint = NULL; /* ownership moved */
       asprintf(&out,
-        "{\"ok\":false,\"base_url\":\"%s\",\"model\":\"%s\",\"models\":[],\"error\":\"%s\"}",
-        base_e ? base_e : "", cur ? cur : "", err ? err : "fetch failed");
-      free(err);
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+        "\"base_url\":\"%s\",\"model\":\"%s\",\"models\":[],\"error\":\"%s\","
+        NG_PEER_HTTP_DUAL_WIRE "}",
+        base_e ? base_e : "", cur ? cur : "",
+        hint_tok ? hint_tok : "models_fetch_failed");
     }
-    free(hint);
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
     free(out); free(raw); free(ids); free(cur); free(base_e);
     free(req); close(cfd); return;
@@ -552,7 +575,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if ((is_post || is_put) && strcmp(path, "/api/settings") == 0) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!agent) {
-      http_json(cfd, 500, "{\"error\":\"no agent\"}");
+      http_peer_err(cfd, 500, "no_agent");
       free(req); close(cfd); return;
     }
     char *body = strstr(req, "\r\n\r\n");
@@ -584,7 +607,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         free(req); close(cfd); return;
       }
       free(backend); free(base); free(model);
-      http_json(cfd, 400, "{\"error\":\"need backend (grok|local), base_url, model, or policy keys\"}");
+      http_peer_err(cfd, 400, "need_backend_or_policy");
       free(req); close(cfd); return;
     }
     if (backend && (strcmp(backend, "grok") == 0 || strcmp(backend, "cloud") == 0)) {
@@ -636,7 +659,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     /* alias: switch backend; same as /api/settings */
     if (!agent) {
-      http_json(cfd, 500, "{\"error\":\"no agent\"}");
+      http_peer_err(cfd, 500, "no_agent");
       free(req); close(cfd); return;
     }
     char *jsonp = strstr(req, "\r\n\r\n");
@@ -711,7 +734,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     body = body ? body + 4 : "";
     int rc = ng_mcp_servers_save_raw(body);
     if (rc != 0) {
-      http_json(cfd, 400, "{\"ok\":false,\"error\":\"invalid mcp_servers json\"}");
+      http_peer_err(cfd, 400, "invalid_mcp_servers");
     } else {
       char *list = ng_mcp_servers_list_json();
       http_response(cfd, 200, "application/json", list ? list : "{\"ok\":true}",
@@ -786,7 +809,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                || (images_json && strstr(images_json, "base64"));
     if ((!prompt || !prompt[0]) && !has_img) {
       free(prompt); free(image_b64); free(image_mime); free(images_json);
-      http_json(cfd, 400, "{\"error\":\"missing prompt or image/attachments\"}");
+      http_peer_err(cfd, 400, "missing_prompt_or_image");
       free(req); close(cfd); return;
     }
     if (!prompt) prompt = strdup("");
@@ -797,7 +820,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (session && session->login_pending) ng_session_poll_login(session);
       if (!session || !ng_session_valid(session)) {
         free(prompt); free(image_b64); free(image_mime); free(images_json);
-        http_json(cfd, 401, "{\"error\":\"Grok backend needs activation link, or use --offline / @! cmd\",\"need_login\":true}");
+        http_peer_err_flag(cfd, 401, "need_login", "need_login");
         free(req); close(cfd); return;
       }
     }
@@ -942,7 +965,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (!act && en >= 0) act = strdup(en ? "on" : "off");
     if (!svc || !act) {
       free(svc); free(act);
-      http_json(cfd, 400, "{\"error\":\"need service shell|watcher|ui and action on|off\"}");
+      http_peer_err(cfd, 400, "need_service_action");
       free(req); close(cfd); return;
     }
     char pathf[640];
@@ -976,7 +999,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
     } else {
       free(svc); free(act);
-      http_json(cfd, 400, "{\"error\":\"unknown service (shell|watcher|ui)\"}");
+      http_peer_err(cfd, 400, "unknown_service");
       free(req); close(cfd); return;
     }
     char *jb = NULL;
@@ -1005,7 +1028,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     if ((!prompt || !prompt[0]) && (!cmd || !cmd[0])) {
       free(prompt); free(cmd); free(kind);
-      http_json(cfd, 400, "{\"error\":\"need prompt or command\"}");
+      http_peer_err(cfd, 400, "need_prompt_or_command");
       free(req); close(cfd); return;
     }
     char jdir[640];
@@ -1089,12 +1112,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     const char *id = path + 14;
     /* job ids are digits only (time+pid) */
     if (!id[0] || strchr(id, '/') || strstr(id, "..")) {
-      http_json(cfd, 400, "{\"error\":\"bad id\"}");
+      http_peer_err(cfd, 400, "bad_id");
       free(req); close(cfd); return;
     }
     for (const char *p = id; *p; p++) {
       if (!isdigit((unsigned char)*p)) {
-        http_json(cfd, 400, "{\"error\":\"bad id\"}");
+        http_peer_err(cfd, 400, "bad_id");
         free(req); close(cfd); return;
       }
     }
@@ -1103,7 +1126,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     size_t blen = 0;
     char *body = ng_read_file(mpath, &blen);
     if (!body) {
-      http_json(cfd, 404, "{\"error\":\"job not found\"}");
+      http_peer_err(cfd, 404, "job_not_found");
       free(req); close(cfd); return;
     }
     http_response(cfd, 200, "application/json", body, blen);
@@ -1177,9 +1200,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       char *id = ng_json_get_string(body, "id");
       int rc = ng_subagent_cancel(id ? id : "");
       free(id); free(action);
-      http_json(cfd, rc == 0 ? 200 : 400,
-                rc == 0 ? "{\"ok\":true,\"cancelled\":true}"
-                        : "{\"error\":\"cancel failed\"}");
+      if (rc == 0)
+        http_json(cfd, 200, "{\"ok\":true,\"cancelled\":true}");
+      else
+        http_peer_err(cfd, 400, "cancel_failed");
       free(req); close(cfd); return;
     }
     if (!strcmp(action, "status")) {
@@ -1195,18 +1219,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *type = ng_json_get_string(body, "type");
     if (!prompt || !prompt[0] || !agent) {
       free(prompt); free(desc); free(type); free(action);
-      http_json(cfd, 400, "{\"error\":\"need prompt\"}");
+      http_peer_err(cfd, 400, "need_prompt");
       free(req); close(cfd); return;
     }
     if (!ng_subagent_enabled()) {
       free(prompt); free(desc); free(type); free(action);
-      http_json(cfd, 503, "{\"error\":\"subagents disabled (SUBAGENTS=0)\"}");
+      http_peer_err(cfd, 503, "subagents_disabled");
       free(req); close(cfd); return;
     }
     char *id = ng_agent_subagent_spawn(agent, type, desc, prompt);
     free(prompt); free(desc); free(type); free(action);
     if (!id) {
-      http_json(cfd, 429, "{\"error\":\"spawn failed or at max concurrent (8)\"}");
+      http_peer_err(cfd, 429, "spawn_failed");
       free(req); close(cfd); return;
     }
     char *jb = NULL;
@@ -1229,7 +1253,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     {
       int need_browser = agent && ng_agent_needs_browser_session(agent);
       if (need_browser && (!session || !ng_session_valid(session))) {
-        http_json(cfd, 401, "{\"error\":\"Grok session not active; use --offline for llama or open /activate\",\"need_login\":true}");
+        http_peer_err_flag(cfd, 401, "need_login", "need_login");
         free(req); close(cfd); return;
       }
     }
@@ -1239,7 +1263,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (!prompt) prompt = ng_json_get_string(body, "message");
     if (!prompt) prompt = ng_json_get_string(body, "q");
     if (!prompt) {
-      http_json(cfd, 400, "{\"error\":\"missing prompt\"}");
+      http_peer_err(cfd, 400, "missing_prompt");
       free(req); close(cfd); return;
     }
     ng_log("peer: prompt from remote session: %.200s", prompt);
@@ -1260,7 +1284,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *cmd = ng_json_get_string(body, "command");
     if (!cmd) cmd = ng_json_get_string(body, "cmd");
     if (!cmd) {
-      http_json(cfd, 400, "{\"error\":\"missing command\"}");
+      http_peer_err(cfd, 400, "missing_command");
       free(req); close(cfd); return;
     }
     ng_log("peer: shell from remote session: %.80s", cmd);
@@ -1324,14 +1348,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *pw = ng_json_get_string(body, "password");
     if (action && !strcmp(action, "set") && pw) {
       int rc = ng_shell_gate_set_password(pw);
-      http_json(cfd, rc == 0 ? 200 : 400,
-                rc == 0 ? "{\"ok\":true,\"gate\":\"set\"}"
-                        : "{\"ok\":false,\"error\":\"set failed (min 4 chars)\"}");
+      if (rc == 0)
+        http_json(cfd, 200, "{\"ok\":true,\"gate\":\"set\"}");
+      else
+        http_peer_err(cfd, 400, "gate_set_failed");
     } else if (action && !strcmp(action, "verify") && pw) {
       int ok = ng_shell_gate_verify_password(pw);
       http_json(cfd, 200, ok ? "{\"ok\":true,\"valid\":true}" : "{\"ok\":true,\"valid\":false}");
     } else {
-      http_json(cfd, 400, "{\"error\":\"need action set|verify + password\"}");
+      http_peer_err(cfd, 400, "need_gate_action");
     }
     free(action); free(pw);
     free(req); close(cfd); return;
@@ -1366,21 +1391,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       free(esc); free(jb);
       ng_cmd_result_free(&cr);
     } else {
-      const char *err = rc == -3 ? "gate password not configured"
-                       : rc == -4 ? "invalid password"
-                       : rc == -2 ? "not pending"
-                       : "approval failed";
-      char *jb = NULL;
-      asprintf(&jb, "{\"ok\":false,\"error\":\"%s\"}", err);
-      http_response(cfd, 403, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
-      free(jb);
+      const char *err = rc == -3 ? "gate_password_not_configured"
+                       : rc == -4 ? "invalid_password"
+                       : rc == -2 ? "not_pending"
+                       : "approval_failed";
+      http_peer_err(cfd, 403, err);
     }
     free(id); free(pw); free(action); free(cmd);
     free(req); close(cfd); return;
   }
 
 
-  http_text(cfd, 404, "not found\n");
+  http_peer_err(cfd, 404, "not_found");
   free(req);
   close(cfd);
 }
