@@ -463,21 +463,148 @@ static void stream_evt(ng_stream_fn on_delta, void *ud, const char *json) {
 
 /* Parse OpenAI SSE "data: {json}" lines; call on_delta for each content delta.
  * Also surfaces reasoning/thinking as structured events for spoiler UI.
- * Returns malloc'd full assistant text accumulated. */
+ * Returns malloc'd full assistant text accumulated.
+ *
+ * Anti-spam: many local servers re-send *cumulative* content each event
+ * (full text so far). Prefer delta.content; if a piece is a prefix extension
+ * of the accumulator, only emit/append the new suffix. Cap length/events.
+ */
+/* True if tail of buf (len bl) is a near-repeat of an earlier window (stutter). */
+static int stream_stutter_tail(const char *buf, size_t bl) {
+  size_t w, i, hits;
+  if (!buf || bl < 96) return 0;
+  /* Window = last ~1/3 of text, clamped */
+  w = bl / 3;
+  if (w < 48) w = 48;
+  if (w > 240) w = 240;
+  if (bl < w * 2) return 0;
+  /* Count how many times the final window appears in the whole buffer */
+  hits = 0;
+  for (i = 0; i + w <= bl; i++) {
+    if (memcmp(buf + i, buf + (bl - w), w) == 0) {
+      hits++;
+      if (hits >= 3) return 1;
+      i += w / 2; /* stride */
+    }
+  }
+  /* Also: second half equals first half (pure A+A) */
+  if (bl >= 120 && (bl % 2) == 0 &&
+      memcmp(buf, buf + bl / 2, bl / 2) == 0)
+    return 1;
+  if (bl >= 120 && bl % 2 == 1 &&
+      memcmp(buf, buf + bl / 2, bl / 2) == 0)
+    return 1;
+  return 0;
+}
+
+/* Drop leaked thinking blocks / lone close tags from a stream piece. */
+static void stream_strip_think_inplace(char *s) {
+  static const char *tags[] = {
+      "think", "thinking", "reasoning", "redacted_reasoning",
+      "redacted_thinking", NULL};
+  int i;
+  char *p;
+  if (!s || !s[0]) return;
+  for (i = 0; tags[i]; i++) {
+    char open[48], close[48];
+    char *a;
+    snprintf(open, sizeof open, "<%s>", tags[i]);
+    snprintf(close, sizeof close, "</%s>", tags[i]);
+    a = strstr(s, open);
+    while (a) {
+      char *b = strstr(a, close);
+      if (!b) {
+        *a = 0; /* unclosed — drop rest (anti think-leak spam) */
+        break;
+      }
+      b += strlen(close);
+      memmove(a, b, strlen(b) + 1);
+      a = strstr(s, open);
+    }
+    /* Lone close tag: keep only text after last close (model restarted answer) */
+    while ((p = strstr(s, close)) != NULL) {
+      char *after = p + strlen(close);
+      while (*after == '\n' || *after == '\r' || *after == ' ') after++;
+      memmove(s, after, strlen(after) + 1);
+    }
+  }
+}
+
+/* Collapse A+A+A… repeated blocks in final streamed text. */
+static char *stream_dedupe_final(char *acc) {
+  size_t n, w, best_w = 0;
+  if (!acc) return acc;
+  stream_strip_think_inplace(acc);
+  n = strlen(acc);
+  if (n < 96) return acc;
+  /* Find largest w where text is k>=2 copies of prefix length w */
+  for (w = n / 2; w >= 40; w--) {
+    size_t k = 0, pos = 0;
+    if (n < w * 2) continue;
+    while (pos + w <= n && memcmp(acc + pos, acc, w) == 0) {
+      k++;
+      pos += w;
+      /* allow one newline between copies */
+      if (pos < n && (acc[pos] == '\n' || acc[pos] == '\r')) {
+        while (pos < n && (acc[pos] == '\n' || acc[pos] == '\r')) pos++;
+      }
+    }
+    if (k >= 2 && pos >= n - 2) {
+      best_w = w;
+      break;
+    }
+  }
+  if (best_w > 0) {
+    acc[best_w] = 0;
+    ng_log("agent: stream dedupe collapsed to %zu bytes (was %zu)", best_w, n);
+  } else if (stream_stutter_tail(acc, n)) {
+    /* Keep first ~half when stutter detected */
+    size_t keep = n / 2;
+    while (keep > 40 && acc[keep] && acc[keep] != '\n') keep--;
+    if (keep < 40) keep = n / 2;
+    acc[keep] = 0;
+    ng_log("agent: stream stutter trim to %zu bytes", keep);
+  }
+  return acc;
+}
+
 static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
   char *acc = strdup("");
+  size_t acc_len = 0;
+  size_t n_events = 0;
+  size_t n_emits = 0;
+  int spam_stop = 0;
+  const size_t MAX_ACC = 256 * 1024;
+  /* Hard caps: runaway proxies / model loops must not spam UI or pin llama. */
+  const size_t MAX_EVENTS = 8000;
+  const size_t MAX_EMITS = 4000;
   if (!acc) return NULL;
   char line[8192];
   while (fgets(line, sizeof line, fp)) {
     char *s = line;
+    char *piece = NULL;
+    int is_snapshot = 0;
+    size_t pl, al;
+    const char *emit = NULL;
+
+    if (spam_stop) {
+      /* Drain remainder of SSE without emitting — free llama sooner. */
+      continue;
+    }
+    if (++n_events > MAX_EVENTS) {
+      ng_log("agent: stream event cap %zu — stop (anti-spam)", MAX_EVENTS);
+      break;
+    }
     while (*s == ' ' || *s == '\t') s++;
     if (strncmp(s, "data:", 5) != 0) continue;
     s += 5;
     while (*s == ' ' || *s == '\t') s++;
     /* strip CR/LF */
-    size_t L = strlen(s);
-    while (L && (s[L-1] == '\n' || s[L-1] == '\r')) s[--L] = 0;
-    if (!L || strcmp(s, "[DONE]") == 0) continue;
+    {
+      size_t L = strlen(s);
+      while (L && (s[L - 1] == '\n' || s[L - 1] == '\r')) s[--L] = 0;
+      if (!L || strcmp(s, "[DONE]") == 0) continue;
+    }
 
     /* Grok / OpenAI reasoning in delta */
     {
@@ -485,8 +612,14 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
       char *think = NULL;
       if (d) {
         think = ng_json_get_string(d, "reasoning_content");
-        if (!think || !think[0]) { free(think); think = ng_json_get_string(d, "reasoning"); }
-        if (!think || !think[0]) { free(think); think = ng_json_get_string(d, "thinking"); }
+        if (!think || !think[0]) {
+          free(think);
+          think = ng_json_get_string(d, "reasoning");
+        }
+        if (!think || !think[0]) {
+          free(think);
+          think = ng_json_get_string(d, "thinking");
+        }
       }
       if (!think || !think[0]) {
         free(think);
@@ -496,66 +629,150 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
        * Default: suppress entirely (models still reason server-side). */
       if (think && think[0]) {
         const char *st = getenv("NANOBOT_SHOW_THINKING");
-        int show = st && (st[0] == '1' || st[0] == 'y' || st[0] == 'Y' || st[0] == 't');
+        int show = st && (st[0] == '1' || st[0] == 'y' || st[0] == 'Y' ||
+                          st[0] == 't');
         if (show) {
           char *esc = ng_json_escape(think);
           char *ev = NULL;
-          if (esc && asprintf(&ev, "{\"type\":\"thinking\",\"text\":\"%s\"}", esc) > 0 && ev)
+          if (esc &&
+              asprintf(&ev, "{\"type\":\"thinking\",\"text\":\"%s\"}", esc) > 0 &&
+              ev)
             stream_evt(on_delta, ud, ev);
-          free(esc); free(ev);
+          free(esc);
+          free(ev);
         }
       }
       free(think);
     }
 
-    char *piece = ng_json_get_string(s, "content");
-    /* prefer delta.content path: look for "delta" then content */
-    if (!piece || !piece[0]) {
-      free(piece);
+    /* Prefer delta.content — first "content" key is often message.content
+     * (full cumulative snapshot) and would re-append the whole reply. */
+    {
       const char *d = strstr(s, "\"delta\"");
-      piece = d ? ng_json_get_string(d, "content") : NULL;
-    }
-    /* Strip common model thinking tags leaking into content (configurable via env). */
-    if (piece && piece[0]) {
-      static const char *tags[] = {
-        "think", "thinking", "reasoning", "redacted_reasoning", "redacted_thinking",
-        NULL
-      };
-      char *clean = piece;
-      int i;
-      for (i = 0; tags[i]; i++) {
-        char open[48], close[48];
-        snprintf(open, sizeof open, "<%s>", tags[i]);
-        snprintf(close, sizeof close, "</%s>", tags[i]);
-        char *a = strstr(clean, open);
-        while (a) {
-          char *b = strstr(a, close);
-          if (!b) break;
-          b += strlen(close);
-          memmove(a, b, strlen(b) + 1);
-          a = strstr(clean, open);
+      if (d) piece = ng_json_get_string(d, "content");
+      if (!piece || !piece[0]) {
+        free(piece);
+        piece = NULL;
+        {
+          const char *m = strstr(s, "\"message\"");
+          if (m) piece = ng_json_get_string(m, "content");
+          if (piece && piece[0]) is_snapshot = 1;
         }
-        /* also ... style some models use */
-        snprintf(open, sizeof open, "<%s>", tags[i]);
       }
-      /* drop pure whitespace-only after strip */
-      piece = clean;
+      if (!piece || !piece[0]) {
+        free(piece);
+        piece = ng_json_get_string(s, "content");
+        if (piece && piece[0]) is_snapshot = 1; /* treat as snapshot when not under delta */
+      }
     }
-    /* Keep space-only deltas (" ") — piece[0]==0 would skip them and glue words. */
-    if (piece) {
-      size_t pl = strlen(piece);
-      if (pl > 0) {
-        if (on_delta) on_delta(ud, piece, pl);
-        size_t al = strlen(acc);
-        char *n = realloc(acc, al + pl + 1);
-        if (!n) { free(piece); return acc; }
-        memcpy(n + al, piece, pl + 1);
-        acc = n;
+
+    /* Strip thinking tags leaking into content (paired + lone close). */
+    if (piece && piece[0]) stream_strip_think_inplace(piece);
+
+    if (!piece) continue;
+    pl = strlen(piece);
+    if (pl == 0) {
+      free(piece);
+      continue;
+    }
+    al = acc_len;
+
+    /* Exact full re-send of what we already have — skip. */
+    if (al > 0 && pl == al && memcmp(piece, acc, pl) == 0) {
+      free(piece);
+      continue;
+    }
+    /* Cumulative snapshot / cumulative "delta": only take the new suffix. */
+    if ((is_snapshot || (al > 0 && pl > al)) && al > 0 &&
+        memcmp(piece, acc, al) == 0) {
+      emit = piece + al;
+      pl = strlen(emit);
+      if (pl == 0) {
+        free(piece);
+        continue;
       }
+    } else if (al > 0 && pl < al && memcmp(acc + (al - pl), piece, pl) == 0) {
+      /* Piece is exactly the last pl bytes already appended — skip. */
+      free(piece);
+      continue;
+    } else if (al > 0 && pl > 0 && pl <= al &&
+               memcmp(acc, piece, pl) == 0) {
+      /* Piece is a strict prefix of what we already have — skip. */
+      free(piece);
+      continue;
+    } else if (is_snapshot && al > 0) {
+      /* Snapshot that is not a prefix extension of acc — skip. */
+      free(piece);
+      continue;
+    } else if (al > 0 && pl > 48) {
+      /* Large non-token "delta" after we already have text: only accept a
+       * true cumulative extension; otherwise it re-appends the whole reply
+       * (main UI spam source with some local models / proxies). */
+      if (pl > al && memcmp(piece, acc, al) == 0) {
+        emit = piece + al;
+        pl = strlen(emit);
+        if (pl == 0) {
+          free(piece);
+          continue;
+        }
+      } else {
+        free(piece);
+        continue;
+      }
+    } else {
+      emit = piece;
+    }
+    if (!emit || pl == 0) {
+      free(piece);
+      continue;
+    }
+
+    /* Already-have: emit is a substring we already streamed. */
+    if (pl >= 24 && al >= pl) {
+      size_t i;
+      int found = 0;
+      for (i = 0; i + pl <= al; i++) {
+        if (memcmp(acc + i, emit, pl) == 0) {
+          found = 1;
+          break;
+        }
+      }
+      if (found) {
+        free(piece);
+        continue;
+      }
+    }
+
+    if (acc_len + pl > MAX_ACC) {
+      ng_log("agent: stream size cap %zu — stop (anti-spam)", MAX_ACC);
+      free(piece);
+      break;
+    }
+    if (++n_emits > MAX_EMITS) {
+      ng_log("agent: stream emit cap %zu — stop (anti-spam)", MAX_EMITS);
+      free(piece);
+      break;
+    }
+    if (on_delta) on_delta(ud, emit, pl);
+    {
+      char *n = realloc(acc, acc_len + pl + 1);
+      if (!n) {
+        free(piece);
+        return stream_dedupe_final(acc);
+      }
+      memcpy(n + acc_len, emit, pl + 1);
+      acc = n;
+      acc_len += pl;
     }
     free(piece);
+    /* Model loop / re-greeting: stop emitting further (drain SSE). */
+    if (stream_stutter_tail(acc, acc_len)) {
+      ng_log("agent: stream stutter detected @%zu — stop emit (anti-spam)",
+             acc_len);
+      spam_stop = 1;
+    }
   }
-  return acc;
+  return stream_dedupe_final(acc);
 }
 
 /* Streaming POST (curl -N). Holds LLM sched lock for the whole stream so
@@ -988,7 +1205,8 @@ static char *run_shell_direct(ng_agent_cfg *c, const char *cmd) {
   char *out = NULL;
   asprintf(&out, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
   ng_cmd_result_free(&cr);
-  return out ? out : strdup("(no output)");
+  /* OOM path: empty machine body — host dual-wires empty tool plates. */
+  return out ? out : strdup("");
 }
 
 char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt) {
@@ -1305,9 +1523,17 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         messages = nudge;
       }
       int want_stream = stream_final && on_delta;
-      asprintf(&body,
-        "{\"model\":\"%s\",\"messages\":%s,\"stream\":%s}",
-        c->model, messages, want_stream ? "true" : "false");
+      /* Cap completion length so a looping local model cannot pin llama forever.
+       * Short social prompts get a tighter cap. */
+      {
+        int max_tok = 2048;
+        size_t upl = user_prompt ? strlen(user_prompt) : 0;
+        if (upl > 0 && upl < 48) max_tok = 512;
+        else if (upl < 200) max_tok = 1024;
+        asprintf(&body,
+          "{\"model\":\"%s\",\"messages\":%s,\"stream\":%s,\"max_tokens\":%d}",
+          c->model, messages, want_stream ? "true" : "false", max_tok);
+      }
     }
 
     char url[512];
