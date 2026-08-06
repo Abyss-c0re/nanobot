@@ -1012,6 +1012,26 @@ static int parse_content_tool_cosplay(const char *s, char **name_out, char **cmd
   return 1;
 }
 
+/* Dual-wire cosplay plate — machine tokens only (no free-text tool essays). */
+static char *cosplay_plate(int ok, const char *error, const char *extra_json) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "cosplay";
+  if (ok) {
+    asprintf(&out,
+             "{\"schema\":\"nanobot.cosplay.v1\",\"ok\":true,"
+             "\"status\":\"%s\",\"python\":0%s}",
+             e, extra_json ? extra_json : "");
+  } else {
+    asprintf(&out,
+             "{\"schema\":\"nanobot.cosplay.v1\",\"ok\":false,"
+             "\"error\":\"%s\",\"python\":0%s}",
+             e, extra_json ? extra_json : "");
+  }
+  return out ? out
+             : strdup("{\"schema\":\"nanobot.cosplay.v1\",\"ok\":false,"
+                      "\"error\":\"oom\",\"python\":0}");
+}
+
 /* Strip cosplay markup for user-visible text (never show raw tool XML). */
 static char *strip_tool_cosplay_markup(const char *s) {
   if (!s) return strdup("");
@@ -1021,7 +1041,9 @@ static char *strip_tool_cosplay_markup(const char *s) {
   if (!cut) cut = strstr(s, "<tool_name>");
   if (!cut) cut = strstr(s, "run_terminal_command");
   if (!cut) cut = strstr(s, "run_terminal_cmd");
-  if (!cut) return strdup("(model emitted tool cosplay — stripped; tool was not called)");
+  if (!cut)
+    return cosplay_plate(0, "stripped_no_marker",
+                         ",\"hint\":\"not_a_tool_call\"");
   size_t n = (size_t)(cut - s);
   while (n && (s[n - 1] == ' ' || s[n - 1] == '\n' || s[n - 1] == '\r')) n--;
   char *out = malloc(n + 1);
@@ -1030,7 +1052,7 @@ static char *strip_tool_cosplay_markup(const char *s) {
   out[n] = 0;
   if (!out[0]) {
     free(out);
-    return strdup("(tool cosplay stripped — was not a real tool_call)");
+    return cosplay_plate(0, "stripped_empty", ",\"hint\":\"not_a_tool_call\"");
   }
   return out;
 }
@@ -1813,14 +1835,17 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
           ng_log("agent: cosplay exec exit=%d out=%.200s",
                  cr.exit_code, cr.output ? cr.output : "");
         } else {
-          asprintf(&cr.output, "unknown cosplay tool %s (not executed)", cos_name);
+          char *en = ng_json_escape(cos_name);
+          char extra[160];
+          snprintf(extra, sizeof extra, ",\"tool\":\"%s\"", en ? en : "unknown");
+          cr.output = cosplay_plate(0, "unknown_tool", extra);
           cr.exit_code = 1;
+          free(en);
         }
         free(last_tool_out);
-        asprintf(&last_tool_out,
-                 "exit=%d\n%s\n(note: model wrote tool_call in text; "
-                 "agent recovered and ran via shell policy)",
-                 cr.exit_code, cr.output ? cr.output : "");
+        /* Dual-wire recovered tool body — no free-text cosplay note essay. */
+        asprintf(&last_tool_out, "exit=%d\n%s", cr.exit_code,
+                 cr.output ? cr.output : "");
         if (stream_final && on_delta) {
           char out_cap[900];
           snprintf(out_cap, sizeof out_cap, "%.800s", last_tool_out ? last_tool_out : "");
@@ -1840,20 +1865,22 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         char *esc_out = ng_json_escape(last_tool_out);
         char *esc_cmd = ng_json_escape(cos_cmd);
         char *esc_name = ng_json_escape(cos_name);
+        char *coach = cosplay_plate(1, "recovered",
+                                    ",\"must\":\"plain_text_reply\","
+                                    "\"forbid\":\"tool_markup\"");
+        char *esc_coach = ng_json_escape(coach ? coach : "");
         char *new_messages = NULL;
         asprintf(&new_messages,
           "%s,{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"cosplay1\","
           "\"type\":\"function\",\"function\":{\"name\":\"%s\","
           "\"arguments\":\"{\\\"command\\\":\\\"%s\\\"}\"}}]},"
           "{\"role\":\"tool\",\"tool_call_id\":\"cosplay1\",\"content\":\"%s\"},"
-          "{\"role\":\"user\",\"content\":\"Tool result above was recovered from "
-          "illegal text tool_call cosplay. Reply to the user in plain text only. "
-          "Never emit tool_call XML or run_terminal_command markup.\"}]",
+          "{\"role\":\"user\",\"content\":\"%s\"}]",
           messages, esc_name ? esc_name : "shell", esc_cmd ? esc_cmd : "",
-          esc_out ? esc_out : "");
+          esc_out ? esc_out : "", esc_coach ? esc_coach : "");
         free(messages);
         messages = new_messages;
-        free(esc_out); free(esc_cmd); free(esc_name);
+        free(esc_out); free(esc_cmd); free(esc_name); free(esc_coach); free(coach);
         ng_cmd_result_free(&cr);
         free(cos_name); free(cos_cmd);
         free(final); final = NULL;
@@ -1865,13 +1892,15 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       if (content_looks_like_tool_cosplay(final)) {
         char *clean = strip_tool_cosplay_markup(final);
         free(final);
-        char *honest = NULL;
-        asprintf(&honest,
-          "%s\n\n(Tool was NOT called — model emitted tool markup as text. "
-          "Use @! <cmd> for real shell, or retry.)",
-          (clean && clean[0]) ? clean : "(empty)");
-        free(clean);
-        final = honest;
+        /* Keep leading prose if any; else dual-wire not_executed plate. */
+        if (clean && clean[0] &&
+            !strstr(clean, "\"schema\":\"nanobot.cosplay.v1\""))
+          final = clean;
+        else {
+          free(clean);
+          final = cosplay_plate(0, "not_executed",
+                                ",\"hint\":\"shell_or_retry\"");
+        }
       }
       /* If a multi-step task is still open, do not stop — remind and continue. */
       if (use_tools && ng_task_is_open() && turn < hard_max - 1) {
@@ -1947,7 +1976,9 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       strncmp(final, "curl failed", 11) != 0 &&
       strncmp(final, "(no reply", 9) != 0 &&
       !strstr(final, "\"schema\":\"nanobot.transport.v1\"") &&
-      !strstr(final, "\"schema\":\"nanobot.api_error.v1\"")) {
+      !strstr(final, "\"schema\":\"nanobot.api_error.v1\"") &&
+      !(strstr(final, "\"schema\":\"nanobot.cosplay.v1\"") &&
+        strstr(final, "\"ok\":false"))) {
     ng_memory_record_exchange(mem_user ? mem_user : user_prompt, final);
   }
   ng_log("agent: final: %.300s", final);
