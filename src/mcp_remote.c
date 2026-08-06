@@ -476,13 +476,22 @@ static char *mcp_call_server(const char *server_id, const char *tool,
   }
   if (!hit || !hit->url) {
     free_srv(&copy);
-    char *e = NULL;
-    asprintf(&e, "MCP server '%s' not found or disabled", server_id ? server_id : "?");
-    return e ? e : strdup("MCP server missing");
+    /* Dual-wire deny — machine server token only (no free-text "not found" essay). */
+    {
+      char *sid = ng_json_escape(server_id && server_id[0] ? server_id : "");
+      char *out = NULL;
+      asprintf(&out,
+               "{\"schema\":\"nanobot.mcp.v1\",\"ok\":false,"
+               "\"error\":\"server_not_found\",\"server\":\"%s\","
+               "\"transport\":\"http\",\"python\":0}",
+               sid ? sid : "");
+      free(sid);
+      return out ? out : mcp_err("server_not_found");
+    }
   }
   if (!tool || !tool[0]) {
     free_srv(&copy);
-    return strdup("mcp_call needs tool name");
+    return mcp_err("need_tool_name");
   }
   char *sess = NULL;
   /* initialize for session */
