@@ -6,7 +6,7 @@
 /* Append JSON object as one line to $HOME/hub/events.jsonl */
 int ng_hub_event_obj(const char *json_object);
 
-/* Convenience: type + optional fields as flat strings (escapes values). */
+/* Convenience: dual-wire nanobot.hub.v1 line (escapes values; keys machine-only). */
 int ng_hub_event(const char *type, const char *k1, const char *v1,
                  const char *k2, const char *v2);
 

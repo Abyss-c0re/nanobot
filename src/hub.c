@@ -27,6 +27,27 @@ static void events_path(char *out, size_t n) {
   snprintf(out, n, "%s/hub/events.jsonl", ng_workdir());
 }
 
+/* Dual-wire hub event honesty — lab/ops bus; product bus remains SMX2. */
+#define NG_HUB_DUAL_WIRE                                                       \
+  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","                  \
+  "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","        \
+  "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0"
+
+/* Key leaf must be short machine token (no quote/control inject). */
+static int hub_key_ok(const char *k) {
+  size_t i, n;
+  if (!k || !k[0]) return 0;
+  n = strlen(k);
+  if (n > 32) return 0;
+  for (i = 0; i < n; i++) {
+    unsigned char c = (unsigned char)k[i];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-'))
+      return 0;
+  }
+  return 1;
+}
+
 int ng_hub_event_obj(const char *json_object) {
   if (!json_object || !json_object[0]) return -1;
   char dir[700], path[720];
@@ -46,16 +67,24 @@ int ng_hub_event(const char *type, const char *k1, const char *v1,
   char *e0 = ng_json_escape(type ? type : "event");
   time_t t = time(NULL);
   char *line = NULL;
-  if (k1 && k1[0] && k2 && k2[0])
+  int has1 = hub_key_ok(k1);
+  int has2 = has1 && hub_key_ok(k2);
+  /* Dual-wire plate: schema nanobot.hub.v1 — machine type/keys only. */
+  if (has1 && has2)
     asprintf(&line,
-      "{\"ts\":%ld,\"type\":\"%s\",\"%s\":\"%s\",\"%s\":\"%s\"}",
-      (long)t, e0, k1, e1, k2, e2);
-  else if (k1 && k1[0])
+      "{\"schema\":\"nanobot.hub.v1\",\"ok\":true,\"ts\":%ld,\"type\":\"%s\","
+      "\"%s\":\"%s\",\"%s\":\"%s\"," NG_HUB_DUAL_WIRE "}",
+      (long)t, e0 ? e0 : "event", k1, e1 ? e1 : "", k2, e2 ? e2 : "");
+  else if (has1)
     asprintf(&line,
-      "{\"ts\":%ld,\"type\":\"%s\",\"%s\":\"%s\"}",
-      (long)t, e0, k1, e1);
+      "{\"schema\":\"nanobot.hub.v1\",\"ok\":true,\"ts\":%ld,\"type\":\"%s\","
+      "\"%s\":\"%s\"," NG_HUB_DUAL_WIRE "}",
+      (long)t, e0 ? e0 : "event", k1, e1 ? e1 : "");
   else
-    asprintf(&line, "{\"ts\":%ld,\"type\":\"%s\"}", (long)t, e0);
+    asprintf(&line,
+      "{\"schema\":\"nanobot.hub.v1\",\"ok\":true,\"ts\":%ld,\"type\":\"%s\","
+      NG_HUB_DUAL_WIRE "}",
+      (long)t, e0 ? e0 : "event");
   free(e0); free(e1); free(e2);
   int rc = ng_hub_event_obj(line ? line : "{}");
   free(line);
@@ -127,7 +156,8 @@ static void handle_out_client(int cfd, const char *expect_token) {
   }
 
   /* Fail-closed: non-loopback never gets free READ. No expect token → 503
-   * (misconfig); wrong/missing client token → 401. Loopback may proceed. */
+   * (misconfig); wrong/missing client token → 401. Loopback may proceed.
+   * Dual-wire deny plates — machine tokens only (no free-text essays). */
   {
     int loopback = client_loopback(cfd);
     int has_expect = expect_token && expect_token[0];
@@ -136,8 +166,12 @@ static void handle_out_client(int cfd, const char *expect_token) {
         const char *body =
           "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\n"
           "Connection: close\r\n\r\n"
-          "{\"error\":\"hub OUT token not configured; refusing non-loopback "
-          "(set peer_token or NANOBOT_OUT_TOKEN)\"}";
+          "{\"schema\":\"nanobot.hub.v1\",\"ok\":false,"
+          "\"error\":\"hub_out_token_not_configured\","
+          "\"need_out_token\":true,"
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}";
         out_write(cfd, body);
         close(cfd);
         return;
@@ -146,7 +180,11 @@ static void handle_out_client(int cfd, const char *expect_token) {
         const char *body =
           "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n"
           "Connection: close\r\n\r\n"
-          "{\"error\":\"need X-Nanobot-Out-Token or peer token (READ)\"}";
+          "{\"schema\":\"nanobot.hub.v1\",\"ok\":false,"
+          "\"error\":\"hub_out_token_invalid\",\"need_out_token\":true,"
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}";
         out_write(cfd, body);
         close(cfd);
         return;
@@ -158,7 +196,11 @@ static void handle_out_client(int cfd, const char *expect_token) {
     out_write(cfd,
       "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
       "Connection: close\r\n\r\n"
-      "{\"ok\":true,\"role\":\"out\",\"service\":\"nanobot-hub\"}");
+      "{\"schema\":\"nanobot.hub.v1\",\"ok\":true,\"action\":\"health\","
+      "\"role\":\"out\",\"service\":\"nanobot-hub\","
+      "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}");
     close(cfd);
     return;
   }
@@ -169,7 +211,14 @@ static void handle_out_client(int cfd, const char *expect_token) {
       "Content-Type: text/event-stream\r\n"
       "Cache-Control: no-cache\r\n"
       "Connection: keep-alive\r\n\r\n");
-    out_write(cfd, ": nanobot hub out\n\n");
+    /* Dual-wire SSE open plate — no free-text SSE comment essay. */
+    out_write(cfd,
+      "event: open\n"
+      "data: {\"schema\":\"nanobot.hub.v1\",\"ok\":true,\"action\":\"stream_open\","
+      "\"role\":\"out\","
+      "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n\n");
 
     char path_ev[720];
     events_path(path_ev, sizeof path_ev);
