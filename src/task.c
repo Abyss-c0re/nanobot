@@ -26,6 +26,19 @@ static void active_path(char *out, size_t n) {
   snprintf(out, n, "%s/%s", d, TASK_ACTIVE);
 }
 
+/* Dual-wire task tool deny — no free-text "error: …" banners to the model/UI. */
+static char *task_err(const char *error, const char *hint) {
+  char *out = NULL;
+  const char *e = error && error[0] ? error : "task_failed";
+  const char *h = hint && hint[0] ? hint : "task_plan";
+  asprintf(&out,
+           "{\"schema\":\"nanobot.task.v1\",\"ok\":false,\"error\":\"%s\","
+           "\"hint\":\"%s\",\"python\":0}",
+           e, h);
+  return out ? out : strdup("{\"schema\":\"nanobot.task.v1\",\"ok\":false,"
+                            "\"error\":\"oom\",\"python\":0}");
+}
+
 static char *load_active(void) {
   char p[700];
   active_path(p, sizeof p);
@@ -209,7 +222,7 @@ static char *tool_plan(const char *args) {
   char *steps = ng_json_get_string(args, "steps");
   if (!goal || !goal[0]) {
     free(goal); free(steps);
-    return strdup("error: task_plan needs goal");
+    return task_err("need_goal", "task_plan");
   }
   char lines[TASK_MAX_STEPS][240];
   int n = 0;
@@ -223,7 +236,11 @@ static char *tool_plan(const char *args) {
   /* build JSON */
   size_t cap = 4096;
   char *json = malloc(cap);
-  if (!json) { free(goal); free(steps); return strdup("oom"); }
+  if (!json) {
+    free(goal);
+    free(steps);
+    return task_err("oom", "task_plan");
+  }
   int o = snprintf(json, cap,
     "{\"id\":\"%s\",\"status\":\"planned\",\"goal\":", id);
   char *eg = ng_json_escape(goal);
@@ -293,7 +310,7 @@ static char *tool_start(void) {
   char *j = load_active();
   if (!j || !j[0]) {
     free(j);
-    return strdup("error: no plan — call task_plan first");
+    return task_err("no_plan", "task_plan");
   }
   char *goal = field_str(j, "goal");
   char *id = field_str(j, "id");
@@ -302,8 +319,9 @@ static char *tool_start(void) {
   char *out = rebuild_task(id, "active", goal, steps, ",\"notes\":[]");
   free(steps);
   if (!out) {
-    free(goal); free(id);
-    return strdup("oom");
+    free(goal);
+    free(id);
+    return task_err("oom", "task_start");
   }
   save_active(out);
   char *reply = NULL;
@@ -322,12 +340,12 @@ static char *tool_step_done(const char *args) {
   char *note = ng_json_get_string(args, "note");
   if (idx < 0) {
     free(note);
-    return strdup("error: task_step_done needs index>=0");
+    return task_err("need_index", "task_step_done");
   }
   char *j = load_active();
   if (!j) {
     free(note);
-    return strdup("error: no active task");
+    return task_err("no_active_task", "task_plan");
   }
   char *goal = field_str(j, "goal");
   char *id = field_str(j, "id");
@@ -399,7 +417,7 @@ static char *tool_done(const char *args) {
   char *j = load_active();
   if (!j) {
     free(summary);
-    return strdup("error: no active task");
+    return task_err("no_active_task", "task_plan");
   }
   char *eg = ng_json_escape(summary ? summary : "done");
   char *id = field_str(j, "id");
@@ -427,7 +445,7 @@ static char *tool_block(const char *args) {
   char *j = load_active();
   if (!j) {
     free(reason);
-    return strdup("error: no active task");
+    return task_err("no_active_task", "task_plan");
   }
   char *eg = ng_json_escape(reason ? reason : "blocked");
   char *id = field_str(j, "id");
@@ -453,7 +471,7 @@ static char *tool_status(void) {
   char *j = load_active();
   if (!j || !j[0]) {
     free(j);
-    return strdup("no active task");
+    return task_err("no_active_task", "task_plan");
   }
   int tot = 0, done = 0;
   count_steps(j, &tot, &done);
