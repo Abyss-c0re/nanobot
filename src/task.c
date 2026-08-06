@@ -130,29 +130,43 @@ static void count_steps(const char *j, int *total, int *done) {
 
 char *ng_task_reminder_text(void) {
   char *j = load_active();
-  if (!j || !j[0]) { free(j); return NULL; }
+  char *goal = NULL, *status = NULL, *tid = NULL, *eg = NULL, *out = NULL;
+  char goal_trunc[241];
+  int tot = 0, done = 0;
+  if (!j || !j[0]) {
+    free(j);
+    return NULL;
+  }
   if (!(field_has_status(j, "planned") || field_has_status(j, "active"))) {
     free(j);
     return NULL;
   }
-  char *goal = field_str(j, "goal");
-  char *id = field_str(j, "status");
-  int tot = 0, done = 0;
+  goal = field_str(j, "goal");
+  status = field_str(j, "status");
+  tid = field_str(j, "id");
   count_steps(j, &tot, &done);
-  char *out = NULL;
+  /* Truncate goal so reminder stays compact; escape for valid JSON plate. */
+  snprintf(goal_trunc, sizeof goal_trunc, "%s", goal ? goal : "");
+  eg = ng_json_escape(goal_trunc);
+  /* Dual-wire self-reminder for model context — no free-text coaching essay.
+   * Machine fields: status, progress, goal, must/next/forbid tokens. */
   asprintf(&out,
-    "[ACTIVE TASK — do not stop until finished or blocked]\n"
-    "status=%s  steps_done=%d/%d\n"
-    "goal: %s\n"
-    "Instructions:\n"
-    "1) Prefer run_terminal_command / mcp tools to make real progress.\n"
-    "2) Call task_step_done after each completed step.\n"
-    "3) Call task_done with a short summary only when the goal is fully met.\n"
-    "4) Call task_block with a reason only if truly stuck (dead end).\n"
-    "5) Do NOT claim done without task_done. Keep working this turn.\n"
-    "State JSON (truncated): %.800s",
-    id ? id : "?", done, tot, goal ? goal : "(no goal)", j);
-  free(goal); free(id); free(j);
+           "{\"schema\":\"nanobot.task_reminder.v1\",\"ok\":true,"
+           "\"id\":\"%s\",\"status\":\"%s\","
+           "\"steps_done\":%d,\"steps_total\":%d,"
+           "\"goal\":\"%s\","
+           "\"must\":\"continue_until_done_or_blocked\","
+           "\"next\":\"run_tools|task_step_done|task_done|task_block\","
+           "\"forbid\":\"claim_done_without_task_done\","
+           "\"python\":0}",
+           tid && tid[0] ? tid : "task",
+           status && status[0] ? status : "active", done, tot,
+           eg ? eg : "");
+  free(eg);
+  free(goal);
+  free(status);
+  free(tid);
+  free(j);
   return out;
 }
 

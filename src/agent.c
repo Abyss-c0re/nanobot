@@ -1491,7 +1491,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         char *nmsg = NULL;
         asprintf(&nmsg,
           "%s,{\"role\":\"user\",\"content\":\"%s\"}]",
-          messages, esc ? esc : "Continue the active task.");
+          messages,
+          esc ? esc
+              : "{\"schema\":\"nanobot.task_reminder.v1\",\"ok\":true,"
+                "\"must\":\"continue\",\"python\":0}");
         free(messages);
         messages = nmsg;
         free(esc);

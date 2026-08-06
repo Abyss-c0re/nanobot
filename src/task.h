@@ -15,7 +15,8 @@ char *ng_task_try_tool(const char *name, const char *args_json);
 /* 1 if active task exists and status is planned|active (not done/blocked). */
 int ng_task_is_open(void);
 
-/* Malloc'd multi-line reminder for the model (or NULL if no open task). */
+/* Malloc'd dual-wire reminder plate for the model (or NULL if no open task).
+ * schema nanobot.task_reminder.v1 — machine fields only, no free-text essay. */
 char *ng_task_reminder_text(void);
 
 /* Soft: max extra agent turns when a task is open (beyond normal max_turns). */
