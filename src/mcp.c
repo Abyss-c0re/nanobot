@@ -200,10 +200,10 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     }
     ng_log("mcp tools/call shell: %.200s", cmd);
     ng_cmd_result cr = ng_run_command(cmd, agent->timeout_sec > 0 ? agent->timeout_sec : 60);
-    char *text = NULL;
-    asprintf(&text, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
-    text_result(out_result, text, cr.exit_code != 0);
-    free(text); free(cmd); free(name);
+    /* Dual-wire shell plate — no free-text exit=N banner on MCP wire. */
+    char *plate = ng_tool_result_body(cr.exit_code, cr.output);
+    plate_result(out_result, plate, cr.exit_code != 0);
+    free(cmd); free(name);
     ng_cmd_result_free(&cr);
     return 0;
   }

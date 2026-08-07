@@ -1258,13 +1258,23 @@ static int msg_append_user_vision(char **msgs, const char *text,
 
 static char *run_shell_direct(ng_agent_cfg *c, const char *cmd) {
   while (*cmd == ' ' || *cmd == '\t') cmd++;
-  if (!cmd[0]) return strdup("usage: @! <shell command>");
+  if (!cmd[0]) {
+    /* Dual-wire need_command — no free-text usage essay. */
+    return ng_tool_result_body(2, "{\"schema\":\"nanobot.shell.v1\","
+                                  "\"ok\":false,\"error\":\"need_command\","
+                                  "\"hint\":\"@!_shell_cmd\","
+                                  "\"product_wire\":\"smx2\","
+                                  "\"peer_http\":\"lab_ops_only\","
+                                  "\"peer_http_is_product_bus\":false,"
+                                  "\"share\":\"state_matrix_only\","
+                                  "\"hold_flash\":1,\"llm_is_commander\":false,"
+                                  "\"python\":0}");
+  }
   ng_log("agent: @! shell: %.200s", cmd);
   ng_cmd_result cr = ng_run_command(cmd, c->timeout_sec);
-  char *out = NULL;
-  asprintf(&out, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
+  /* Dual-wire shell/tool body — no free-text exit=N banner. */
+  char *out = ng_tool_result_body(cr.exit_code, cr.output);
   ng_cmd_result_free(&cr);
-  /* OOM path: empty machine body — host dual-wires empty tool plates. */
   return out ? out : strdup("");
 }
 
@@ -1749,7 +1759,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       }
 
       free(last_tool_out);
-      asprintf(&last_tool_out, "exit=%d\n%s", cr.exit_code, cr.output ? cr.output : "");
+      /* Dual-wire tool body — keep existing plates; wrap free-text shell only. */
+      last_tool_out = ng_tool_result_body(cr.exit_code, cr.output);
       /* Cap what the model sees (keep head+tail of large dumps) */
       char *tool_for_model = NULL;
       {
@@ -1863,9 +1874,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
           free(en);
         }
         free(last_tool_out);
-        /* Dual-wire recovered tool body — no free-text cosplay note essay. */
-        asprintf(&last_tool_out, "exit=%d\n%s", cr.exit_code,
-                 cr.output ? cr.output : "");
+        /* Dual-wire recovered tool body — no free-text exit=N / cosplay essay. */
+        last_tool_out = ng_tool_result_body(cr.exit_code, cr.output);
         if (stream_final && on_delta) {
           char out_cap[900];
           snprintf(out_cap, sizeof out_cap, "%.800s", last_tool_out ? last_tool_out : "");

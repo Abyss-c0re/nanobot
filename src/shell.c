@@ -446,17 +446,23 @@ void ng_shell_ensure_policy_files(void) {
   }
 }
 
+/* Dual-wire honesty tail for shell plates (lab/ops ≠ product bus · py=0). */
+#define SHELL_DUAL_WIRE_TAIL                                               \
+  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","              \
+  "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","    \
+  "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0"
+
 /* Dual-wire shell gate deny — machine error/reason tokens only (no free-text essays). */
 static char *shell_err(const char *error, const char *extra_json) {
   char *out = NULL;
   const char *e = error && error[0] ? error : "shell_failed";
   asprintf(&out,
            "{\"schema\":\"nanobot.shell.v1\",\"ok\":false,\"error\":\"%s\","
-           "\"python\":0%s}",
+           SHELL_DUAL_WIRE_TAIL "%s}",
            e, extra_json ? extra_json : "");
   return out ? out
              : strdup("{\"schema\":\"nanobot.shell.v1\",\"ok\":false,"
-                      "\"error\":\"oom\",\"python\":0}");
+                      "\"error\":\"oom\"," SHELL_DUAL_WIRE_TAIL "}");
 }
 
 static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int skip_dangerous) {
@@ -658,4 +664,28 @@ ng_cmd_result ng_run_command(const char *command, int timeout_sec) {
 
 ng_cmd_result ng_run_command_approved(const char *command, int timeout_sec) {
   return ng_run_command_ex(command, timeout_sec, 1);
+}
+
+/*
+ * Dual-wire body for agent/MCP tool wire — no free-text "exit=N\n…" banner.
+ * Already dual-wire plates (deny/task/mcp/braincell) pass through unchanged.
+ * Free-text command stdout becomes nanobot.shell.v1 with exit + capped body.
+ */
+char *ng_tool_result_body(int exit_code, const char *output) {
+  char body_cap[2400];
+  char *esc = NULL, *out = NULL;
+  int ex = exit_code;
+  if (output && output[0] == '{' && strstr(output, "\"schema\":"))
+    return strdup(output);
+  if (ex < -1) ex = -1;
+  if (ex > 9999) ex = 9999;
+  snprintf(body_cap, sizeof body_cap, "%.2200s", output ? output : "");
+  esc = ng_json_escape(body_cap);
+  asprintf(&out,
+           "{\"schema\":\"nanobot.shell.v1\",\"ok\":%s,\"exit\":%d,"
+           "\"output\":\"%s\"," SHELL_DUAL_WIRE_TAIL "}",
+           ex == 0 ? "true" : "false", ex, esc ? esc : "");
+  free(esc);
+  if (out) return out;
+  return shell_err("oom", NULL);
 }

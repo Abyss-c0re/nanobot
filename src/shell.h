@@ -15,5 +15,11 @@ void ng_cmd_result_free(ng_cmd_result *r);
 int ng_command_denied(const char *command);
 /* Write default shell_denylist / shell_allow under NANOBOT_HOME if missing. */
 void ng_shell_ensure_policy_files(void);
+/*
+ * Dual-wire body for model/tool wire (no free-text "exit=N\n…" banner).
+ * If output is already a dual-wire JSON plate (\"schema\":…), returns a copy.
+ * Else wraps free-text stdout as nanobot.shell.v1 with exit + capped body.
+ */
+char *ng_tool_result_body(int exit_code, const char *output);
 
 #endif
