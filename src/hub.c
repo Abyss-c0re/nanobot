@@ -250,10 +250,16 @@ static void handle_out_client(int cfd, const char *expect_token) {
     return;
   }
 
+  /* Dual-wire not_found — machine tokens only (no free-text route essay). */
   out_write(cfd,
     "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n"
     "Connection: close\r\n\r\n"
-    "{\"error\":\"out routes: GET /hub/v1/health | /hub/v1/events\"}");
+    "{\"schema\":\"nanobot.hub.v1\",\"ok\":false,"
+    "\"error\":\"not_found\",\"action\":\"deny\","
+    "\"hint\":\"health|events\",\"role\":\"out\","
+    "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+    "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+    "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}");
   close(cfd);
 }
 
