@@ -415,20 +415,33 @@ char *ng_resources_json(void) {
     extern char *ng_llm_sched_status_json(void);
     llm = ng_llm_sched_status_json();
   }
+  /* Path inject sanitize — workdir may contain quotes on odd hosts. */
+  char *dp_esc = ng_json_escape(dp && dp[0] ? dp : "/");
   char *out = NULL;
+  /* Dual-wire lab/ops plate (schema nanobot.peer_http.v1). Product bus = SMX2. */
   asprintf(&out,
-    "{\"ok\":true,\"lean\":%s,\"mem_total_kb\":%ld,\"mem_free_kb\":%ld,"
+    "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"resources\","
+    "\"lean\":%s,\"mem_total_kb\":%ld,\"mem_free_kb\":%ld,"
     "\"mem_avail_kb\":%ld,\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,"
     "\"disk_path\":\"%s\",\"disk_total_kb\":%ld,\"disk_free_kb\":%ld,"
     "\"limits\":{\"max_turns\":%d,\"http_children\":%d,\"out_max\":%zu,\"log_max\":%zu},"
     "\"llm_sched\":%s,"
-    "\"version\":\"%s\"}",
+    "\"version\":\"%s\","
+    "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+    "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+    "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}",
     ng_is_lean() ? "true" : "false",
     mem_total, mem_free, avail, load1, load5, load15,
-    dp, data_total_kb, data_free_kb,
+    dp_esc ? dp_esc : "/", data_total_kb, data_free_kb,
     ng_max_turns(), ng_http_max_children(), ng_out_max(), ng_log_max(),
     llm && llm[0] ? llm : "{}",
     NG_VERSION);
   free(llm);
-  return out ? out : strdup("{\"ok\":false}");
+  free(dp_esc);
+  if (out) return out;
+  return strdup(
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"action\":\"resources\","
+      "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}");
 }
