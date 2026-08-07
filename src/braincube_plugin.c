@@ -1839,22 +1839,35 @@ char *ng_bc_handle_post(const char *json_body) {
     free(w); free(teacher); free(ttl_s);
     if (want < 0 || want >= NG_BC_SENSORS) {
       free(note); free(action);
-      return strdup("{\"ok\":false,\"error\":\"want lane 0-7 or name (bump_L..free_ok)\"}");
+      /* Dual-wire supervise fail — machine error token only. */
+      return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                    "\"action\":\"supervise\",\"error\":\"bad_want\","
+                    "\"python\":0}");
     }
     supervise_write(want, ttl, note);
     free(note);
     {
+      char *lane_esc = ng_json_escape(g_lane_name[want] ? g_lane_name[want] : "");
       char *jb = NULL;
+      /* Dual-wire supervise ack — no free-text note essay. */
       asprintf(&jb,
-        "{\"ok\":true,\"supervised\":true,\"want\":%d,\"want_name\":\"%s\","
-        "\"ttl_sec\":%d,\"note\":\"agent supervision queued for parent learner\"}",
-        want, g_lane_name[want], ttl);
+        "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+        "\"action\":\"supervise\",\"supervised\":true,"
+        "\"want\":%d,\"want_name\":\"%s\",\"ttl_sec\":%d,"
+        NG_BC_DUAL_WIRE "}",
+        want, lane_esc ? lane_esc : "", ttl);
+      free(lane_esc);
       free(action);
-      return jb ? jb : strdup("{\"ok\":true}");
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"supervise\",\"error\":\"oom\","
+                         "\"python\":0}");
     }
 #else
     free(action);
-    return strdup("{\"ok\":false}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"supervise\",\"error\":\"braincube_unavailable\","
+                  "\"python\":0}");
 #endif
   }
 
@@ -1946,12 +1959,19 @@ char *ng_bc_handle_post(const char *json_body) {
       supervise_write(want, ttl, note ? note : "teach");
       free(w); free(tb); free(note); free(ttl_s); free(action);
       {
+        char *lane_esc = ng_json_escape(g_lane_name[want] ? g_lane_name[want] : "");
         char *jb = NULL;
+        /* Dual-wire teach ack — machine fields only (no free-text essay). */
         asprintf(&jb,
-          "{\"ok\":true,\"taught\":true,\"mode\":\"supervise\",\"want\":%d,"
-          "\"want_name\":\"%s\",\"ttl_sec\":%d}",
-          want, g_lane_name[want], ttl);
-        return jb ? jb : strdup("{\"ok\":true}");
+          "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+          "\"action\":\"teach\",\"taught\":true,\"mode\":\"supervise\","
+          "\"want\":%d,\"want_name\":\"%s\",\"ttl_sec\":%d,"
+          NG_BC_DUAL_WIRE "}",
+          want, lane_esc ? lane_esc : "", ttl);
+        free(lane_esc);
+        return jb ? jb
+                  : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                           "\"action\":\"teach\",\"error\":\"oom\",\"python\":0}");
       }
     }
     free(w); free(note); free(ttl_s);
@@ -2299,17 +2319,27 @@ char *ng_bc_handle_post(const char *json_body) {
       }
       free(sid); free(note); free(action);
       {
+        char *sid_esc = ng_json_escape(g_session_id[0] ? g_session_id : "");
         char *jb = NULL;
+        /* Dual-wire session_start — machine flags only. */
         asprintf(&jb,
-          "{\"ok\":true,\"session_start\":true,\"session_id\":\"%s\","
-          "\"continuous\":true,\"self_teach\":true,\"agent_service\":true}",
-          g_session_id);
-        return jb ? jb : strdup("{\"ok\":true}");
+          "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+          "\"action\":\"session_start\",\"session_start\":true,"
+          "\"session_id\":\"%s\",\"continuous\":true,\"self_teach\":true,"
+          "\"agent_service\":true," NG_BC_DUAL_WIRE "}",
+          sid_esc ? sid_esc : "");
+        free(sid_esc);
+        return jb ? jb
+                  : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                           "\"action\":\"session_start\",\"error\":\"oom\","
+                           "\"python\":0}");
       }
     }
 #else
     free(action);
-    return strdup("{\"ok\":false}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"session_start\","
+                  "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
   }
 
@@ -2321,7 +2351,10 @@ char *ng_bc_handle_post(const char *json_body) {
     g_session_start = 0;
     pthread_mutex_unlock(&g_mu);
     free(action);
-    return strdup("{\"ok\":true,\"session_stop\":true,\"agent_service\":false}");
+    /* Dual-wire session_stop — machine flags only. */
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+                  "\"action\":\"session_stop\",\"session_stop\":true,"
+                  "\"agent_service\":false," NG_BC_DUAL_WIRE "}");
   }
 
   if (!strcmp(action, "agent_service")) {
