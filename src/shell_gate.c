@@ -226,6 +226,19 @@ int ng_shell_gate_verify_password(const char *password) {
   return ok;
 }
 
+/* Approval ids are lowercase hex from create(); reject path inject (../ etc). */
+static int approval_id_ok(const char *id) {
+  size_t i, n;
+  if (!id || !id[0]) return 0;
+  n = strlen(id);
+  if (n < 8 || n > 32) return 0;
+  for (i = 0; i < n; i++) {
+    unsigned char c = (unsigned char)id[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return 0;
+  }
+  return 1;
+}
+
 char *ng_shell_approval_create(const char *command, const char *source) {
   if (!command) return NULL;
   char dir[640];
@@ -286,7 +299,7 @@ char *ng_shell_approval_list_json(void) {
 
 static int load_approval(const char *id, char **cmd_out) {
   if (cmd_out) *cmd_out = NULL;
-  if (!id || !id[0]) return -1;
+  if (!approval_id_ok(id)) return -1;
   char path[700];
   snprintf(path, sizeof path, "%s/approvals/%s.json", ng_workdir(), id);
   size_t len = 0;
@@ -303,6 +316,7 @@ static int load_approval(const char *id, char **cmd_out) {
 
 int ng_shell_approval_approve(const char *id, const char *password, char **out_cmd) {
   if (out_cmd) *out_cmd = NULL;
+  if (!approval_id_ok(id)) return -1;
   if (!ng_shell_gate_configured()) return -3; /* no password set */
   if (!ng_shell_gate_verify_password(password)) return -4;
   char *cmd = NULL;
@@ -317,7 +331,7 @@ int ng_shell_approval_approve(const char *id, const char *password, char **out_c
 }
 
 int ng_shell_approval_reject(const char *id) {
-  if (!id) return -1;
+  if (!approval_id_ok(id)) return -1;
   char path[700];
   snprintf(path, sizeof path, "%s/approvals/%s.json", ng_workdir(), id);
   return unlink(path);
