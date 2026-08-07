@@ -2119,7 +2119,9 @@ char *ng_bc_handle_post(const char *json_body) {
       if (!src || !g_chain_live) {
         pthread_mutex_unlock(&g_mu);
         free(action);
-        return strdup("{\"ok\":false,\"error\":\"no cube lattice\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin\",\"error\":\"no_cube_lattice\","
+                      "\"python\":0}");
       }
       n = src->n ? src->n : LHLAM_CORE_N;
       if (n > LHLAM_MAX_N) n = LHLAM_MAX_N;
@@ -2131,7 +2133,9 @@ char *ng_bc_handle_post(const char *json_body) {
       if (!blob) {
         pthread_mutex_unlock(&g_mu);
         free(action);
-        return strdup("{\"ok\":false,\"error\":\"OOM\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin\",\"error\":\"oom\","
+                      "\"python\":0}");
       }
       blob[o++] = 'S'; blob[o++] = 'M'; blob[o++] = 'X'; blob[o++] = '1';
       blob[o++] = 1; /* ver */
@@ -2155,19 +2159,31 @@ char *ng_bc_handle_post(const char *json_body) {
       pthread_mutex_unlock(&g_mu);
       b64 = b64_encode(blob, o);
       free(blob);
-      if (!b64) { free(action); return strdup("{\"ok\":false,\"error\":\"b64 OOM\"}"); }
+      if (!b64) {
+        free(action);
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin\",\"error\":\"b64_oom\","
+                      "\"python\":0}");
+      }
+      /* Dual-wire SMX1 export — no free-text note essay. */
       asprintf(&jb,
-        "{\"ok\":true,\"format\":\"SMX1\",\"wire\":\"binary\","
-        "\"note\":\"cubes exchange State Matrix as binary SMX1\","
-        "\"bytes\":%zu,\"n\":%u,\"flags\":%u,\"data\":\"%s\"}",
+        "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+        "\"action\":\"matrix_bin\",\"format\":\"SMX1\",\"wire\":\"binary\","
+        "\"bytes\":%zu,\"n\":%u,\"flags\":%u,\"data\":\"%s\","
+        NG_BC_DUAL_WIRE "}",
         o, n, (unsigned)flags, b64);
       free(b64);
       free(action);
-      return jb ? jb : strdup("{\"ok\":false}");
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"matrix_bin\",\"error\":\"oom\","
+                         "\"python\":0}");
     }
 #else
     free(action);
-    return strdup("{\"ok\":false}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"matrix_bin\","
+                  "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
   }
 
@@ -2184,25 +2200,33 @@ char *ng_bc_handle_post(const char *json_body) {
       lhlam_cube *dst = NULL;
       if (!data || !data[0]) {
         free(data); free(which); free(action);
-        return strdup("{\"ok\":false,\"error\":\"need data=base64 SMX1\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin_import\","
+                      "\"error\":\"need_data\",\"python\":0}");
       }
       raw = b64_decode(data, &raw_n);
       free(data);
       if (!raw || raw_n < 16 || raw[0] != 'S' || raw[1] != 'M' || raw[2] != 'X' || raw[3] != '1') {
         free(raw); free(which); free(action);
-        return strdup("{\"ok\":false,\"error\":\"not SMX1 binary\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin_import\","
+                      "\"error\":\"not_smx1\",\"python\":0}");
       }
       ver = raw[4]; n = raw[5]; flags = raw[6];
       o = 12; /* skip magic+hdr+seq start: 4+4 = 8, then seq 4 → 12, pick 4 → 16 */
       o = 16;
       if (ver != 1 || n < 2 || n > LHLAM_MAX_N) {
         free(raw); free(which); free(action);
-        return strdup("{\"ok\":false,\"error\":\"bad SMX1 header\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin_import\","
+                      "\"error\":\"bad_smx1_header\",\"python\":0}");
       }
       nn = n * n * n;
       if (raw_n < 16 + nn) {
         free(raw); free(which); free(action);
-        return strdup("{\"ok\":false,\"error\":\"SMX1 truncated\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin_import\","
+                      "\"error\":\"smx1_truncated\",\"python\":0}");
       }
       pthread_mutex_lock(&g_mu);
       if (!g_chain_live) chain_init_locked();
@@ -2215,7 +2239,9 @@ char *ng_bc_handle_post(const char *json_body) {
       if (!dst) {
         pthread_mutex_unlock(&g_mu);
         free(raw); free(action);
-        return strdup("{\"ok\":false,\"error\":\"no dest cube\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"matrix_bin_import\","
+                      "\"error\":\"no_dest_cube\",\"python\":0}");
       }
       dst->n = (uint8_t)n;
       for (i = 0; i < nn; i++) dst->cells[i] = raw[o + i] % 10;
@@ -2235,12 +2261,16 @@ char *ng_bc_handle_post(const char *json_body) {
       pthread_mutex_unlock(&g_mu);
       free(raw);
       free(action);
-      return strdup("{\"ok\":true,\"imported\":true,\"format\":\"SMX1\","
-                    "\"note\":\"State Matrix applied from binary exchange\"}");
+      /* Dual-wire SMX1 import ack — no free-text note essay. */
+      return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+                    "\"action\":\"matrix_bin_import\",\"imported\":true,"
+                    "\"format\":\"SMX1\"," NG_BC_DUAL_WIRE "}");
     }
 #else
     free(action);
-    return strdup("{\"ok\":false}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"matrix_bin_import\","
+                  "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
   }
 
@@ -2253,13 +2283,17 @@ char *ng_bc_handle_post(const char *json_body) {
       char ipath[700], cpath[700];
       if (!data || !data[0]) {
         free(data); free(action);
-        return strdup("{\"ok\":false,\"error\":\"need data=base64 chain_state\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"import\",\"error\":\"need_data\","
+                      "\"python\":0}");
       }
       raw = b64_decode(data, &raw_n);
       free(data);
       if (!raw || raw_n < 16) {
         free(raw); free(action);
-        return strdup("{\"ok\":false,\"error\":\"bad base64 payload\"}");
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"import\",\"error\":\"bad_base64\","
+                      "\"python\":0}");
       }
       ensure_dir();
       snprintf(ipath, sizeof ipath, "%s/braincube/chain_import.bin", ng_workdir());
@@ -2281,11 +2315,16 @@ char *ng_bc_handle_post(const char *json_body) {
       }
       pthread_mutex_unlock(&g_mu);
       free(action);
-      return strdup("{\"ok\":true,\"imported\":true,\"note\":\"chain imported\"}");
+      /* Dual-wire chain import ack — no free-text note essay. */
+      return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+                    "\"action\":\"import\",\"imported\":true,"
+                    NG_BC_DUAL_WIRE "}");
     }
 #else
     free(action);
-    return strdup("{\"ok\":false}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"import\","
+                  "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
   }
 
