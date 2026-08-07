@@ -1794,7 +1794,10 @@ char *ng_bc_handle_post(const char *json_body) {
     snap = read_live_snap_if_fresh(30);
 #endif
     if (snap) return snap;
-    return strdup("{\"ok\":false,\"learning\":false,\"error\":\"no live snapshot yet — is continuous on?\"}");
+    /* Dual-wire learn_status fail — machine error token only. */
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"learn_status\",\"learning\":false,"
+                  "\"error\":\"no_live_snap\",\"python\":0}");
   }
 
   if (!strcmp(action, "continuous")) {
@@ -2609,34 +2612,45 @@ char *ng_bc_handle_post(const char *json_body) {
       }
     }
     o += (size_t)snprintf(trials_arr + o, sizeof trials_arr - o, "]");
+    /* Dual-wire trials plate — machine fields only (no how_to_read essay). */
     asprintf(&jb,
-      "{\"ok\":true,\"field_trials\":%s,\"count\":%d,"
+      "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+      "\"action\":\"trials\",\"field_trials\":%s,\"count\":%d,"
       "\"latest\":%s,"
       "\"field_status\":%s,"
       "\"trials\":%s,"
-      "\"how_to_read\":\"Each trial is a motion the robot tried. "
-      "clear=free path; bump=hit; skip/docked=no move. reward 1=good. "
-      "Without field_trials only attention trains (no motion).\"}",
+      NG_BC_DUAL_WIRE "}",
       field_on ? "true" : "false", nlines,
       (lat && llen > 2) ? lat : "null",
       (st && slen > 2) ? st : "null",
       trials_arr);
     free(body); free(st); free(lat);
     free(action);
-    return jb ? jb : strdup("{\"ok\":true,\"trials\":[]}");
+    return jb ? jb
+              : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+                       "\"action\":\"trials\",\"trials\":[],\"count\":0,"
+                       "\"python\":0}");
   }
 
   if (!strcmp(action, "selftest")) {
 #if NANOBOT_HAS_BRAINCUBE
     int rc = lhlam_selftest();
     char *jb = NULL;
-    asprintf(&jb, "{\"ok\":%s,\"selftest_rc\":%d,\"learning_evidence\":%s}",
+    /* Dual-wire selftest — machine rc only. */
+    asprintf(&jb,
+      "{\"schema\":\"nanobot.braincube.v1\",\"ok\":%s,"
+      "\"action\":\"selftest\",\"selftest_rc\":%d,"
+      "\"learning_evidence\":%s," NG_BC_DUAL_WIRE "}",
       rc == 0 ? "true" : "false", rc, rc == 0 ? "true" : "false");
     free(action);
-    return jb ? jb : strdup("{\"ok\":false}");
+    return jb ? jb
+              : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                       "\"action\":\"selftest\",\"error\":\"oom\",\"python\":0}");
 #else
     free(action);
-    return strdup("{\"ok\":false,\"error\":\"braincube not linked\"}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"selftest\","
+                  "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
   }
 
@@ -2683,7 +2697,9 @@ char *ng_bc_handle_post(const char *json_body) {
   }
 
   free(action);
-  return strdup("{\"ok\":false,\"error\":\"unknown action\","
+  /* Dual-wire unknown action — machine error token + action catalog. */
+  return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+    "\"action\":\"unknown\",\"error\":\"unknown_action\","
     "\"actions\":[\"status\",\"live\",\"sense\",\"learn_status\",\"training\","
     "\"train_status\",\"train_report\",\"hows_training\","
     "\"continuous\",\"self_teach\",\"supervise\",\"agent_teach\",\"teach\","
@@ -2693,5 +2709,6 @@ char *ng_bc_handle_post(const char *json_body) {
     "\"matrix_bin_import\",\"smx1_import\","
     "\"reset\",\"brain_reset\",\"agent_service\",\"control\","
     "\"auto_adapt\",\"enable\",\"disable\",\"direct_io\",\"dry_run\",\"tick\","
-    "\"decide\",\"sample\",\"feedback\",\"selftest\",\"chain_status\",\"chain_tick\"]}");
+    "\"decide\",\"sample\",\"feedback\",\"selftest\",\"chain_status\","
+    "\"chain_tick\"],\"python\":0}");
 }
