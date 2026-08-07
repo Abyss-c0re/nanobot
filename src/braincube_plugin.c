@@ -944,8 +944,8 @@ static void law_tick_locked(const uint8_t *feat, size_t nf) {
     g_law_path_fail++;
     g_law_last_path_len = -1;
     g_law_last_winner = -1;
-    snprintf(g_law_status, sizeof g_law_status,
-             "path_blocked energy=%u", g_law_energy);
+    /* Machine token only — path/energy counts live in law numeric fields. */
+    snprintf(g_law_status, sizeof g_law_status, "path_blocked");
     /* Still tick meta with race digits so lattice opens over time */
     race_in[rn++] = (uint8_t)(i_cell % 10);
     race_in[rn++] = (uint8_t)(o_cell % 10);
@@ -999,9 +999,8 @@ static void law_tick_locked(const uint8_t *feat, size_t nf) {
       lhlam_cube_feedback(&g_lane[b], sin, sn, 0, g_lane_fire[b] ? 0 : 1);
     }
     g_law_combines++;
-    snprintf(g_law_status, sizeof g_law_status,
-             "WIN flow A=%d B=%d path=%d plug=%d E=%u",
-             a, b, path_cost, plug_cost, g_law_energy);
+    /* Machine token only — A/B/path/plug/energy live in law numeric fields. */
+    snprintf(g_law_status, sizeof g_law_status, "win");
   } else {
     /* LOSS — plug claimed O; meta still learns the blocked path */
     g_law_losses++;
@@ -1012,15 +1011,14 @@ static void law_tick_locked(const uint8_t *feat, size_t nf) {
     race_in[rn++] = (uint8_t)(plug_cost % 10);
     lhlam_cube_tick(g_coord, race_in, rn);
     lhlam_cube_feedback(g_coord, race_in, rn, 0, 0);
-    snprintf(g_law_status, sizeof g_law_status,
-             "LOSS plug A=%d B=%d path=%d plug=%d E=%u",
-             a, b, path_cost, plug_cost, g_law_energy);
+    /* Machine token only — A/B/path/plug/energy live in law numeric fields. */
+    snprintf(g_law_status, sizeof g_law_status, "loss");
   }
-  /* JSON-safe status (no quotes/backslash) */
+  /* JSON-safe status (no quotes/backslash) — defensive if token ever expands. */
   {
     char *p;
     for (p = g_law_status; *p; p++) {
-      if (*p == '"' || *p == '\\' || *p == '\n') *p = ' ';
+      if (*p == '"' || *p == '\\' || *p == '\n' || *p == ' ') *p = '_';
     }
   }
   /* Keep meta small after any evolution attempt */
