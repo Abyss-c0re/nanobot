@@ -198,12 +198,35 @@ char *ng_llm_sched_run(ng_llm_job_fn fn, void *userdata) {
   return r;
 }
 
+/* Escape lock path for a JSON string leaf (path may come from env/override). */
+static void json_escape_path(char *dst, size_t n, const char *src) {
+  size_t o = 0;
+  if (!dst || n == 0) return;
+  if (!src) src = "";
+  for (; *src && o + 2 < n; src++) {
+    unsigned char c = (unsigned char)*src;
+    if (c < 0x20) continue; /* drop controls — not valid path inject */
+    if (c == '"' || c == '\\') {
+      if (o + 3 >= n) break;
+      dst[o++] = '\\';
+      dst[o++] = (char)c;
+    } else {
+      dst[o++] = (char)c;
+    }
+  }
+  dst[o] = 0;
+}
+
 char *ng_llm_sched_status_json(void) {
   char *out = NULL;
+  char path_esc[640];
   ensure_defaults();
   compute_base();
+  /* Sanitize path inject — NANOBOT_LLM_LOCK / override must not break resources. */
+  json_escape_path(path_esc, sizeof path_esc, g_base_path);
   asprintf(&out,
            "{\"enabled\":%s,\"slots\":%d,\"held\":%d,\"path\":\"%s\"}",
-           g_enabled ? "true" : "false", g_slots, g_held, g_base_path);
-  return out ? out : strdup("{\"enabled\":false}");
+           g_enabled ? "true" : "false", g_slots, g_held, path_esc);
+  return out ? out
+             : strdup("{\"enabled\":false,\"slots\":0,\"held\":-1,\"path\":\"\"}");
 }
