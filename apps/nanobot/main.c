@@ -71,17 +71,53 @@ static void print_cli_err(const char *action, const char *error, const char *hin
 }
 
 /*
+ * Dual-wire ready plate — replaces free-text limits/braincube/backend dump.
+ * Never dumps secrets. Product bus SMX2; peer HTTP lab/ops only; py=0.
+ */
+static void print_ready_plate(const ng_agent_cfg *agent, const char *auth_import) {
+  char *ver = ng_json_escape(NG_VERSION);
+  char *be = ng_json_escape(agent ? ng_agent_backend_kind(agent) : "unknown");
+  char *base = ng_json_escape(agent && agent->base_url ? agent->base_url : "");
+  char *model = ng_json_escape(agent && agent->model ? agent->model : "");
+  char *ai = ng_json_escape(auth_import && auth_import[0] ? auth_import : "none");
+  fprintf(stderr,
+          "{\"schema\":\"nanobot.ready.v1\",\"ok\":true,\"action\":\"ready\","
+          "\"version\":\"%s\",\"lean\":%s,\"max_turns\":%d,"
+          "\"max_children\":%d,\"out_max\":%zu,\"log_max\":%zu,"
+          "\"braincube\":%s,\"continuous\":%s,"
+          "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+          "\"auth_import\":\"%s\","
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n",
+          ver ? ver : "", ng_is_lean() ? "true" : "false", ng_max_turns(),
+          ng_http_max_children(), ng_out_max(), ng_log_max(),
+          ng_bc_available() ? "true" : "false",
+          ng_bc_continuous() ? "true" : "false", be ? be : "unknown",
+          base ? base : "", model ? model : "", ai ? ai : "none");
+  free(ver);
+  free(be);
+  free(base);
+  free(model);
+  free(ai);
+}
+
+/*
  * Dual-wire listen ack after HTTP bind intent (matches grokium serve plate).
  * No free-text essay · no peer_mcp_bridge.py (py=0 · native --mcp only).
- * Bind host is honest: loopback unless --lan.
+ * Bind host is honest: loopback unless --lan. peer_token never dumps secret.
  */
 static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_out,
-                               ng_session *sess, const char *www_root) {
+                               ng_session *sess, const char *www_root,
+                               const char *peer_token_state) {
   const char *host = bind_lan ? "0.0.0.0" : "127.0.0.1";
   int login_pending = sess && sess->login_pending;
   int has_www = www_root && www_root[0];
   char *ver = ng_json_escape(NG_VERSION);
   char *www_esc = has_www ? ng_json_escape(www_root) : NULL;
+  char *pts = ng_json_escape(peer_token_state && peer_token_state[0]
+                                 ? peer_token_state
+                                 : "unknown");
   char *vu = NULL, *vuc = NULL, *uc = NULL;
   if (port <= 0) port = NG_DEFAULT_PORT;
   if (sess) {
@@ -99,6 +135,7 @@ static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_ou
           "\"/peer/v1/shell\",\"/peer/v1/jobs\"],"
           "\"www\":%s,\"www_root\":\"%s\","
           "\"hub\":%s,\"port_out\":%d,"
+          "\"peer_token\":\"%s\","
           "\"login_pending\":%s,\"user_code\":\"%s\","
           "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
           "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
@@ -107,7 +144,7 @@ static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_ou
           ver ? ver : "", host, port, bind_lan ? "lan" : "loopback",
           has_www ? "true" : "false", www_esc ? www_esc : "",
           hub_mode ? "true" : "false",
-          hub_mode && port_out > 0 ? port_out : 0,
+          hub_mode && port_out > 0 ? port_out : 0, pts ? pts : "unknown",
           login_pending ? "true" : "false", uc ? uc : "", vu ? vu : "",
           vuc ? vuc : "");
   /* Primary operator URL on stdout (machine token path only). */
@@ -122,6 +159,7 @@ static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_ou
   fflush(stdout);
   free(ver);
   free(www_esc);
+  free(pts);
   free(vu);
   free(vuc);
   free(uc);
@@ -499,9 +537,8 @@ int main(int argc, char **argv) {
     snprintf(tok_shared, sizeof tok_shared, "%s/peer_token", shared_home);
     if (cur_app && access(sess_cur, R_OK) != 0 &&
         access(sess_shared, R_OK) == 0 && access(tok_shared, R_OK) == 0) {
-      fprintf(stderr,
-              "  auth: redirect workdir %s → %s (shared Grok session SoT)\n",
-              home, shared_home);
+      /* Dual-wire note only — paths not free-text essay on stderr. */
+      print_cli_err("auth", "workdir_redirect", "shared_session_sot");
       home = shared_home;
     }
   }
@@ -521,7 +558,7 @@ int main(int argc, char **argv) {
       return 0;
     }
 #endif
-    fprintf(stderr, "mcp_list unavailable\n");
+    print_cli_err("mcp_list", "unavailable", "NANOBOT_ENABLE_MCP|mcp_servers.json");
     return 1;
   }
   if (mode_mcp_call)
@@ -568,7 +605,7 @@ int main(int argc, char **argv) {
         snprintf(www_buf, sizeof www_buf, "%s/www", www_root);
         www_root = www_buf;
       } else {
-        fprintf(stderr, "  warn: --www %s has no index.html (static off)\n", www_root);
+        print_cli_err("www", "no_index_html", "static_off");
         www_root = NULL;
       }
     }
@@ -585,18 +622,14 @@ int main(int argc, char **argv) {
   ng_cli_version_init();
   ng_limits_init();
   ng_memory_init();
-  fprintf(stderr, "  limits: lean=%s turns=%d children=%d out=%zu log=%zu\n",
-          ng_is_lean() ? "yes" : "no", ng_max_turns(), ng_http_max_children(),
-          ng_out_max(), ng_log_max());
   /* BrainCube: parent continuous learn (fork workers only serve snapshots). */
-  fprintf(stderr, "  braincube: available=%s\n", ng_bc_available() ? "yes" : "no");
   ng_bc_boot_parent();
-  fprintf(stderr, "  braincube: continuous=%s\n", ng_bc_continuous() ? "on" : "off");
 
   ng_session session;
   ng_session_init(&session);
   ng_session_load(&session);
   /* Import Grok Build CLI when sealed session missing/expired, or --import-grok-cli. */
+  const char *auth_import = "none";
 #if NANOBOT_ENABLE_AUTH
   {
     const char *fe = getenv("NANOBOT_IMPORT_GROK_CLI");
@@ -604,9 +637,9 @@ int main(int argc, char **argv) {
     if (!force_offline && (force_import || !ng_session_valid(&session))) {
       int imp = ng_session_try_import_grok_cli(&session);
       if (imp == 1)
-        fprintf(stderr, "  auth: imported Grok Build CLI session from ~/.grok/auth.json\n");
+        auth_import = "imported";
       else if (imp == 0 && !ng_session_valid(&session))
-        fprintf(stderr, "  auth: no Grok Build CLI token — use --login or browser /activate\n");
+        auth_import = "missing";
     }
   }
 #endif
@@ -629,16 +662,21 @@ int main(int argc, char **argv) {
   }
 
   int need_browser = ng_agent_needs_browser_session(&agent);
+  /* Dual-wire ready (limits/braincube/backend) — no free-text dump. */
   if (!auth_status && !auth_start && !auth_poll)
-    fprintf(stderr, "  backend: %s  base=%s  model=%s\n",
-            ng_agent_backend_kind(&agent),
-            agent.base_url ? agent.base_url : "?",
-            agent.model ? agent.model : "?");
+    print_ready_plate(&agent, auth_import);
 
   /* --- CLI auth (JSON on stdout; no HTTP) — product UI path --- */
   if (auth_status || auth_start || auth_poll) {
 #if !NANOBOT_ENABLE_AUTH
-    printf("{\"ok\":false,\"error\":\"AUTH disabled in build\"}\n");
+    /* Dual-wire auth deny — machine tokens only. */
+    printf("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
+           "\"error\":\"auth_disabled\",\"poll_state\":\"error\","
+           "\"cross_device_ok\":true,\"transport\":\"cli\","
+           "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+           "\"peer_http_is_product_bus\":false,"
+           "\"share\":\"state_matrix_only\",\"hold_flash\":1,"
+           "\"llm_is_commander\":false,\"python\":0}\n");
     ng_session_free(&session);
     ng_agent_cfg_free(&agent);
     return 2;
@@ -700,7 +738,7 @@ int main(int argc, char **argv) {
         } else {
           int pr = ng_session_poll_login(&session);
           if (pr == 1) {
-            fprintf(stderr, "  auth: browser approved (cli poll; any device OK)\n");
+            /* Dual-wire poll_state=signed_in on stdout plate — no free-text banner. */
             poll_state = "signed_in";
           } else if (pr == 0) {
             poll_state = "pending"; /* authorization_pending / throttle / transport */
@@ -800,8 +838,7 @@ int main(int argc, char **argv) {
     int is_shell = oneshot[0] == '@' && oneshot[1] == '!';
     if (need_browser && !is_shell) {
       if (!ng_session_valid(&session)) {
-        fprintf(stderr, "No Grok session. Use nanobot --login, or --offline for llama.cpp,\n"
-                        "or @! <cmd> for shell without a model.\n");
+        print_cli_err("chat", "need_session", "--login|--offline|@!_shell");
         ng_session_free(&session);
         ng_agent_cfg_free(&agent);
         return 1;
@@ -825,7 +862,7 @@ int main(int argc, char **argv) {
   /* --login without --port: blocking browser device-code, then exit (no HTTP). */
   if (force_login && need_browser && !want_peer) {
 #if !NANOBOT_ENABLE_AUTH
-    fprintf(stderr, "  --login: AUTH disabled in this build\n");
+    print_cli_err("login", "auth_disabled", "rebuild_with_NANOBOT_ENABLE_AUTH=1");
     ng_session_free(&session);
     ng_agent_cfg_free(&agent);
     return 2;
@@ -844,52 +881,43 @@ int main(int argc, char **argv) {
 
   if (force_login && need_browser && want_peer) {
 #if !NANOBOT_ENABLE_AUTH
-    fprintf(stderr, "  --login: AUTH disabled in this build\n");
+    print_cli_err("login", "auth_disabled", "rebuild_with_NANOBOT_ENABLE_AUTH=1");
 #else
     ng_session_clear(&session);
     (void)ng_session_start_device_login(&session);
-    fprintf(stderr, "  --login: device-code started; peer will poll\n");
+    /* Dual-wire auth plate — peer poll owns the rest (no free-text essay). */
+    print_auth_json(&session, &agent, "pending", NULL);
 #endif
   } else if (need_browser && ng_session_valid(&session)) {
 #if NANOBOT_ENABLE_AUTH
     if (ng_session_ensure(&session) != 0)
-      fprintf(stderr, "  Session refresh failed; use --login or --auth-start\n");
+      print_cli_err("session", "refresh_failed", "--login|--auth-start");
 #endif
   } else if (need_browser && !want_peer) {
-    fprintf(stderr,
-            "  No cloud session. Run: nanobot --login\n"
-            "  Or: nanobot --auth-start  (JSON for UI) then --auth-poll\n"
-            "  Or: --offline / --base-url for local llama (no browser)\n"
-            "  HTTP peer is opt-in: --port N (loopback) or --port N --lan\n");
+    print_cli_err("session", "need_session",
+                  "--login|--auth-start|--offline|--port");
     ng_session_free(&session);
     ng_agent_cfg_free(&agent);
     return 2;
   } else if (need_browser) {
-    fprintf(stderr,
-            "  No cloud session — peer will accept /activate or --login first\n");
-  } else {
-    fprintf(stderr, "  Local/OpenAI-compatible backend — no browser session required\n");
+    print_cli_err("session", "need_session_peer", "/activate|--login");
   }
+  /* local OpenAI-compatible: ready plate already carries backend honesty */
 
   /* No --port / --peer / --hub: CLI-only. Do not open a network socket. */
   if (!want_peer) {
     if (oneshot || mode_mcp || list_models || force_login) {
       /* already handled above */
     }
-    fprintf(stderr,
-            "nanobot: nothing to do.\n"
-            "  Chat:   nanobot -p 'prompt'\n"
-            "  Auth:   nanobot --login | --auth-status | --auth-start\n"
-            "  MCP:    nanobot --mcp\n"
-            "  HTTP:   nanobot --port 8787          # 127.0.0.1 only\n"
-            "          nanobot --port 8787 --lan    # intentional LAN\n");
+    print_cli_err("cli", "nothing_to_do", "-p|--login|--mcp|--port");
     usage(argv[0]);
     ng_session_free(&session);
     ng_agent_cfg_free(&agent);
     return 2;
   }
 
-  /* Peer token only when HTTP is actually started. */
+  /* Peer token only when HTTP is actually started — never dump secret. */
+  const char *peer_token_state = "missing";
   {
     char pt[640];
     snprintf(pt, sizeof pt, "%s/peer_token", home);
@@ -898,19 +926,19 @@ int main(int argc, char **argv) {
       char tok[33];
       if (nb_random_bytes(raw, sizeof raw) != 0 ||
           nb_hex_encode(raw, sizeof raw, tok, sizeof tok) != 0) {
-        fprintf(stderr, "  warn: failed to create peer token (CSPRNG)\n");
+        peer_token_state = "create_failed";
       } else {
         char line[64];
         int n = snprintf(line, sizeof line, "token=%s\n", tok);
-        if (nb_write_secret_file(pt, line, (size_t)n) == 0) {
-          fprintf(stderr, "  Peer token created: %s\n", pt);
-          fprintf(stderr, "  Header: X-Nanobot-Peer-Token: %s\n", tok);
-        }
+        if (nb_write_secret_file(pt, line, (size_t)n) == 0)
+          peer_token_state = "created";
+        else
+          peer_token_state = "write_failed";
         nb_secure_wipe(raw, sizeof raw);
         nb_secure_wipe(tok, sizeof tok);
       }
     } else {
-      fprintf(stderr, "  Peer token file: %s (unchanged)\n", pt);
+      peer_token_state = "present";
     }
   }
 
@@ -957,8 +985,9 @@ int main(int argc, char **argv) {
 
   signal(SIGINT, on_sig);
   signal(SIGTERM, on_sig);
-  /* Dual-wire listen plate (bind/hub/www honesty · py=0 · no free-text essay). */
-  print_listen_plate(port, bind_lan, hub_mode, port_out, &session, www_root);
+  /* Dual-wire listen plate (bind/hub/www/peer_token honesty · py=0). */
+  print_listen_plate(port, bind_lan, hub_mode, port_out, &session, www_root,
+                     peer_token_state);
 
   if (hub_mode) {
 #if NANOBOT_ENABLE_HUB
