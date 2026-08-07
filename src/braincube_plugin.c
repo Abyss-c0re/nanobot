@@ -762,9 +762,14 @@ static void write_live_snap_locked(void) {
   /* enrich snap with continuous learn fields (append before final }) */
   {
     char *enriched = NULL;
+    char *src_esc = ng_json_escape(g_last_teach_src[0] ? g_last_teach_src : "none");
+    char *note_esc = ng_json_escape(g_agent_note[0] ? g_agent_note : "");
+    char *sid_esc = ng_json_escape(g_session_id[0] ? g_session_id : "");
+    char *st_esc = ng_json_escape(g_law_status[0] ? g_law_status : "init");
     size_t L = strlen(jb);
     if (L > 2 && jb[L - 1] == '}') {
       jb[L - 1] = 0;
+      /* Machine fields only — no free-text principle/game essays; inject-sanitize strings. */
       asprintf(&enriched,
         "%s,\"continuous\":%s,\"self_teach\":%s,\"learning\":true,"
         "\"teaches_ok\":%u,\"teaches_bad\":%u,\"self_teaches\":%u,\"agent_teaches\":%u,"
@@ -778,19 +783,17 @@ static void write_live_snap_locked(void) {
         "\"path_len\":%d,\"i_ms\":%d,\"o_ms\":%d,\"plug_ms\":%d,"
         "\"winner\":%d,\"algo_a\":%d,\"algo_b\":%d,"
         "\"i_cell\":%d,\"o_cell\":%d,"
-        "\"status\":\"%s\","
-        "\"principle\":\"energy_must_flow\","
-        "\"game\":\"endless_reverse_rubik_io_race\"}}",
+        "\"status\":\"%s\"}}",
         jb,
         g_continuous ? "true" : "false",
         g_self_teach ? "true" : "false",
         g_teaches_ok, g_teaches_bad, g_self_teaches, g_agent_teaches,
         g_useful_teaches, g_skipped_teaches,
-        g_last_teach_want, g_last_teach_src[0] ? g_last_teach_src : "none",
+        g_last_teach_want, src_esc ? src_esc : "none",
         g_agent_want,
-        g_agent_note[0] ? g_agent_note : "",
+        note_esc ? note_esc : "",
         g_agent_service ? "true" : "false",
-        g_session_id[0] ? g_session_id : "",
+        sid_esc ? sid_esc : "",
         g_session_start ? (long)(time(NULL) - g_session_start) : 0L,
         g_resets,
         LAW_NAME, LAW_VERSION, g_law_ticks,
@@ -799,10 +802,14 @@ static void write_live_snap_locked(void) {
         g_law_last_path_len, g_law_last_i_ms, g_law_last_o_ms, g_law_last_plug_ms,
         g_law_last_winner, g_law_last_algo_a, g_law_last_algo_b,
         g_law_last_in_cell, g_law_last_out_cell,
-        g_law_status[0] ? g_law_status : "init");
+        st_esc ? st_esc : "init");
       free(jb);
       jb = enriched;
     }
+    free(src_esc);
+    free(note_esc);
+    free(sid_esc);
+    free(st_esc);
   }
   if (!jb) return;
   ensure_dir();
@@ -1222,16 +1229,17 @@ static char *chain_live_json_locked(void) {
     g_meta_activity = g_meta_activity * 0.7f + 0.3f * (g_chain_pick >= 0 ? 1.f : 0.2f);
     g_live_seq++;
     (void)mstats;
+    /* Dual-wire live plate — machine fields only (no free-text declaration/principle). */
     asprintf(&jb,
-      "{\"ok\":true,\"live\":true,\"seq\":%u,\"hz\":4,"
-      "\"declaration\":\"each sensor = one LHTL cube (IN+OUT); Meta maps all\","
+      "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+      "\"action\":\"live\",\"live\":true,\"seq\":%u,\"hz\":4,"
       "\"brain\":\"sensor_cubes+meta\","
       "\"law\":{\"name\":\"%s\",\"ver\":\"%s\",\"ticks\":%u,"
       "\"races\":%u,\"wins\":%u,\"losses\":%u,\"combines\":%u,"
       "\"paths\":%u,\"path_fail\":%u,\"energy\":%u,"
       "\"path_len\":%d,\"winner\":%d,\"algo_a\":%d,\"algo_b\":%d,"
       "\"i_ms\":%d,\"o_ms\":%d,\"plug_ms\":%d,"
-      "\"status\":\"%s\",\"principle\":\"energy_must_flow\"},"
+      "\"status\":\"%s\"},"
       "\"meta\":{\"id\":\"meta\",\"role\":\"meta\",\"name\":\"MetaCube\","
       "\"pick\":%d,\"pick_name\":\"%s\",\"activity\":%.3f,"
       "\"hits\":%u,\"misses\":%u,\"acc\":%.3f,\"gen\":%u,\"n\":%u,"
@@ -1240,7 +1248,9 @@ static char *chain_live_json_locked(void) {
       "\"structure\":{\"mode\":\"iso4\",\"cubes\":%s},"
       "\"world\":{\"state\":%d,\"charge\":%d,\"battery\":%d,\"error\":%d,"
       "\"bump\":[%d,%d,%d]},"
-      "\"viz\":{\"layout\":\"radial+iso3d\",\"meta_center\":true,\"colors\":\"crimson_activity\"}}",
+      "\"viz\":{\"layout\":\"radial+iso3d\",\"meta_center\":true,"
+      "\"colors\":\"crimson_activity\"},"
+      NG_BC_DUAL_WIRE "}",
       (unsigned)g_live_seq,
       LAW_NAME, LAW_VERSION, g_law_ticks,
       g_law_races, g_law_wins, g_law_losses, g_law_combines,
