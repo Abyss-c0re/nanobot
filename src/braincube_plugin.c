@@ -2431,13 +2431,16 @@ char *ng_bc_handle_post(const char *json_body) {
     free(action);
     {
       char *jb = NULL;
+      /* Dual-wire field_trials ack — machine flag only (no free-text note essay). */
       asprintf(&jb,
-        "{\"ok\":true,\"field_trials\":%s,"
-        "\"note\":\"%s\"}",
-        on ? "true" : "false",
-        on ? "motion trials enabled — robot will RC-move when undocked"
-           : "motion trials disabled");
-      return jb ? jb : strdup("{\"ok\":true}");
+        "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+        "\"action\":\"field_trials\",\"field_trials\":%s,"
+        NG_BC_DUAL_WIRE "}",
+        on ? "true" : "false");
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"field_trials\",\"error\":\"oom\","
+                         "\"python\":0}");
     }
   }
 
@@ -2468,13 +2471,25 @@ char *ng_bc_handle_post(const char *json_body) {
     free(action);
     {
       char *jb = NULL;
+      int field_on = 0;
+      {
+        char fpath[700];
+        snprintf(fpath, sizeof fpath, "%s/braincube/field_trials.flag",
+                 ng_workdir());
+        field_on = (access(fpath, F_OK) == 0);
+      }
+      /* Dual-wire explore ack — machine flags only (no free-text note essay). */
       asprintf(&jb,
-        "{\"ok\":true,\"explore\":%s,\"field_trials\":%s,"
-        "\"note\":\"%s\"}",
-        on ? "true" : "false", on ? "true" : "false",
-        on ? "explore ON — undock to mess around in RC and build associations"
-           : "explore off");
-      return jb ? jb : strdup("{\"ok\":true}");
+        "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+        "\"action\":\"explore\",\"explore\":%s,\"field_trials\":%s,"
+        "\"continuous\":%s,\"agent_service\":%s,"
+        NG_BC_DUAL_WIRE "}",
+        on ? "true" : "false", field_on ? "true" : "false",
+        g_continuous ? "true" : "false",
+        g_agent_service ? "true" : "false");
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"explore\",\"error\":\"oom\",\"python\":0}");
     }
   }
 
