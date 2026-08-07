@@ -1104,18 +1104,18 @@ static char *chain_status_json_locked(void) {
   char cs[160];
   if (!g_chain_live) chain_init_locked();
   lhlam_cube_stats(g_coord, cs, sizeof cs);
+  /* Dual-wire chain_status — machine fields only (no free-text essays). */
   asprintf(&jb,
-    "{\"ok\":true,\"plugin\":\"cubechain\",\"available\":true,"
+    "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+    "\"action\":\"chain_status\","
+    "\"plugin\":\"cubechain\",\"available\":true,"
     "\"brain\":\"sensor_cubes+meta\",\"sensors\":%d,\"ticks\":%u,"
     "\"pick\":%d,\"pick_name\":\"%s\","
     "\"fire\":[%d,%d,%d,%d,%d,%d,%d,%d],"
     "\"names\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"],"
     "\"agree\":%u,\"conflict\":%u,"
-    "\"meta_is\":\"lhlam_cube\","
-    "\"declaration\":\"each sensor = one LHTL cube (IN+OUT); MetaCube maps all\","
-    "\"core_owns\":\"efficient IN to OUT I/O per sensor; meta selects salience\","
-    "\"direction\":\"sensor cubes interpret; MetaCube brain-like map\","
-    "\"stats\":\"%s\"}",
+    "\"meta_is\":\"lhlam_cube\",\"stats\":\"%s\","
+    NG_BC_DUAL_WIRE "}",
     NG_BC_SENSORS, g_chain_ticks, g_chain_pick,
     (g_chain_pick >= 0 && g_chain_pick < NG_BC_SENSORS) ? g_lane_name[g_chain_pick] : "?",
     g_lane_fire[0], g_lane_fire[1], g_lane_fire[2], g_lane_fire[3],
@@ -1123,7 +1123,10 @@ static char *chain_status_json_locked(void) {
     g_lane_name[0], g_lane_name[1], g_lane_name[2], g_lane_name[3],
     g_lane_name[4], g_lane_name[5], g_lane_name[6], g_lane_name[7],
     g_chain_agree, g_chain_conflict, cs);
-  return jb ? jb : strdup("{\"ok\":false}");
+  return jb ? jb
+            : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                     "\"action\":\"chain_status\",\"error\":\"oom\","
+                     "\"python\":0}");
 }
 
 /* Compact structure for lightweight 3D viz: neur/assoc counts + 4³ cell sample. */
@@ -1255,7 +1258,10 @@ static char *chain_live_json_locked(void) {
       g_world_state, g_world_charge, g_world_battery, g_world_error,
       g_world_bump[0], g_world_bump[1], g_world_bump[2]);
   }
-  return jb ? jb : strdup("{\"ok\":false,\"live\":false}");
+  return jb ? jb
+            : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                     "\"action\":\"live\",\"live\":false,\"error\":\"oom\","
+                     "\"python\":0}");
 }
 #endif /* NANOBOT_HAS_BRAINCUBE */
 
@@ -1722,9 +1728,13 @@ char *ng_bc_live_json(void) {
   jb = chain_live_json_locked();
   pthread_mutex_unlock(&g_mu);
 #else
-  jb = strdup("{\"ok\":false,\"live\":false,\"available\":false}");
+  jb = strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+              "\"action\":\"live\",\"live\":false,\"available\":false,"
+              "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
-  return jb ? jb : strdup("{\"ok\":false}");
+  return jb ? jb
+            : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                     "\"action\":\"live\",\"error\":\"oom\",\"python\":0}");
 }
 
 char *ng_bc_status_json(void) {
@@ -2537,30 +2547,32 @@ char *ng_bc_handle_post(const char *json_body) {
 
   if (!strcmp(action, "train_status") || !strcmp(action, "train_report") ||
       !strcmp(action, "hows_training")) {
-    char *rep = ng_bc_train_status_report();
-    char *esc = NULL, *jb = NULL;
-    /* return both text and json wrapper for tools */
+    char *jb = NULL;
+    int field_on = 0, explore_on = 0;
+    char path[700];
     free(action);
-    if (!rep) return strdup("{\"ok\":false}");
-    /* embed as JSON string (escape quotes/newlines lightly) */
-    {
-      size_t i, o = 0, L = strlen(rep);
-      esc = (char *)malloc(L * 2 + 4);
-      if (esc) {
-        for (i = 0; i < L; i++) {
-          char c = rep[i];
-          if (c == '"' || c == '\\') { esc[o++] = '\\'; esc[o++] = c; }
-          else if (c == '\n') { esc[o++] = '\\'; esc[o++] = 'n'; }
-          else if (c == '\r') continue;
-          else esc[o++] = c;
-        }
-        esc[o] = 0;
-      }
-    }
-    asprintf(&jb, "{\"ok\":true,\"plugin_version\":\"%s\",\"report\":\"%s\"}",
-             NG_BC_PLUGIN_VERSION, esc ? esc : "");
-    free(rep); free(esc);
-    return jb ? jb : strdup("{\"ok\":true}");
+    ensure_dir();
+    snprintf(path, sizeof path, "%s/braincube/field_trials.flag", ng_workdir());
+    field_on = (access(path, F_OK) == 0);
+    snprintf(path, sizeof path, "%s/braincube/explore.flag", ng_workdir());
+    explore_on = (access(path, F_OK) == 0);
+    /* Dual-wire train_status — machine flags only (no free-text report essay). */
+    asprintf(&jb,
+      "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+      "\"action\":\"train_status\",\"plugin_version\":\"%s\","
+      "\"continuous\":%s,\"self_teach\":%s,\"agent_service\":%s,"
+      "\"field_trials\":%s,\"explore\":%s,"
+      NG_BC_DUAL_WIRE "}",
+      NG_BC_PLUGIN_VERSION,
+      g_continuous ? "true" : "false",
+      g_self_teach ? "true" : "false",
+      g_agent_service ? "true" : "false",
+      field_on ? "true" : "false",
+      explore_on ? "true" : "false");
+    return jb ? jb
+              : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                       "\"action\":\"train_status\",\"error\":\"oom\","
+                       "\"python\":0}");
   }
 
   /* Last N field trials + latest + field status (results of trying things). */
@@ -2665,7 +2677,9 @@ char *ng_bc_handle_post(const char *json_body) {
     return jb;
 #else
     free(action);
-    return strdup("{\"ok\":false,\"error\":\"braincube not linked\"}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"chain_status\","
+                  "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
   }
 
@@ -2692,7 +2706,9 @@ char *ng_bc_handle_post(const char *json_body) {
     }
 #else
     free(action);
-    return strdup("{\"ok\":false,\"error\":\"braincube not linked\"}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"chain_tick\","
+                  "\"error\":\"braincube_unavailable\",\"python\":0}");
 #endif
   }
 
