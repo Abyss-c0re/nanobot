@@ -324,16 +324,23 @@ static char *extract_steps_array(const char *j) {
 static char *rebuild_task(const char *id, const char *status, const char *goal,
                           const char *steps_json, const char *extra_kv) {
   char *eg = ng_json_escape(goal ? goal : "");
+  char *eid = ng_json_escape(id && id[0] ? id : "task");
+  /* status is a machine token from callers (planned|active|…); clamp inject. */
+  const char *st = "active";
+  if (status && status[0]) {
+    if (!strcmp(status, "planned") || !strcmp(status, "active") ||
+        !strcmp(status, "done") || !strcmp(status, "blocked"))
+      st = status;
+  }
   char *out = NULL;
   asprintf(&out,
     "{\"id\":\"%s\",\"status\":\"%s\",\"goal\":\"%s\",\"steps\":%s,\"updated\":%ld%s}",
-    id && id[0] ? id : "task",
-    status ? status : "active",
-    eg ? eg : "",
+    eid ? eid : "task", st, eg ? eg : "",
     steps_json && steps_json[0] ? steps_json : "[]",
     (long)time(NULL),
     extra_kv ? extra_kv : "");
   free(eg);
+  free(eid);
   return out;
 }
 
@@ -459,11 +466,16 @@ static char *tool_done(const char *args) {
   char *eg = ng_json_escape(summary ? summary : "done");
   char *id = field_str(j, "id");
   char *goal = field_str(j, "goal");
+  char *eid = ng_json_escape(id && id[0] ? id : "task");
+  char *egoal = ng_json_escape(goal ? goal : "");
   char *out = NULL;
+  /* Escape id/goal injects — summary already escaped (archive + tool plate). */
   asprintf(&out,
     "{\"id\":\"%s\",\"status\":\"done\",\"goal\":\"%s\",\"summary\":\"%s\",\"updated\":%ld}",
-    id ? id : "task", goal ? goal : "", eg ? eg : "", (long)time(NULL));
+    eid ? eid : "task", egoal ? egoal : "", eg ? eg : "", (long)time(NULL));
   free(eg);
+  free(eid);
+  free(egoal);
   if (out) {
     archive_active(out);
     /* clear active */
@@ -492,11 +504,16 @@ static char *tool_block(const char *args) {
   char *eg = ng_json_escape(reason ? reason : "blocked");
   char *id = field_str(j, "id");
   char *goal = field_str(j, "goal");
+  char *eid = ng_json_escape(id && id[0] ? id : "task");
+  char *egoal = ng_json_escape(goal ? goal : "");
   char *out = NULL;
+  /* Escape id/goal injects — reason already escaped (archive + tool plate). */
   asprintf(&out,
     "{\"id\":\"%s\",\"status\":\"blocked\",\"goal\":\"%s\",\"reason\":\"%s\",\"updated\":%ld}",
-    id ? id : "task", goal ? goal : "", eg ? eg : "", (long)time(NULL));
+    eid ? eid : "task", egoal ? egoal : "", eg ? eg : "", (long)time(NULL));
   free(eg);
+  free(eid);
+  free(egoal);
   if (out) {
     archive_active(out);
     char p[700];
