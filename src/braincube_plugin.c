@@ -23,6 +23,16 @@
 #include <braincube/braincube.h>
 #endif
 
+/*
+ * Dual-wire braincube plate tail (schema nanobot.braincube.v1).
+ * Product bus remains SMX2; peer HTTP is lab/ops only.
+ */
+#define NG_BC_DUAL_WIRE                                                        \
+  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","                  \
+  "\"peer_http_is_product_bus\":false,"                                        \
+  "\"share\":\"state_matrix_only\",\"hold_flash\":1,"                          \
+  "\"llm_is_commander\":false,\"python\":0"
+
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 static int g_inited;
 static int g_enabled = 1;
@@ -2007,6 +2017,7 @@ char *ng_bc_handle_post(const char *json_body) {
       size_t blen = 0;
       char *raw;
       char *b64;
+      char *sid_esc = NULL;
       char *jb = NULL;
       ensure_dir();
       /* flush if parent */
@@ -2017,22 +2028,39 @@ char *ng_bc_handle_post(const char *json_body) {
       raw = ng_read_file(path, &blen);
       if (!raw || blen == 0) {
         free(raw); free(action);
-        return strdup("{\"ok\":false,\"error\":\"no chain_state.bin yet\"}");
+        /* Dual-wire export fail — machine error token only. */
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"export\",\"error\":\"no_chain_state\","
+                      "\"python\":0}");
       }
       b64 = b64_encode((const uint8_t *)raw, blen);
       free(raw);
-      if (!b64) { free(action); return strdup("{\"ok\":false,\"error\":\"b64 OOM\"}"); }
+      if (!b64) {
+        free(action);
+        return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                      "\"action\":\"export\",\"error\":\"b64_oom\","
+                      "\"python\":0}");
+      }
+      sid_esc = ng_json_escape(g_session_id[0] ? g_session_id : "");
+      /* Dual-wire export ack — no free-text note essay. */
       asprintf(&jb,
-        "{\"ok\":true,\"format\":\"chain_state_b64\",\"bytes\":%zu,\"resets\":%u,"
-        "\"session_id\":\"%s\",\"data\":\"%s\"}",
-        blen, g_resets, g_session_id[0] ? g_session_id : "", b64);
+        "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+        "\"action\":\"export\",\"format\":\"chain_state_b64\","
+        "\"bytes\":%zu,\"resets\":%u,\"session_id\":\"%s\",\"data\":\"%s\","
+        NG_BC_DUAL_WIRE "}",
+        blen, g_resets, sid_esc ? sid_esc : "", b64);
       free(b64);
+      free(sid_esc);
       free(action);
-      return jb ? jb : strdup("{\"ok\":false}");
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"export\",\"error\":\"oom\",\"python\":0}");
     }
 #else
     free(action);
-    return strdup("{\"ok\":false}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"export\",\"error\":\"braincube_unavailable\","
+                  "\"python\":0}");
 #endif
   }
 
@@ -2307,8 +2335,16 @@ char *ng_bc_handle_post(const char *json_body) {
     free(action);
     {
       char *jb = NULL;
-      asprintf(&jb, "{\"ok\":true,\"agent_service\":%s}", on ? "true" : "false");
-      return jb ? jb : strdup("{\"ok\":true}");
+      /* Dual-wire agent_service ack — machine flag only (no free-text). */
+      asprintf(&jb,
+               "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+               "\"action\":\"agent_service\",\"agent_service\":%s,"
+               NG_BC_DUAL_WIRE "}",
+               on ? "true" : "false");
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"agent_service\",\"error\":\"oom\","
+                         "\"python\":0}");
     }
   }
 
@@ -2324,15 +2360,22 @@ char *ng_bc_handle_post(const char *json_body) {
     }
     free(action);
     {
+      char *sid_esc = ng_json_escape(g_session_id[0] ? g_session_id : "");
       char *jb = NULL;
+      /* Dual-wire control plate — machine fields only (no free-text note essay). */
       asprintf(&jb,
-        "{\"ok\":true,\"learning\":false,\"continuous\":%s,\"self_teach\":%s,"
+        "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+        "\"action\":\"control\",\"learning\":false,\"snap\":false,"
+        "\"continuous\":%s,\"self_teach\":%s,"
         "\"agent_service\":%s,\"session_id\":\"%s\",\"resets\":%u,"
-        "\"note\":\"no live snap yet — start session\"}",
+        NG_BC_DUAL_WIRE "}",
         g_continuous ? "true" : "false", g_self_teach ? "true" : "false",
         g_agent_service ? "true" : "false",
-        g_session_id[0] ? g_session_id : "", g_resets);
-      return jb ? jb : strdup("{\"ok\":true}");
+        sid_esc ? sid_esc : "", g_resets);
+      free(sid_esc);
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"control\",\"error\":\"oom\",\"python\":0}");
     }
   }
 
