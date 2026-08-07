@@ -1720,28 +1720,35 @@ char *ng_bc_live_json(void) {
 char *ng_bc_status_json(void) {
   char *snap = NULL;
   char *jb = NULL;
+  /* Dual-wire status — machine fields only (no free-text coaching notes). */
 #if NANOBOT_HAS_BRAINCUBE
   snap = read_live_snap_if_fresh(8);
   if (snap) {
-    /* compact learn status from parent snap fields if present */
     asprintf(&jb,
-      "{\"ok\":true,\"plugin\":\"braincube\",\"available\":true,"
+      "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,\"action\":\"status\","
+      "\"plugin\":\"braincube\",\"available\":true,"
       "\"brain\":\"sensor_cubes+meta\",\"sensors\":8,"
-      "\"continuous\":true,\"learning\":true,"
-      "\"note\":\"parent continuous learn; see action=live or learn_status\","
-      "\"snap\":true}");
+      "\"continuous\":true,\"learning\":true,\"snap\":true,"
+      "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}");
     free(snap);
     if (jb) return jb;
   }
 #endif
   asprintf(&jb,
-    "{\"ok\":true,\"plugin\":\"braincube\",\"available\":true,"
+    "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,\"action\":\"status\","
+    "\"plugin\":\"braincube\",\"available\":true,"
     "\"brain\":\"sensor_cubes+meta\",\"sensors\":8,"
-    "\"continuous\":%s,\"self_teach\":%s,"
-    "\"note\":\"probe_ok; continuous learn in parent when enabled\"}",
+    "\"continuous\":%s,\"self_teach\":%s,\"snap\":false,"
+    "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+    "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+    "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}",
     g_continuous ? "true" : "false",
     g_self_teach ? "true" : "false");
-  return jb ? jb : strdup("{\"ok\":true,\"plugin\":\"braincube\"}");
+  return jb ? jb
+            : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                     "\"action\":\"status\",\"error\":\"oom\",\"python\":0}");
 }
 
 char *ng_bc_handle_post(const char *json_body) {
@@ -1973,12 +1980,23 @@ char *ng_bc_handle_post(const char *json_body) {
     free(action);
     {
       char *jb = NULL;
-      asprintf(&jb, "{\"ok\":true,\"reset\":true,\"note\":\"brain chain reset queued/applied\"}");
-      return jb ? jb : strdup("{\"ok\":true,\"reset\":true}");
+      /* Dual-wire reset ack — no free-text note essay. */
+      asprintf(&jb,
+               "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+               "\"action\":\"reset\",\"reset\":true,"
+               "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+               "\"peer_http_is_product_bus\":false,"
+               "\"share\":\"state_matrix_only\",\"hold_flash\":1,"
+               "\"llm_is_commander\":false,\"python\":0}");
+      return jb ? jb
+                : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                         "\"action\":\"reset\",\"error\":\"oom\",\"python\":0}");
     }
 #else
     free(action);
-    return strdup("{\"ok\":false}");
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"reset\",\"error\":\"braincube_unavailable\","
+                  "\"python\":0}");
 #endif
   }
 
