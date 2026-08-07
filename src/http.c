@@ -50,19 +50,55 @@ static void send_all(int fd, const char *data, size_t n) {
 
 /* SSE chat stream helper — top-level (not nested) for portable C compilers.
  * Normal chunks → dual-wire nanobot.peer_http.v1 chat_delta plates.
- * Chunks starting with 0x1e (RS) → agent structured JSON (tool / thinking).
- * Product bus remains SMX2; this HTTP stream is lab/ops only. */
+ * Chunks starting with 0x1e (RS) → dual-wire chat_agent plates (tool/thinking).
+ * Product bus remains SMX2; this HTTP stream is lab/ops only.
+ * In-process host callbacks still see raw 0x1e JSON; only peer HTTP is plated. */
 typedef struct { int fd; } chat_sse_ud;
 static void chat_sse_delta(void *p, const char *chunk, size_t n) {
   chat_sse_ud *u = (chat_sse_ud *)p;
   if (!chunk || !n || !u || u->fd < 0) return;
-  /* Structured event from agent (tool / thinking) — pass through as data body. */
+  /* Structured agent event (tool / thinking) — dual-wire, keep type/phase leaves. */
   if ((unsigned char)chunk[0] == 0x1e && n > 1) {
+    const char *body = chunk + 1;
+    size_t bl = n - 1;
+    while (bl > 0 &&
+           (body[bl - 1] == '\n' || body[bl - 1] == '\r' || body[bl - 1] == ' ' ||
+            body[bl - 1] == '\t'))
+      bl--;
     char *line = NULL;
-    if (asprintf(&line, "event: agent\ndata: %.*s\n\n", (int)(n - 1), chunk + 1) > 0 &&
-        line) {
-      send_all(u->fd, line, strlen(line));
-      free(line);
+    if (bl >= 2 && body[0] == '{' && body[bl - 1] == '}') {
+      /* Merge honesty into object: schema/action + original leaves + dual-wire. */
+      if (asprintf(&line,
+                   "event: agent\n"
+                   "data: {\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+                   "\"action\":\"chat_agent\",%.*s,"
+                   NG_PEER_HTTP_DUAL_WIRE "}\n\n",
+                   (int)(bl - 2), body + 1) > 0 &&
+          line) {
+        send_all(u->fd, line, strlen(line));
+        free(line);
+      }
+    } else {
+      /* Non-object agent body — escape as payload string (fail-closed honesty). */
+      char *tmp = (char *)malloc(bl + 1);
+      char *esc = NULL;
+      if (tmp) {
+        memcpy(tmp, body, bl);
+        tmp[bl] = 0;
+        esc = ng_json_escape(tmp);
+        free(tmp);
+      }
+      if (asprintf(&line,
+                   "event: agent\n"
+                   "data: {\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+                   "\"action\":\"chat_agent\",\"payload\":\"%s\","
+                   NG_PEER_HTTP_DUAL_WIRE "}\n\n",
+                   esc ? esc : "") > 0 &&
+          line) {
+        send_all(u->fd, line, strlen(line));
+        free(line);
+      }
+      free(esc);
     }
     return;
   }
