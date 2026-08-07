@@ -315,16 +315,16 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     return 0;
   }
 
-  /* Clanker BrainCube / CubeChain training — agent can report progress to user. */
+  /* BrainCube / CubeChain — dual-wire plates only (no free-text train report). */
   if (strcmp(name, "braincube_train_status") == 0 ||
       strcmp(name, "train_status") == 0 ||
       strcmp(name, "cubechain_status") == 0) {
-    char *rep = ng_bc_train_status_report();
-    if (rep)
-      text_result(out_result, rep, 0);
+    char *resp = ng_bc_handle_post("{\"action\":\"train_status\"}");
+    if (resp)
+      plate_result(out_result, resp, 0);
     else
       plate_result(out_result, mcp_err("unavailable"), 1);
-    free(rep); free(name);
+    free(name);
     return 0;
   }
   if (strcmp(name, "braincube_explore") == 0 || strcmp(name, "explore") == 0) {
@@ -334,23 +334,40 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     if (v && (v[0] == '0' || v[0] == 'f' || v[0] == 'F')) on = 0;
     asprintf(&body, "{\"action\":\"explore\",\"value\":\"%s\"}", on ? "1" : "0");
     resp = ng_bc_handle_post(body ? body : "{}");
-    text_result(out_result, resp ? resp : "{}", 0);
-    free(body); free(resp); free(v); free(name);
+    free(body); free(v);
+    if (resp)
+      plate_result(out_result, resp, strstr(resp, "\"ok\":false") ? 1 : 0);
+    else
+      plate_result(out_result, mcp_err("unavailable"), 1);
+    free(name);
     return 0;
   }
   if (strcmp(name, "braincube_supervise") == 0) {
     char *want = tool_arg(json, "want");
     char *ttl = tool_arg(json, "ttl_sec");
     char *note = tool_arg(json, "note");
+    char *want_esc = ng_json_escape(want && want[0] ? want : "free_ok");
+    char *note_esc = ng_json_escape(note && note[0] ? note : "mcp_agent");
     char *body = NULL, *resp = NULL;
+    int ttl_n = ttl ? atoi(ttl) : 40;
+    int is_err = 0;
+    if (ttl_n < 1) ttl_n = 1;
+    if (ttl_n > 600) ttl_n = 600;
+    /* Inject-sanitize want/note before JSON body assembly. */
     asprintf(&body,
       "{\"action\":\"supervise\",\"want\":\"%s\",\"ttl_sec\":%d,\"note\":\"%s\"}",
-      want && want[0] ? want : "free_ok",
-      ttl ? atoi(ttl) : 40,
-      note && note[0] ? note : "mcp_agent");
+      want_esc ? want_esc : "free_ok",
+      ttl_n,
+      note_esc ? note_esc : "mcp_agent");
     resp = ng_bc_handle_post(body ? body : "{}");
-    text_result(out_result, resp ? resp : "{}", 0);
-    free(body); free(resp); free(want); free(ttl); free(note); free(name);
+    free(body); free(want); free(ttl); free(note); free(want_esc); free(note_esc);
+    if (resp) {
+      is_err = strstr(resp, "\"ok\":false") ? 1 : 0;
+      plate_result(out_result, resp, is_err);
+    } else {
+      plate_result(out_result, mcp_err("unavailable"), 1);
+    }
+    free(name);
     return 0;
   }
 
