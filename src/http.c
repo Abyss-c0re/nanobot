@@ -38,17 +38,29 @@ static void send_all(int fd, const char *data, size_t n) {
   }
 }
 
+/*
+ * Dual-wire lab/ops peer HTTP plate tail (schema nanobot.peer_http.v1).
+ * Product bus remains SMX2; this HTTP surface is lab/ops only.
+ */
+#define NG_PEER_HTTP_DUAL_WIRE                                                 \
+  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","                  \
+  "\"peer_http_is_product_bus\":false,"                                        \
+  "\"share\":\"state_matrix_only\",\"hold_flash\":1,"                          \
+  "\"llm_is_commander\":false,\"python\":0"
+
 /* SSE chat stream helper — top-level (not nested) for portable C compilers.
- * Normal chunks → {"delta":"..."}.
- * Chunks starting with 0x1e (RS) → raw JSON event (tool / thinking) for the client. */
+ * Normal chunks → dual-wire nanobot.peer_http.v1 chat_delta plates.
+ * Chunks starting with 0x1e (RS) → agent structured JSON (tool / thinking).
+ * Product bus remains SMX2; this HTTP stream is lab/ops only. */
 typedef struct { int fd; } chat_sse_ud;
 static void chat_sse_delta(void *p, const char *chunk, size_t n) {
   chat_sse_ud *u = (chat_sse_ud *)p;
   if (!chunk || !n || !u || u->fd < 0) return;
-  /* Structured event from agent (tool / thinking) */
+  /* Structured event from agent (tool / thinking) — pass through as data body. */
   if ((unsigned char)chunk[0] == 0x1e && n > 1) {
     char *line = NULL;
-    if (asprintf(&line, "data: %.*s\n\n", (int)(n - 1), chunk + 1) > 0 && line) {
+    if (asprintf(&line, "event: agent\ndata: %.*s\n\n", (int)(n - 1), chunk + 1) > 0 &&
+        line) {
       send_all(u->fd, line, strlen(line));
       free(line);
     }
@@ -62,7 +74,13 @@ static void chat_sse_delta(void *p, const char *chunk, size_t n) {
   free(tmp);
   if (!esc) return;
   char *line = NULL;
-  if (asprintf(&line, "data: {\"delta\":\"%s\"}\n\n", esc) > 0 && line) {
+  if (asprintf(&line,
+               "event: delta\n"
+               "data: {\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+               "\"action\":\"chat_delta\",\"delta\":\"%s\","
+               NG_PEER_HTTP_DUAL_WIRE "}\n\n",
+               esc) > 0 &&
+      line) {
     send_all(u->fd, line, strlen(line));
     free(line);
   }
@@ -92,17 +110,6 @@ static void http_json(int fd, int code, const char *body) {
 static void http_text(int fd, int code, const char *body) {
   http_response(fd, code, "text/plain", body, body ? strlen(body) : 0);
 }
-
-/*
- * Dual-wire lab/ops peer HTTP deny plate (schema nanobot.peer_http.v1).
- * Product bus remains SMX2; this HTTP surface is lab/ops only.
- * error must be a short machine token (caller-controlled; no free-text essays).
- */
-#define NG_PEER_HTTP_DUAL_WIRE                                                 \
-  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","                  \
-  "\"peer_http_is_product_bus\":false,"                                        \
-  "\"share\":\"state_matrix_only\",\"hold_flash\":1,"                          \
-  "\"llm_is_commander\":false,\"python\":0"
 
 static void http_peer_err(int fd, int code, const char *error) {
   char body[384];
@@ -860,25 +867,38 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         free(req); close(cfd); return;
       }
     }
-    /* Real-time typing: stream=true → SSE deltas (final free-text only). */
+    /* Real-time typing: stream=true → dual-wire SSE chat_delta plates. */
     int want_stream = (strstr(body, "\"stream\":true") != NULL)
                    || (strstr(body, "\"stream\": true") != NULL);
     if (want_stream && !shell_only) {
-      char hdr[256];
+      char hdr[384];
       int hn = snprintf(hdr, sizeof hdr,
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/event-stream\r\n"
         "Cache-Control: no-cache\r\n"
         "Connection: close\r\n"
         "Access-Control-Allow-Origin: *\r\n"
+        "X-Grokium-Product-Wire: smx2\r\n"
+        "X-Grokium-Peer-HTTP: lab_ops_only\r\n"
+        "X-Grokium-Share: state_matrix_only\r\n"
         "\r\n");
       send_all(cfd, hdr, (size_t)hn);
+      /* Dual-wire stream open — no free-text SSE comment. */
+      {
+        static const char open_evt[] =
+          "event: open\n"
+          "data: {\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "\"action\":\"chat_stream_open\","
+          NG_PEER_HTTP_DUAL_WIRE "}\n\n";
+        send_all(cfd, open_evt, sizeof open_evt - 1);
+      }
       chat_sse_ud ud = { .fd = cfd };
       char *reply = ng_agent_run_attachments(agent, prompt, image_b64, image_mime,
                                              images_json, 1, chat_sse_delta, &ud);
       char *esc = ng_json_escape(reply ? reply : "");
       char *fin = NULL;
       if (asprintf(&fin,
+                   "event: done\n"
                    "data: {\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
                    "\"action\":\"chat\",\"done\":true,\"reply\":\"%s\","
                    NG_PEER_HTTP_DUAL_WIRE "}\n\n",
