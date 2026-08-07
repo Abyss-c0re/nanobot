@@ -1038,17 +1038,29 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (!ui_on && cfg->www_root && cfg->www_root[0]) ui_on = 1;
     }
     char *www = ng_settings_get("WWW");
-    char body[512];
-    int n = snprintf(body, sizeof body,
-      "{\"ok\":true,\"shell_enabled\":%s,\"watcher_enabled\":%s,\"ui_enabled\":%s,"
-      "\"www\":\"%s\",\"settings\":\"%s\",\"status\":\"%s\","
-      "\"persist\":true,\"note\":\"settings survive reboot under NANOBOT_HOME/settings\"}",
-      shell_on ? "true" : "false", watch_on ? "true" : "false", ui_on ? "true" : "false",
-      www ? www : (cfg->www_root ? cfg->www_root : ""),
-      ng_settings_path(),
-      (session && ng_session_valid(session)) ? "online" : "offline");
-    http_response(cfd, 200, "application/json", body, (size_t)n);
+    const char *www_raw = (www && www[0]) ? www
+                           : (cfg->www_root && cfg->www_root[0]) ? cfg->www_root
+                                                                : "";
+    char *www_esc = ng_json_escape(www_raw);
+    char *sp_esc = ng_json_escape(ng_settings_path());
+    char *jb = NULL;
+    /* Dual-wire control plate — no free-text note essay; paths inject-sanitized. */
+    asprintf(&jb,
+             "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+             "\"action\":\"control\","
+             "\"shell_enabled\":%s,\"watcher_enabled\":%s,\"ui_enabled\":%s,"
+             "\"www\":\"%s\",\"settings\":\"%s\",\"status\":\"%s\","
+             "\"persist\":true," NG_PEER_HTTP_DUAL_WIRE "}",
+             shell_on ? "true" : "false", watch_on ? "true" : "false",
+             ui_on ? "true" : "false", www_esc ? www_esc : "",
+             sp_esc ? sp_esc : "",
+             (session && ng_session_valid(session)) ? "online" : "offline");
+    http_response(cfd, 200, "application/json", jb ? jb : "{}",
+                  jb ? strlen(jb) : 2);
     free(www);
+    free(www_esc);
+    free(sp_esc);
+    free(jb);
     free(req); close(cfd); return;
   }
 
