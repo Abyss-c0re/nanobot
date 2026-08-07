@@ -13,7 +13,7 @@ char *ng_bc_status_json(void);
 char *ng_bc_live_json(void);
 /* Handle POST JSON body; returns malloc'd JSON response. */
 char *ng_bc_handle_post(const char *json_body);
-/* Compact human report for agent/MCP tool (malloc'd plain text). */
+/* Dual-wire train_status plate (malloc'd JSON · machine fields only). */
 char *ng_bc_train_status_report(void);
 /* Log one-liner after supervision then purge bulky logs (keep robot lean). */
 void ng_bc_log_supervision_oneliner(const char *line);

@@ -691,64 +691,55 @@ static void supervise_write(int want, int ttl_sec, const char *note) {
   ng_bc_log_supervision_oneliner(one);
 }
 
-/* Human-readable train status for nanobot agent / MCP tool. */
+/* Dual-wire train_status plate — machine fields only (no free-text essay). */
 char *ng_bc_train_status_report(void) {
-  char *snap = NULL, *lat = NULL, *fst = NULL, *one = NULL, *jb = NULL;
-  size_t sl = 0, ll = 0, fl = 0, ol = 0;
+  char *snap = NULL, *jb = NULL, *pick_esc = NULL;
+  size_t sl = 0;
   char path[700];
   int cont = g_continuous, self = g_self_teach, asvc = g_agent_service;
   int field_on = 0, explore_on = 0;
+  int seq = 0, self_t = 0, agent_t = 0, agree = 0;
+  char pick[32] = "none";
   ensure_dir();
   snprintf(path, sizeof path, "%s/braincube/live_snap.json", ng_workdir());
   snap = ng_read_file(path, &sl);
-  snprintf(path, sizeof path, "%s/braincube/latest_trial.json", ng_workdir());
-  lat = ng_read_file(path, &ll);
-  snprintf(path, sizeof path, "%s/braincube/field_status.json", ng_workdir());
-  fst = ng_read_file(path, &fl);
-  snprintf(path, sizeof path, "%s/braincube/last_report.txt", ng_workdir());
-  one = ng_read_file(path, &ol);
   snprintf(path, sizeof path, "%s/braincube/field_trials.flag", ng_workdir());
   field_on = (access(path, F_OK) == 0);
   snprintf(path, sizeof path, "%s/braincube/explore.flag", ng_workdir());
   explore_on = (access(path, F_OK) == 0);
-
-  /* extract a few keys from snap with crude parse */
-  {
-    int seq = 0, self_t = 0, agent_t = 0, agree = 0;
-    char pick[32] = "?";
+  if (snap) {
     const char *p;
-    if (snap) {
-      p = strstr(snap, "\"seq\":"); if (p) seq = atoi(p + 6);
-      p = strstr(snap, "\"self_teaches\":"); if (p) self_t = atoi(p + 15);
-      p = strstr(snap, "\"agent_teaches\":"); if (p) agent_t = atoi(p + 16);
-      p = strstr(snap, "\"agree\":"); if (p) agree = atoi(p + 8);
-      p = strstr(snap, "\"pick_name\":\"");
-      if (p) {
-        p += 13;
-        size_t i = 0;
-        while (*p && *p != '"' && i + 1 < sizeof pick) pick[i++] = *p++;
-        pick[i] = 0;
-      }
+    p = strstr(snap, "\"seq\":"); if (p) seq = atoi(p + 6);
+    p = strstr(snap, "\"self_teaches\":"); if (p) self_t = atoi(p + 15);
+    p = strstr(snap, "\"agent_teaches\":"); if (p) agent_t = atoi(p + 16);
+    p = strstr(snap, "\"agree\":"); if (p) agree = atoi(p + 8);
+    p = strstr(snap, "\"pick_name\":\"");
+    if (p) {
+      p += 13;
+      size_t i = 0;
+      while (*p && *p != '"' && i + 1 < sizeof pick) pick[i++] = *p++;
+      pick[i] = 0;
     }
-    asprintf(&jb,
-      "BrainCube train status (plugin %s)\n"
-      "continuous=%s self_teach=%s agent_service=%s field_trials=%s explore=%s\n"
-      "seq=%d self_teaches=%d agent_teaches=%d meta_agree=%d pick=%s session=%s\n"
-      "latest_trial=%s\n"
-      "field_status=%s\n"
-      "last_report=%s\n"
-      "hint: without field_trials/explore the robot only trains attention (no RC motion).",
-      NG_BC_PLUGIN_VERSION,
-      cont ? "on" : "off", self ? "on" : "off", asvc ? "on" : "off",
-      field_on ? "on" : "off", explore_on ? "on" : "off",
-      seq, self_t, agent_t, agree, pick,
-      g_session_id[0] ? g_session_id : "(none)",
-      (lat && ll > 2) ? lat : "(none yet)",
-      (fst && fl > 2) ? fst : "(n/a)",
-      (one && ol > 0) ? one : "(none)");
   }
-  free(snap); free(lat); free(fst); free(one);
-  return jb ? jb : strdup("train status unavailable");
+  pick_esc = ng_json_escape(pick[0] ? pick : "none");
+  asprintf(&jb,
+    "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+    "\"action\":\"train_status\",\"plugin_version\":\"%s\","
+    "\"continuous\":%s,\"self_teach\":%s,\"agent_service\":%s,"
+    "\"field_trials\":%s,\"explore\":%s,"
+    "\"seq\":%d,\"self_teaches\":%d,\"agent_teaches\":%d,"
+    "\"meta_agree\":%d,\"pick_name\":\"%s\","
+    NG_BC_DUAL_WIRE "}",
+    NG_BC_PLUGIN_VERSION,
+    cont ? "true" : "false", self ? "true" : "false", asvc ? "true" : "false",
+    field_on ? "true" : "false", explore_on ? "true" : "false",
+    seq, self_t, agent_t, agree, pick_esc ? pick_esc : "none");
+  free(snap);
+  free(pick_esc);
+  return jb ? jb
+            : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                     "\"action\":\"train_status\",\"error\":\"oom\","
+                     "\"python\":0}");
 }
 
 static char *chain_live_json_locked(void); /* defined below */
@@ -2555,32 +2546,9 @@ char *ng_bc_handle_post(const char *json_body) {
 
   if (!strcmp(action, "train_status") || !strcmp(action, "train_report") ||
       !strcmp(action, "hows_training")) {
-    char *jb = NULL;
-    int field_on = 0, explore_on = 0;
-    char path[700];
     free(action);
-    ensure_dir();
-    snprintf(path, sizeof path, "%s/braincube/field_trials.flag", ng_workdir());
-    field_on = (access(path, F_OK) == 0);
-    snprintf(path, sizeof path, "%s/braincube/explore.flag", ng_workdir());
-    explore_on = (access(path, F_OK) == 0);
-    /* Dual-wire train_status — machine flags only (no free-text report essay). */
-    asprintf(&jb,
-      "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
-      "\"action\":\"train_status\",\"plugin_version\":\"%s\","
-      "\"continuous\":%s,\"self_teach\":%s,\"agent_service\":%s,"
-      "\"field_trials\":%s,\"explore\":%s,"
-      NG_BC_DUAL_WIRE "}",
-      NG_BC_PLUGIN_VERSION,
-      g_continuous ? "true" : "false",
-      g_self_teach ? "true" : "false",
-      g_agent_service ? "true" : "false",
-      field_on ? "true" : "false",
-      explore_on ? "true" : "false");
-    return jb ? jb
-              : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
-                       "\"action\":\"train_status\",\"error\":\"oom\","
-                       "\"python\":0}");
+    /* Shared dual-wire plate builder (same as ng_bc_train_status_report). */
+    return ng_bc_train_status_report();
   }
 
   /* Last N field trials + latest + field status (results of trying things). */
