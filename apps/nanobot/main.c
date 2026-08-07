@@ -15,10 +15,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <ifaddrs.h>
 #include <signal.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -54,93 +50,107 @@ static void cli_stream_delta(void *ud, const char *chunk, size_t n) {
   fflush(stdout);
 }
 
-static void print_banner(int port, ng_session *sess, const char *www_root) {
-  char host[256] = "127.0.0.1";
-  struct ifaddrs *ifaddr = NULL;
-  if (getifaddrs(&ifaddr) == 0) {
-    for (struct ifaddrs *ifa = ifaddr; ifa; ifa = ifa->ifa_next) {
-      if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
-      struct sockaddr_in *sin = (struct sockaddr_in *)ifa->ifa_addr;
-      const char *ip = inet_ntoa(sin->sin_addr);
-      if (ip && strncmp(ip, "127.", 4) != 0) {
-        snprintf(host, sizeof host, "%s", ip);
-        break;
-      }
-    }
-    freeifaddrs(ifaddr);
-  }
+/*
+ * Dual-wire CLI deny — machine action/error/hint only (no free-text essay).
+ * Product bus remains SMX2; peer HTTP is lab/ops only; py=0.
+ */
+static void print_cli_err(const char *action, const char *error, const char *hint) {
+  char *a = ng_json_escape(action && action[0] ? action : "cli");
+  char *e = ng_json_escape(error && error[0] ? error : "deny");
+  char *h = ng_json_escape(hint ? hint : "");
+  fprintf(stderr,
+          "{\"schema\":\"nanobot.cli.v1\",\"ok\":false,"
+          "\"action\":\"%s\",\"error\":\"%s\",\"hint\":\"%s\","
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n",
+          a ? a : "cli", e ? e : "deny", h ? h : "");
+  free(a);
+  free(e);
+  free(h);
+}
 
-  fprintf(stderr, "\n");
-  fprintf(stderr, "  nanobot %s — CLI stream + hub IN/OUT + MCP\n", NG_VERSION);
-  fprintf(stderr, "  ─────────────────────────────────────────────\n");
-  fprintf(stderr, "  Peer / JSON API:\n");
-  fprintf(stderr, "       GET  http://%s:%d/peer/v1/info\n", host, port);
-  fprintf(stderr, "       POST http://%s:%d/peer/v1/prompt  {\"prompt\":\"...\"}\n", host, port);
-  fprintf(stderr, "       POST http://%s:%d/peer/v1/shell   {\"command\":\"...\"}\n", host, port);
-  fprintf(stderr, "       POST http://%s:%d/peer/v1/jobs    (async)\n", host, port);
-  fprintf(stderr, "  MCP (optional): nanobot --mcp  |  scripts/peer_mcp_bridge.py\n");
-  fprintf(stderr, "  One-shot: nanobot -p 'prompt'  |  @! shell without session\n");
-  if (www_root && www_root[0]) {
-    fprintf(stderr, "  Static files: http://%s:%d/  ← %s\n", host, port, www_root);
+/*
+ * Dual-wire listen ack after HTTP bind intent (matches grokium serve plate).
+ * No free-text essay · no peer_mcp_bridge.py (py=0 · native --mcp only).
+ * Bind host is honest: loopback unless --lan.
+ */
+static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_out,
+                               ng_session *sess, const char *www_root) {
+  const char *host = bind_lan ? "0.0.0.0" : "127.0.0.1";
+  int login_pending = sess && sess->login_pending;
+  int has_www = www_root && www_root[0];
+  char *ver = ng_json_escape(NG_VERSION);
+  char *www_esc = has_www ? ng_json_escape(www_root) : NULL;
+  char *vu = NULL, *vuc = NULL, *uc = NULL;
+  if (port <= 0) port = NG_DEFAULT_PORT;
+  if (sess) {
+    if (sess->verification_uri) vu = ng_json_escape(sess->verification_uri);
+    if (sess->verification_uri_complete)
+      vuc = ng_json_escape(sess->verification_uri_complete);
+    if (sess->user_code) uc = ng_json_escape(sess->user_code);
   }
-  if (sess && sess->verification_uri_complete) {
-    fprintf(stderr, "\n  Device login (browser):\n");
-    fprintf(stderr, "       %s\n", sess->verification_uri_complete);
-    if (sess->user_code)
-      fprintf(stderr, "     code: %s\n", sess->user_code);
-  } else if (sess && sess->verification_uri) {
-    fprintf(stderr, "\n  Device login:\n");
-    fprintf(stderr, "       %s\n", sess->verification_uri);
-    if (sess->user_code)
-      fprintf(stderr, "     code: %s\n", sess->user_code);
-  }
-  fprintf(stderr, "  ─────────────────────────────────────────────\n");
-  fprintf(stderr, "  Auth: browser device-code, or --offline for llama.cpp.\n\n");
-
-  if (sess && sess->verification_uri_complete)
+  fprintf(stderr,
+          "{\"schema\":\"nanobot.serve.v1\",\"ok\":true,"
+          "\"action\":\"listen\",\"version\":\"%s\","
+          "\"host\":\"%s\",\"port\":%d,\"bind\":\"%s\","
+          "\"control_plane\":\"peer_http\",\"mcp\":\"native_stdio\","
+          "\"endpoints\":[\"/peer/v1/info\",\"/peer/v1/prompt\","
+          "\"/peer/v1/shell\",\"/peer/v1/jobs\"],"
+          "\"www\":%s,\"www_root\":\"%s\","
+          "\"hub\":%s,\"port_out\":%d,"
+          "\"login_pending\":%s,\"user_code\":\"%s\","
+          "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n",
+          ver ? ver : "", host, port, bind_lan ? "lan" : "loopback",
+          has_www ? "true" : "false", www_esc ? www_esc : "",
+          hub_mode ? "true" : "false",
+          hub_mode && port_out > 0 ? port_out : 0,
+          login_pending ? "true" : "false", uc ? uc : "", vu ? vu : "",
+          vuc ? vuc : "");
+  /* Primary operator URL on stdout (machine token path only). */
+  if (vuc && vuc[0])
     printf("%s\n", sess->verification_uri_complete);
-  else if (sess && sess->verification_uri)
+  else if (vu && vu[0])
     printf("%s\n", sess->verification_uri);
-  else if (www_root && www_root[0])
+  else if (has_www)
     printf("http://%s:%d/\n", host, port);
   else
     printf("http://%s:%d/peer/v1/info\n", host, port);
   fflush(stdout);
+  free(ver);
+  free(www_esc);
+  free(vu);
+  free(vuc);
+  free(uc);
 }
 
+/* Dual-wire --help (machine command index · no free-text multi-line dump). */
 static void usage(const char *argv0) {
+  char *ver = ng_json_escape(NG_VERSION);
+  char *prog = ng_json_escape(argv0 && argv0[0] ? argv0 : "nanobot");
+  (void)prog;
   fprintf(stderr,
-    "nanobot %s — CLI agent (HTTP peer is opt-in only)\n\n"
-    "  CLI (default product path — no open port):\n"
-    "    -p prompt | --no-stream | @! shell\n"
-    "    --auth-status | --auth-start [--force] | --auth-poll\n"
-    "    --login          browser device-code (blocking; then exit)\n"
-    "    --offline | --base-url URL | --model NAME | --models\n"
-    "    --mcp            MCP on stdio (no HTTP)\n"
-    "    --mcp-list       list remote MCP servers (pure C; $NANOBOT_HOME/mcp_servers.json)\n"
-    "    --mcp-call S T [JSON]  call remote MCP tool (no Python, no LLM)\n"
-    "    --order TARGET …      commander order: status|nexus <text>|blackcube [ping|prophecy]\n\n"
-    "  Optional HTTP (MCP bridge / LAN share — explicit):\n"
-    "    --port N         listen (default bind 127.0.0.1 only)\n"
-    "    --lan            bind 0.0.0.0 (requires peer_token for mutate)\n"
-    "    --hub | --port-out M | --www DIR\n\n"
-    "Build features: MCP=%d AUTH=%d PEER=%d HUB=%d SHELL=%d PROVIDERS=%d\n\n"
-    "Examples:\n"
-    "  %s --login\n"
-    "  %s --auth-status\n"
-    "  %s -p 'hello'\n"
-    "  %s --offline --base-url http://127.0.0.1:8080/v1 -p '…'\n"
-    "  %s --mcp\n"
-    "  %s --mcp-call nexuscore nexus_command '{\"text\":\"hello\"}'\n"
-    "  %s --order nexus acknowledge commander\n"
-    "  %s --port 8787          # loopback API only\n"
-    "  %s --port 8787 --lan    # intentional LAN (token-gated)\n\n"
-    "Env: NANOBOT_HOME  NANOBOT_PEER_TOKEN  NANOBOT_OUT_TOKEN\n"
-    "Auth sealed under peer_token KDF. No server unless --port.\n",
-    NG_VERSION,
-    NANOBOT_ENABLE_MCP, NANOBOT_ENABLE_AUTH, NANOBOT_ENABLE_PEER,
-    NANOBOT_ENABLE_HUB, NANOBOT_ENABLE_SHELL, NANOBOT_ENABLE_PROVIDERS,
-    argv0, argv0, argv0, argv0, argv0, argv0, argv0, argv0, argv0);
+          "{\"schema\":\"nanobot.cli.v1\",\"ok\":true,\"action\":\"help\","
+          "\"version\":\"%s\","
+          "\"content\":\"meta_only\","
+          "\"commands\":\"-p|--help|--version|--login|--auth-status|"
+          "--auth-start|--auth-poll|--offline|--base-url|--model|--models|"
+          "--mcp|--mcp-list|--mcp-call|--order|--port|--lan|--hub|"
+          "--port-out|--www|--home\","
+          "\"mcp\":%d,\"auth\":%d,\"peer\":%d,\"hub\":%d,\"shell\":%d,"
+          "\"providers\":%d,"
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0,"
+          "\"hint\":\"no_server_unless_--port|native_mcp_stdio|py=0\"}\n",
+          ver ? ver : "",
+          NANOBOT_ENABLE_MCP, NANOBOT_ENABLE_AUTH, NANOBOT_ENABLE_PEER,
+          NANOBOT_ENABLE_HUB, NANOBOT_ENABLE_SHELL, NANOBOT_ENABLE_PROVIDERS);
+  free(ver);
+  free(prog);
 }
 
 /* Pure-C commander order path (NeuralCube). No Python. No LLM. */
@@ -161,16 +171,16 @@ static void order_log(const char *line) {
 static int run_mcp_call_cli(const char *server, const char *tool, const char *args_obj) {
 #if !NANOBOT_ENABLE_MCP
   (void)server; (void)tool; (void)args_obj;
-  fprintf(stderr, "MCP disabled in this build\n");
+  print_cli_err("mcp_call", "mcp_disabled", "rebuild_with_NANOBOT_ENABLE_MCP=1");
   return 2;
 #else
   if (!server || !server[0] || !tool || !tool[0]) {
-    fprintf(stderr, "usage: nanobot --mcp-call SERVER TOOL [JSON_OBJECT]\n");
+    print_cli_err("mcp_call", "need_server_tool", "SERVER TOOL [JSON_OBJECT]");
     return 2;
   }
   const char *args = (args_obj && args_obj[0]) ? args_obj : "{}";
   if (args[0] != '{') {
-    fprintf(stderr, "arguments must be a JSON object string, e.g. {}\n");
+    print_cli_err("mcp_call", "need_json_object", "arguments_must_be_{}");
     return 2;
   }
   char *esc_s = ng_json_escape(server);
@@ -187,7 +197,7 @@ static int run_mcp_call_cli(const char *server, const char *tool, const char *ar
   char *out = ng_mcp_try_tool("mcp_call", payload);
   free(payload);
   if (!out) {
-    fprintf(stderr, "mcp_call: not handled\n");
+    print_cli_err("mcp_call", "not_handled", "check_mcp_servers.json");
     return 1;
   }
   fputs(out, stdout);
@@ -215,11 +225,11 @@ static int run_mcp_call_cli(const char *server, const char *tool, const char *ar
 static int run_order_cli(const char *target, const char *text) {
 #if !NANOBOT_ENABLE_MCP
   (void)target; (void)text;
-  fprintf(stderr, "MCP disabled in this build\n");
+  print_cli_err("order", "mcp_disabled", "rebuild_with_NANOBOT_ENABLE_MCP=1");
   return 2;
 #else
   if (!target || !target[0]) {
-    fprintf(stderr, "usage: nanobot --order status|nexus <text>|blackcube [ping|prophecy|status]\n");
+    print_cli_err("order", "need_target", "status|nexus|blackcube");
     return 2;
   }
   if (!strcmp(target, "status") || !strcmp(target, "stat")) {
@@ -240,8 +250,8 @@ static int run_order_cli(const char *target, const char *text) {
     int rc = run_mcp_call_cli("nexuscore", "nexus_command", args);
     free(args);
     if (rc != 0) {
-      /* soft fallback: smx tick still advances hive */
-      fprintf(stderr, "nexus_command soft-fail; trying nexus_smx_tick\n");
+      /* soft fallback: smx tick still advances hive (dual-wire note). */
+      print_cli_err("order", "nexus_command_soft_fail", "fallback_nexus_smx_tick");
       return run_mcp_call_cli("nexuscore", "nexus_smx_tick", "{}");
     }
     return 0;
@@ -262,7 +272,7 @@ static int run_order_cli(const char *target, const char *text) {
       return run_mcp_call_cli("blackcube", "blackcube_cube_status", "{}");
     return run_mcp_call_cli("blackcube", "blackcube_ping", "{}");
   }
-  fprintf(stderr, "unknown order target: %s\n", target);
+  print_cli_err("order", "unknown_target", "status|nexus|blackcube");
   return 2;
 #endif
 }
@@ -456,7 +466,7 @@ int main(int argc, char **argv) {
       snprintf(www_buf, sizeof www_buf, "%s/www", home);
       if (access(www_buf, R_OK) == 0) www_root = www_buf;
       else {
-        fprintf(stderr, "--www: no $NANOBOT_HOME/www (pass --www DIR or NANOBOT_WWW)\n");
+        print_cli_err("www", "need_www_dir", "pass_--www_DIR|NANOBOT_WWW");
         return 2;
       }
     } else if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--prompt") == 0) && i + 1 < argc) {
@@ -464,7 +474,7 @@ int main(int argc, char **argv) {
     } else if (strcmp(argv[i], "--version") == 0) {
       printf("nanobot %s\n", NG_VERSION); return 0;
     } else {
-      fprintf(stderr, "unknown arg: %s\n", argv[i]);
+      print_cli_err("cli", "unknown_arg", argv[i]);
       usage(argv[0]); return 2;
     }
   }
@@ -755,22 +765,20 @@ int main(int argc, char **argv) {
 
   if (mode_mcp) {
 #if !NANOBOT_ENABLE_MCP
-    fprintf(stderr, "nanobot: built without MCP (NANOBOT_ENABLE_MCP=0)\n");
+    print_cli_err("mcp", "mcp_disabled", "rebuild_with_NANOBOT_ENABLE_MCP=1");
     ng_session_free(&session);
     ng_agent_cfg_free(&agent);
     return 2;
 #else
     if (need_browser) {
 #if !NANOBOT_ENABLE_AUTH
-      fprintf(stderr, "nanobot: Grok backend needs AUTH; rebuild with NANOBOT_ENABLE_AUTH=ON\n"
-                      "  or use --offline / --base-url\n");
+      print_cli_err("mcp", "auth_disabled", "rebuild_AUTH_or_--offline");
       ng_session_free(&session);
       ng_agent_cfg_free(&agent);
       return 2;
 #else
       if (!ng_session_valid(&session)) {
-        fprintf(stderr, "nanobot --mcp (cloud backend) needs a session.\n"
-                        "Run: nanobot --login   or use --offline / --base-url\n");
+        print_cli_err("mcp", "need_session", "--login|browser_/activate|--offline");
         if (ng_session_login_blocking(&session) != 0) {
           ng_session_free(&session);
           ng_agent_cfg_free(&agent);
@@ -916,17 +924,13 @@ int main(int argc, char **argv) {
       snprintf(alt, sizeof alt, "%s/labauth/master.key", home);
       if (access(alt, R_OK) == 0) master_present = 1;
     }
-    if (master_present) {
-      fprintf(stderr, "  optional master key present (NANOBOT_LABAUTH_MASTER or $HOME/labauth/)\n");
-    }
     const char *req_la = getenv("NANOBOT_REQUIRE_LABAUTH");
     if (req_la && (!strcmp(req_la, "1") || !strcasecmp(req_la, "true") ||
                    !strcasecmp(req_la, "yes"))) {
       if (!master_present) {
-        fprintf(stderr,
-                "nanobot: NANOBOT_REQUIRE_LABAUTH=1 but master key not found\n"
-                "  set NANOBOT_LABAUTH_MASTER=/path/to/master.key\n"
-                "  or place $NANOBOT_HOME/labauth/master.key\n");
+        /* Dual-wire deny — no free-text path dump (labauth machine tokens). */
+        print_cli_err("labauth", "need_master_key",
+                      "NANOBOT_LABAUTH_MASTER|labauth/master.key");
         ng_session_free(&session);
         ng_agent_cfg_free(&agent);
         return 1;
@@ -935,28 +939,29 @@ int main(int argc, char **argv) {
   }
 
 #if !NANOBOT_ENABLE_PEER
-  fprintf(stderr, "nanobot: built without PEER HTTP (NANOBOT_ENABLE_PEER=0)\n");
+  print_cli_err("serve", "peer_disabled", "rebuild_with_NANOBOT_ENABLE_PEER=1");
   ng_session_free(&session);
   ng_agent_cfg_free(&agent);
   return 2;
 #endif
 
   if (port <= 0) port = NG_DEFAULT_PORT;
-  if (bind_lan)
-    fprintf(stderr, "  WARN: --lan binds 0.0.0.0 — mutate routes need peer_token\n");
-  else
-    fprintf(stderr, "  HTTP bind: 127.0.0.1:%d (not LAN-visible)\n", port);
+#if !NANOBOT_ENABLE_HUB
+  if (hub_mode) {
+    /* Hub not in this build — listen plate reports hub:false honestly. */
+    hub_mode = 0;
+  }
+#else
+  if (hub_mode && port_out <= 0) port_out = port + 1;
+#endif
 
   signal(SIGINT, on_sig);
   signal(SIGTERM, on_sig);
-  print_banner(port, &session, www_root);
+  /* Dual-wire listen plate (bind/hub/www honesty · py=0 · no free-text essay). */
+  print_listen_plate(port, bind_lan, hub_mode, port_out, &session, www_root);
 
   if (hub_mode) {
-#if !NANOBOT_ENABLE_HUB
-    fprintf(stderr, "  warn: --hub ignored (NANOBOT_ENABLE_HUB=0)\n");
-#else
-    if (port_out <= 0) port_out = port + 1;
-    fprintf(stderr, "  hub: IN(WRITE)=:%d  OUT(READ)=:%d  (docs/HUB.md)\n", port, port_out);
+#if NANOBOT_ENABLE_HUB
     pid_t out_pid = fork();
     if (out_pid == 0) {
       const char *ot = getenv("NANOBOT_OUT_TOKEN");
