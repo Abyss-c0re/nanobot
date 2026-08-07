@@ -300,11 +300,14 @@ static int parse_servers(mcp_srv *arr, int max) {
 
 char *ng_mcp_servers_list_json(void) {
   char *raw = read_config_raw();
-  /* ensure ok wrapper */
   char *out = NULL;
-  asprintf(&out, "{\"ok\":true,\"config\":%s}", raw ? raw : "{\"servers\":[]}");
+  /* Dual-wire MCP config plate — schema/action honesty (peer HTTP surface). */
+  asprintf(&out,
+           "{\"schema\":\"nanobot.mcp.v1\",\"ok\":true,\"action\":\"servers\","
+           "\"config\":%s,\"python\":0}",
+           raw ? raw : "{\"servers\":[]}");
   free(raw);
-  return out ? out : strdup("{\"ok\":false}");
+  return out ? out : mcp_err("oom");
 }
 
 int ng_mcp_servers_save_raw(const char *json_body) {
@@ -393,25 +396,25 @@ char *ng_mcp_server_probe(const char *id, const char *url_override, const char *
     while ((p = strstr(p, "\"name\"")) != NULL) { tools++; p += 6; }
     /* overcounts a bit; fine for probe UI */
   }
+  char *esc_id = ng_json_escape(id && id[0] ? id : "adhoc");
   char *esc_url = ng_json_escape(url);
   char *esc_name = ng_json_escape(name ? name : "");
   char *esc_body = ng_json_escape(list ? list : "");
   char *out = NULL;
   int ok = list && !strstr(list, "\"error\"") && strstr(list, "tools");
   if (!ok && list && strstr(list, "\"result\"")) ok = 1;
+  /* Dual-wire probe plate — escape id/url/name/raw injects; py=0. */
   asprintf(&out,
-    "{\"ok\":%s,\"id\":\"%s\",\"name\":\"%s\",\"url\":\"%s\","
-    "\"session\":%s,\"tools_hint\":%d,\"raw\":\"%.1200s\"}",
-    ok ? "true" : "false",
-    id && id[0] ? id : "adhoc",
-    esc_name ? esc_name : "",
-    esc_url ? esc_url : "",
-    sess ? "true" : "false",
-    tools,
-    esc_body ? esc_body : "");
+           "{\"schema\":\"nanobot.mcp.v1\",\"ok\":%s,\"action\":\"probe\","
+           "\"id\":\"%s\",\"name\":\"%s\",\"url\":\"%s\","
+           "\"session\":%s,\"tools_hint\":%d,\"raw\":\"%.1200s\","
+           "\"python\":0}",
+           ok ? "true" : "false", esc_id ? esc_id : "adhoc",
+           esc_name ? esc_name : "", esc_url ? esc_url : "",
+           sess ? "true" : "false", tools, esc_body ? esc_body : "");
   free(list); free(sess); free(url); free(auth); free(name);
-  free(esc_url); free(esc_name); free(esc_body);
-  return out ? out : strdup("{\"ok\":false}");
+  free(esc_id); free(esc_url); free(esc_name); free(esc_body);
+  return out ? out : mcp_err("oom");
 }
 
 /* Build OpenAI tools fragment: mcp_list + mcp_call always when any server enabled */
