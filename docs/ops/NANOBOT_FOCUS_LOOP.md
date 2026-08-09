@@ -91,6 +91,7 @@ cd ~/Dev/AI/nanobot
 | jobs_keep on GET /jobs index | `f242007` |
 | root discovery health/ready | `b26920b` |
 | `/api/health` + `/api/ready` aliases | `5fe5633` |
+| empty/whitespace peer shell → missing_command | `875f3b7` |
 
 ## Anti-chaos
 
