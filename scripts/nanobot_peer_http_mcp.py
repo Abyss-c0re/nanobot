@@ -262,6 +262,11 @@ class H(BaseHTTPRequestHandler):
             "/api/jobs",
             "/api/job",
         )
+        # Residual: peer control/task/models already dual-wire; mesh probes on
+        # :18790 still not_found after info/jobs aliases landed.
+        control_paths = ("/peer/v1/control", "/api/control")
+        task_paths = ("/peer/v1/task", "/api/task")
+        models_paths = ("/peer/v1/models", "/api/models")
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -269,6 +274,20 @@ class H(BaseHTTPRequestHandler):
         if path in jobs_coll:
             jobs = peer_json("GET", "/peer/v1/jobs", timeout=8)
             self._send(200, jobs if isinstance(jobs, dict) else {"ok": False, "jobs": jobs})
+            return
+        if path in control_paths:
+            ctl = peer_json("GET", "/peer/v1/control", timeout=5)
+            self._send(200, ctl if isinstance(ctl, dict) else {"ok": False, "control": ctl})
+            return
+        if path in task_paths:
+            task = peer_json("GET", "/peer/v1/task", timeout=5)
+            self._send(200, task if isinstance(task, dict) else {"ok": False, "task": task})
+            return
+        if path in models_paths:
+            models = peer_json("GET", "/peer/v1/models", timeout=15)
+            self._send(
+                200, models if isinstance(models, dict) else {"ok": False, "models": models}
+            )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
         for pref in ("/peer/v1/jobs/", "/peer/v1/job/", "/api/jobs/", "/api/job/"):
