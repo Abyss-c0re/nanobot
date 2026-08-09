@@ -189,7 +189,11 @@ def handle_rpc(msg: dict) -> dict:
         elif _BC is not None and name == "cubalc_run":
             out = _BC.cubalc_run(str(args.get("board") or ""), str(args.get("source") or ""))
         else:
-            out = {"error": f"unknown tool {name}"}
+            # Residual: bare {"error":"unknown tool X"} lacked dual-wire + isError
+            # stayed false (ok defaulted True). Align _missing action=error.
+            out = _missing("unknown_tool")
+            if name:
+                out["tool"] = str(name)[:128]
         text = json.dumps(out, ensure_ascii=False, indent=2)[:50000]
         err = bool(out.get("error")) and not out.get("ok", True)
         return {

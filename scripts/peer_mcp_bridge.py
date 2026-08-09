@@ -376,7 +376,11 @@ def main() -> None:
                 else:
                     out = start_job("shell", command=command)
             else:
-                out = {"error": f"unknown tool {name}"}
+                # Residual: bare {"error":"unknown tool X"} lacked dual-wire
+                # action=error (align HTTP MCP + peer http_peer_err).
+                out = _missing("unknown_tool")
+                if name:
+                    out["tool"] = str(name)[:128]
             text = json.dumps(out, indent=2)
             write_message(
                 {
