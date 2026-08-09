@@ -88,6 +88,7 @@ cd ~/Dev/AI/nanobot
 | cool_restart installs newer build/host bin | `046a943` |
 | `/ready` action=ready (was health) | `66d1217` |
 | `/peer/v1/ready` alias (was 404) | `9a7f613` |
+| jobs_keep on GET /jobs index | `f242007` |
 
 ## Anti-chaos
 
