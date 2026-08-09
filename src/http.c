@@ -1580,6 +1580,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       jobs_gc(jdir);
       _exit(0);
     }
+    /* Residual: fork fail still returned job_queued; meta stayed queued until
+     * cool_restart orphan sweep. Mark error + 503 so mesh does not poll forever. */
+    if (w < 0) {
+      char *jb = NULL;
+      asprintf(&jb,
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"action\":\"job\","
+        "\"id\":\"%s\",\"status\":\"error\",\"kind\":\"%s\","
+        "\"error\":\"fork_failed\","
+        NG_PEER_HTTP_DUAL_WIRE "}\n",
+        id, kind);
+      if (jb) {
+        ng_write_file(mpath, jb, strlen(jb));
+        free(jb);
+      }
+      free(prompt); free(cmd);
+      http_peer_err(cfd, 503, "fork_failed");
+      free(req); close(cfd); return;
+    }
     char *ack = NULL;
     char *id_esc = ng_json_escape(id);
     /* Residual: job_queued omitted kind; mesh had to poll meta to learn
@@ -1672,25 +1690,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       if (meta) {
         char *s = ng_json_get_string(meta, "status");
         char *k = ng_json_get_string(meta, "kind");
+        /* Residual: error tokens (orphan_restart, shell_disabled) only on
+         * full job poll — mesh index could not fail-fast without GET by id. */
+        char *e = ng_json_get_string(meta, "error");
         if (s && s[0]) st = s;
         if (k && k[0]) kind = k;
         /* free later via copies — ng_json_get_string allocates */
         char *st_own = s;
         char *k_own = k;
+        char *e_own = e;
         char *id_esc = ng_json_escape(ids[i]);
         char *st_esc = ng_json_escape(st);
         char *k_esc = ng_json_escape(kind);
-        wr = snprintf(out + used, cap - used,
-          "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
-          "\"poll\":\"/peer/v1/jobs/%s\"}",
-          i ? "," : "",
-          id_esc ? id_esc : ids[i],
-          st_esc ? st_esc : st,
-          k_esc ? k_esc : kind,
-          id_esc ? id_esc : ids[i]);
+        char *e_esc = (e_own && e_own[0]) ? ng_json_escape(e_own) : NULL;
+        if (e_esc && e_esc[0]) {
+          wr = snprintf(out + used, cap - used,
+            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
+            "\"error\":\"%s\",\"poll\":\"/peer/v1/jobs/%s\"}",
+            i ? "," : "",
+            id_esc ? id_esc : ids[i],
+            st_esc ? st_esc : st,
+            k_esc ? k_esc : kind,
+            e_esc,
+            id_esc ? id_esc : ids[i]);
+        } else {
+          wr = snprintf(out + used, cap - used,
+            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
+            "\"poll\":\"/peer/v1/jobs/%s\"}",
+            i ? "," : "",
+            id_esc ? id_esc : ids[i],
+            st_esc ? st_esc : st,
+            k_esc ? k_esc : kind,
+            id_esc ? id_esc : ids[i]);
+        }
         if (wr > 0) used += (size_t)wr;
-        free(id_esc); free(st_esc); free(k_esc);
-        free(st_own); free(k_own);
+        free(id_esc); free(st_esc); free(k_esc); free(e_esc);
+        free(st_own); free(k_own); free(e_own);
         free(meta);
       } else {
         char *id_esc = ng_json_escape(ids[i]);
