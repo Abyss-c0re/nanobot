@@ -116,7 +116,7 @@ cd ~/Dev/AI/nanobot
 | async job kind case-fold (Shell→shell) | `4ed64ef`  |
 | control service/action case-fold | `ffeab17`  |
 | jobs index exit leaf | `fb48ea9`  |
-| jobs index ok leaf (+ exit/error unified) | `8f26380`  |
+| jobs index ok leaf (+ exit/error unified) | `71b2c0c`  |
 
 ## Anti-chaos
 
