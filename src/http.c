@@ -754,8 +754,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* List models: GET {base}/models (OpenAI-compatible; Grok session or local). */
-  if (is_get && (strcmp(path, "/api/models") == 0 || strcmp(path, "/peer/v1/models") == 0)) {
+  /* List models: GET {base}/models (OpenAI-compatible; Grok session or local).
+   * Residual: trailing slash 404 after info/jobs/control gained slash aliases. */
+  if (is_get && (strcmp(path, "/api/models") == 0 || strcmp(path, "/peer/v1/models") == 0 ||
+                 strcmp(path, "/api/models/") == 0 || strcmp(path, "/peer/v1/models/") == 0)) {
     if (!agent) {
       http_peer_err(cfd, 500, "no_agent");
       free(req); close(cfd); return;
@@ -951,8 +953,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* Active multi-step task board (task_plan / task_done tools) */
-  if (is_get && (strcmp(path, "/api/task") == 0 || strcmp(path, "/peer/v1/task") == 0)) {
+  /* Active multi-step task board (task_plan / task_done tools).
+   * Residual: trailing slash 404 after info/jobs/control gained slash aliases. */
+  if (is_get && (strcmp(path, "/api/task") == 0 || strcmp(path, "/peer/v1/task") == 0 ||
+                 strcmp(path, "/api/task/") == 0 || strcmp(path, "/peer/v1/task/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char tpath[700];
     snprintf(tpath, sizeof tpath, "%s/tasks/active.json", ng_workdir());

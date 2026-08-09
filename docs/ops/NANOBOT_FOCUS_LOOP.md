@@ -121,6 +121,7 @@ cd ~/Dev/AI/nanobot
 | peer path /api + slash aliases (info/prompt/shell/control) | `bbbcd78`  |
 | MCP :18790 info/jobs/health path aliases + slash | `79ef715`  |
 | peer_mcp_bridge start_job running dual-wire plate | `2a7f98e`  |
+| task/models trailing slash aliases | `85c7f16`  |
 
 ## Anti-chaos
 
