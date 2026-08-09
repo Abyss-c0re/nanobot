@@ -110,7 +110,7 @@ cd ~/Dev/AI/nanobot
 | async job kind whitespace strip | `415266b`  |
 | MCP start_job watcher empty + kind/service fail-fast | `4498181`  |
 | shell job/sync error token leaf (shell_disabled) | `a79295f`  |
-| jobs index error leaf + fork_failed on queue | *(this push)* |
+| jobs index error leaf + fork_failed on queue | `896349c`  |
 
 ## Anti-chaos
 
