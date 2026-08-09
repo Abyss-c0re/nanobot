@@ -138,6 +138,7 @@ cd ~/Dev/AI/nanobot
 | MCP auth status proxy + peer auth aliases | `8854837`  |
 | MCP /activate dual-wire + peer slash | `9d30a9e`  |
 | GET settings plate + MCP proxy | `875fff5`  |
+| GET version dual-wire + MCP proxy | `a60d122`  |
 
 ## Anti-chaos
 
