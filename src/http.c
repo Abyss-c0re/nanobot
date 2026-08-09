@@ -825,8 +825,50 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* Settings: select backend (grok | local) + optional base/model */
-  if ((is_post || is_put) && strcmp(path, "/api/settings") == 0) {
+  /* Settings: select backend (grok | local) + optional base/model.
+   * Residual: root discovery listed /api/settings but only POST/PUT existed → GET not_found. */
+  if (is_get && (strcmp(path, "/api/settings") == 0 || strcmp(path, "/api/settings/") == 0 ||
+                 strcmp(path, "/peer/v1/settings") == 0 ||
+                 strcmp(path, "/peer/v1/settings/") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    if (!agent) {
+      http_peer_err(cfd, 500, "no_agent");
+      free(req); close(cfd); return;
+    }
+    if (session && ng_agent_needs_browser_session(agent) && !ng_session_valid(session)
+        && !session->login_pending)
+      (void)ng_session_ensure(session);
+    char *be = ng_json_escape(agent->base_url ? agent->base_url : "");
+    char *me = ng_json_escape(agent->model ? agent->model : "");
+    char *bk = ng_json_escape(ng_agent_backend_kind(agent));
+    char *sp = ng_json_escape(ng_settings_path());
+    char *out = NULL;
+    asprintf(&out,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"settings\","
+      "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+      "\"needs_browser\":%s,\"signed_in\":%s,"
+      "\"subagents\":%s,\"subagents_max\":%d,\"llm_serial\":%s,"
+      "\"settings\":\"%s\","
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      bk ? bk : "",
+      be ? be : "",
+      me ? me : "",
+      ng_agent_needs_browser_session(agent) ? "true" : "false",
+      (ng_agent_needs_browser_session(agent) && session && ng_session_valid(session))
+        ? "true" : (ng_agent_needs_browser_session(agent) ? "false" : "true"),
+      ng_subagent_enabled() ? "true" : "false",
+      ng_subagent_max(),
+      ng_llm_sched_enabled() ? "true" : "false",
+      sp ? sp : "");
+    http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
+    free(out); free(be); free(me); free(bk); free(sp);
+    free(req); close(cfd); return;
+  }
+
+  if ((is_post || is_put) && (strcmp(path, "/api/settings") == 0 ||
+                              strcmp(path, "/api/settings/") == 0 ||
+                              strcmp(path, "/peer/v1/settings") == 0 ||
+                              strcmp(path, "/peer/v1/settings/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!agent) {
       http_peer_err(cfd, 500, "no_agent");
