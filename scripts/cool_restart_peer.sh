@@ -16,6 +16,23 @@ if [[ -z "$PORT" && -f "$HOME_NB/settings" ]]; then
 fi
 PORT="${PORT:-18787}"
 
+# Residual: lab often `make host` then cool_restart without cp → stale ~/.local/bin.
+# If repo build/host/nanobot is newer, install it before stop/start.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_BIN="${NANOBOT_REPO_BIN:-$REPO_ROOT/build/host/nanobot}"
+if [[ -n "${NANOBOT_REPO:-}" && -x "${NANOBOT_REPO}/build/host/nanobot" ]]; then
+  REPO_BIN="${NANOBOT_REPO}/build/host/nanobot"
+fi
+if [[ -x "$REPO_BIN" ]]; then
+  if [[ ! -x "$BIN" ]] || [[ "$REPO_BIN" -nt "$BIN" ]]; then
+    mkdir -p "$(dirname "$BIN")"
+    cp -f "$REPO_BIN" "$BIN"
+    chmod +x "$BIN" 2>/dev/null || true
+    echo "cool_restart_peer: installed newer $REPO_BIN -> $BIN" | tee -a "$LOG"
+  fi
+fi
+
 if [[ ! -x "$BIN" ]]; then
   echo "cool_restart_peer: missing binary $BIN" >&2
   exit 2

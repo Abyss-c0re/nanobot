@@ -26,8 +26,8 @@
 ## Peer health probes
 
 ```bash
-curl -sS http://127.0.0.1:18787/health          # alias OK
-curl -sS http://127.0.0.1:18787/peer/v1/health  # pid + started (listener)
+curl -sS http://127.0.0.1:18787/health          # alias OK; jobs + jobs_keep
+curl -sS http://127.0.0.1:18787/peer/v1/health  # pid + started + jobs (listener)
 curl -sS http://127.0.0.1:18787/peer/v1/info    # same + signed_in
 curl -sS http://127.0.0.1:18790/peer/v1/health  # HTTP MCP proxy
 ```
@@ -85,6 +85,7 @@ cd ~/Dev/AI/nanobot
 | MCP bridges dual-send Bearer + X-header | `b086bef` |
 | hub events.jsonl rotate at 256KiB | `99660fa` |
 | health/info jobs + jobs_keep leaves | `df0a8d4` |
+| cool_restart installs newer build/host bin | this cycle |
 
 ## Anti-chaos
 
