@@ -126,6 +126,7 @@ cd ~/Dev/AI/nanobot
 | models plate action leaf | `d09d6e8`  |
 | peer error plates action=error | `1ab6206`  |
 | MCP 404 + bridge _missing action=error dual-wire | `2d2ae61`  |
+| MCP unknown_tool dual-wire + isError true | `03174d0`  |
 
 ## Anti-chaos
 
