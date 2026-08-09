@@ -280,9 +280,11 @@ class H(BaseHTTPRequestHandler):
         )
         # Residual: peer control/task/models already dual-wire; mesh probes on
         # :18790 still not_found after info/jobs aliases landed.
+        # Residual: GET subagents list on peer/API but :18790 returned not_found.
         control_paths = ("/peer/v1/control", "/api/control")
         task_paths = ("/peer/v1/task", "/api/task")
         models_paths = ("/peer/v1/models", "/api/models")
+        subagents_paths = ("/peer/v1/subagents", "/api/subagents")
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -303,6 +305,12 @@ class H(BaseHTTPRequestHandler):
             models = peer_json("GET", "/peer/v1/models", timeout=15)
             self._send(
                 200, models if isinstance(models, dict) else {"ok": False, "models": models}
+            )
+            return
+        if path in subagents_paths:
+            sa = peer_json("GET", "/peer/v1/subagents", timeout=8)
+            self._send(
+                200, sa if isinstance(sa, dict) else {"ok": False, "subagents": sa}
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
