@@ -1588,7 +1588,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   close(cfd);
 }
 
-static int g_live_children = 0;
+/* sig_atomic_t: mutated from SIGCHLD handler and serve loop. */
+static volatile sig_atomic_t g_live_children = 0;
 
 static void reap_children(void) {
   int st;
@@ -1600,12 +1601,29 @@ static void reap_children(void) {
 
 static void on_sigchld(int s) {
   (void)s;
-  /* actual waitpid in serve loop to keep handler async-signal-safe */
+  /* waitpid is async-signal-safe (POSIX). Reap here so per-request worker
+   * zombies do not pile under the peer when accept() is SA_RESTART-stuck or
+   * the parent is blocked in session/env reload between accepts. */
+  int st;
+  pid_t p;
+  while ((p = waitpid(-1, &st, WNOHANG)) > 0) {
+    if (g_live_children > 0) g_live_children--;
+  }
 }
 
 int ng_http_serve(ng_http_cfg *cfg) {
   signal(SIGPIPE, SIG_IGN);
-  signal(SIGCHLD, on_sigchld);
+  {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = on_sigchld;
+    /* No SA_RESTART: accept()/waitpid must wake on SIGCHLD so reaps and
+     * stop flags are not deferred until the next client connection. */
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGCHLD, &sa, NULL) != 0)
+      signal(SIGCHLD, on_sigchld);
+  }
   int sfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sfd < 0) { ng_log("socket: %s", strerror(errno)); return -1; }
   int on = 1;
@@ -1619,9 +1637,18 @@ int ng_http_serve(ng_http_cfg *cfg) {
     : htonl(INADDR_LOOPBACK);
   addr.sin_port = htons((uint16_t)cfg->port);
   if (bind(sfd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-    ng_log("bind %s:%d: %s",
-           (cfg && cfg->bind_lan) ? "0.0.0.0" : "127.0.0.1",
-           cfg->port, strerror(errno));
+    const char *h = (cfg && cfg->bind_lan) ? "0.0.0.0" : "127.0.0.1";
+    ng_log("bind %s:%d: %s", h, cfg->port, strerror(errno));
+    /* Dual-wire bind fail — do not leave only free-text in the log. */
+    fprintf(stderr,
+            "{\"schema\":\"nanobot.serve.v1\",\"ok\":false,"
+            "\"action\":\"listen\",\"error\":\"bind_failed\","
+            "\"host\":\"%s\",\"port\":%d,\"errno_msg\":\"%s\","
+            "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+            "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+            "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n",
+            h, cfg->port, strerror(errno));
+    fflush(stderr);
     close(sfd);
     return -1;
   }
@@ -1634,6 +1661,9 @@ int ng_http_serve(ng_http_cfg *cfg) {
          (cfg && cfg->bind_lan) ? "0.0.0.0" : "127.0.0.1",
          cfg->port, ng_http_max_children(),
          (cfg && cfg->bind_lan) ? " [LAN — peer token required for mutate]" : " [loopback only]");
+  /* Dual-wire listen plate only after socket is live (no false ok on EADDRINUSE). */
+  if (cfg && cfg->on_listening)
+    cfg->on_listening(cfg);
 
   g_live_children = 0;
   {

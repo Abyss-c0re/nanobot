@@ -3,7 +3,8 @@
 #include "agent.h"
 #include "auth.h"
 
-typedef struct {
+typedef struct ng_http_cfg ng_http_cfg;
+struct ng_http_cfg {
   int port;
   ng_agent_cfg *agent;
   ng_session *session;
@@ -12,7 +13,10 @@ typedef struct {
   const char *www_root;
   /* 0 = bind 127.0.0.1 only (default, not LAN-exposed). 1 = 0.0.0.0. */
   int bind_lan;
-} ng_http_cfg;
+  /* Optional: dual-wire listen plate only after bind+listen succeed. */
+  void (*on_listening)(ng_http_cfg *cfg);
+  void *on_listening_ud;
+};
 
 int ng_http_serve(ng_http_cfg *cfg);
 

@@ -107,6 +107,17 @@ static void print_ready_plate(const ng_agent_cfg *agent, const char *auth_import
  * No free-text essay · no peer_mcp_bridge.py (py=0 · native --mcp only).
  * Bind host is honest: loopback unless --lan. peer_token never dumps secret.
  */
+/* Userdata for ng_http_cfg.on_listening — plate only after bind succeeds. */
+typedef struct {
+  int port;
+  int bind_lan;
+  int hub_mode;
+  int port_out;
+  ng_session *session;
+  const char *www_root;
+  const char *peer_token_state;
+} listen_plate_ctx;
+
 static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_out,
                                ng_session *sess, const char *www_root,
                                const char *peer_token_state) {
@@ -163,6 +174,13 @@ static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_ou
   free(vu);
   free(vuc);
   free(uc);
+}
+
+static void ng_http_listening_plate_cb(ng_http_cfg *c) {
+  listen_plate_ctx *x = (listen_plate_ctx *)(c ? c->on_listening_ud : NULL);
+  if (!x) return;
+  print_listen_plate(x->port, x->bind_lan, x->hub_mode, x->port_out,
+                     x->session, x->www_root, x->peer_token_state);
 }
 
 /* Dual-wire --help (machine command index · no free-text multi-line dump). */
@@ -985,9 +1003,6 @@ int main(int argc, char **argv) {
 
   signal(SIGINT, on_sig);
   signal(SIGTERM, on_sig);
-  /* Dual-wire listen plate (bind/hub/www/peer_token honesty · py=0). */
-  print_listen_plate(port, bind_lan, hub_mode, port_out, &session, www_root,
-                     peer_token_state);
 
   if (hub_mode) {
 #if NANOBOT_ENABLE_HUB
@@ -1003,6 +1018,17 @@ int main(int argc, char **argv) {
 #endif
   }
 
+  /* Post-bind dual-wire plate (no false ok:true on EADDRINUSE). */
+  listen_plate_ctx lctx = {
+    .port = port,
+    .bind_lan = bind_lan,
+    .hub_mode = hub_mode,
+    .port_out = port_out,
+    .session = &session,
+    .www_root = www_root,
+    .peer_token_state = peer_token_state,
+  };
+
   ng_http_cfg http = {
     .port = port,
     .agent = &agent,
@@ -1010,15 +1036,19 @@ int main(int argc, char **argv) {
     .stop = 0,
     .www_root = www_root,
     .bind_lan = bind_lan,
+    .on_listening = ng_http_listening_plate_cb,
+    .on_listening_ud = &lctx,
   };
+  int serve_rc = 0;
   while (!g_stop) {
     http.stop = g_stop;
-    if (ng_http_serve(&http) != 0) break;
+    serve_rc = ng_http_serve(&http);
+    if (serve_rc != 0) break;
     break;
   }
   g_stop = 1;
 
   ng_session_free(&session);
   ng_agent_cfg_free(&agent);
-  return 0;
+  return serve_rc != 0 ? 1 : 0;
 }
