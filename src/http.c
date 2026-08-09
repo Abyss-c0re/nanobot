@@ -1338,6 +1338,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_peer_err(cfd, 400, "need_prompt_or_command");
       free(req); close(cfd); return;
     }
+    /* Residual: prompt jobs queued without login gate; soft-expired access ran
+     * agent turns that failed late (sync /peer/v1/prompt ensures first). Shell
+     * jobs do not need browser session. */
+    if (!strcmp(kind, "prompt")) {
+      int need_browser = agent && ng_agent_needs_browser_session(agent);
+      if (need_browser && session && !ng_session_valid(session)
+          && !session->login_pending)
+        (void)ng_session_ensure(session);
+      if (need_browser && (!session || !ng_session_valid(session))) {
+        free(prompt); free(cmd);
+        http_peer_err_flag(cfd, 401, "need_login", "need_login");
+        free(req); close(cfd); return;
+      }
+    }
     char jdir[640];
     snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
     mkdir(jdir, 0755);
