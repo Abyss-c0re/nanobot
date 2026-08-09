@@ -103,6 +103,7 @@ cd ~/Dev/AI/nanobot
 | subagent spawn session_ensure + need_login | `e06e2ad` |
 | control blank/unknown action → need_service_action | `4c2a04f` |
 | job_queued dual-wire kind leaf | `22f24f1` |
+| peer_mcp_bridge control/job_status empty fail-fast | `ac50990` |
 
 ## Anti-chaos
 
