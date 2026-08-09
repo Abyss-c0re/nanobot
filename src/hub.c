@@ -48,11 +48,23 @@ static int hub_key_ok(const char *k) {
   return 1;
 }
 
+/* Cap hub event log growth (mesh leaves 3 lines per job forever). */
+enum { NG_HUB_EVENTS_MAX = 256 * 1024 };
+
 int ng_hub_event_obj(const char *json_object) {
   if (!json_object || !json_object[0]) return -1;
   char dir[700], path[720];
   hub_dir(dir, sizeof dir);
   events_path(path, sizeof path);
+  /* Residual: rotate past 256KiB so lab jobs thrash cannot fill disk. */
+  {
+    struct stat st;
+    if (stat(path, &st) == 0 && st.st_size > (off_t)NG_HUB_EVENTS_MAX) {
+      char bak[740];
+      snprintf(bak, sizeof bak, "%s.1", path);
+      rename(path, bak);
+    }
+  }
   FILE *f = fopen(path, "a");
   if (!f) return -1;
   fprintf(f, "%s\n", json_object);
