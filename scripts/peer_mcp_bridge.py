@@ -174,11 +174,10 @@ def _nonempty(s: object) -> str | None:
     return t if t else None
 
 
-def _missing(err: str) -> dict:
-    return {
+def _dual_wire(**extra) -> dict:
+    """Shared dual-wire plate leaves (matches peer NG_PEER_HTTP_DUAL_WIRE)."""
+    out = {
         "schema": "nanobot.peer_http.v1",
-        "ok": False,
-        "error": err,
         "product_wire": "smx2",
         "peer_http": "lab_ops_only",
         "peer_http_is_product_bus": False,
@@ -187,6 +186,12 @@ def _missing(err: str) -> dict:
         "llm_is_commander": False,
         "python": 0,
     }
+    out.update(extra)
+    return out
+
+
+def _missing(err: str) -> dict:
+    return _dual_wire(ok=False, error=err)
 
 
 def start_job(kind: str, prompt: str = "", command: str = "") -> dict:
@@ -217,7 +222,18 @@ def start_job(kind: str, prompt: str = "", command: str = "") -> dict:
         st = http_json("GET", f"/peer/v1/jobs/{jid}", timeout=5)
         if st.get("status") in ("done", "error"):
             return st
-    return {"ok": True, "id": jid, "status": "running", "poll": f"/peer/v1/jobs/{jid}", "queued": ack}
+    # Residual: still-running short-circuit lacked schema/action/kind/dual-wire;
+    # mesh treated a sparse {ok,id,status,poll} plate as non-peer or success-only.
+    kind_leaf = (ack.get("kind") if isinstance(ack, dict) else None) or k
+    return _dual_wire(
+        ok=True,
+        action="job",
+        id=jid,
+        status="running",
+        kind=kind_leaf,
+        poll=f"/peer/v1/jobs/{jid}",
+        queued=ack,
+    )
 
 
 TOOLS = [
