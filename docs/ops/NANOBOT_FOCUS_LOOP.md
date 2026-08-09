@@ -87,6 +87,7 @@ cd ~/Dev/AI/nanobot
 | health/info jobs + jobs_keep leaves | `df0a8d4` |
 | cool_restart installs newer build/host bin | `046a943` |
 | `/ready` action=ready (was health) | `66d1217` |
+| `/peer/v1/ready` alias (was 404) | `9a7f613` |
 
 ## Anti-chaos
 
