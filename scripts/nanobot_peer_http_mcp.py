@@ -237,7 +237,11 @@ class H(BaseHTTPRequestHandler):
         # answer them instead of {"error":"not_found"} so focus loops stay quiet.
         # Residual: /ready|/peer/v1/ready|/api/ready|/api/health were 404 while
         # peer :18787 answers them (action health|ready).
+        # Residual: trailing slash + /api/info + jobs index still 404 on :18790
+        # after peer gained those aliases — mesh hit MCP port and saw not_found.
         path = self.path.split("?", 1)[0]
+        if path != "/" and path.endswith("/"):
+            path = path.rstrip("/") or "/"
         ready_paths = ("/ready", "/peer/v1/ready", "/api/ready")
         health_paths = (
             "/peer/v1/health",
@@ -246,10 +250,55 @@ class H(BaseHTTPRequestHandler):
             "/",
             "/mcp",
         )
-        if path in ("/peer/v1/info",):
+        info_paths = (
+            "/peer/v1/info",
+            "/api/info",
+            "/peer/v1/hello",
+            "/api/hello",
+        )
+        jobs_coll = (
+            "/peer/v1/jobs",
+            "/peer/v1/job",
+            "/api/jobs",
+            "/api/job",
+        )
+        if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
             return
+        if path in jobs_coll:
+            jobs = peer_json("GET", "/peer/v1/jobs", timeout=8)
+            self._send(200, jobs if isinstance(jobs, dict) else {"ok": False, "jobs": jobs})
+            return
+        # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
+        for pref in ("/peer/v1/jobs/", "/peer/v1/job/", "/api/jobs/", "/api/job/"):
+            if path.startswith(pref):
+                jid = path[len(pref) :]
+                if jid.endswith("/"):
+                    jid = jid.rstrip("/")
+                if jid and jid.isdigit():
+                    st = peer_json("GET", f"/peer/v1/jobs/{jid}", timeout=8)
+                    self._send(
+                        200,
+                        st if isinstance(st, dict) else {"ok": False, "job": st},
+                    )
+                    return
+                self._send(
+                    400,
+                    {
+                        "schema": "nanobot.peer_http.v1",
+                        "ok": False,
+                        "error": "bad_id",
+                        "product_wire": "smx2",
+                        "peer_http": "lab_ops_only",
+                        "peer_http_is_product_bus": False,
+                        "share": "state_matrix_only",
+                        "hold_flash": 1,
+                        "llm_is_commander": False,
+                        "python": 0,
+                    },
+                )
+                return
         if path in ready_paths or path in health_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             is_ready = path in ready_paths
