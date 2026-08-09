@@ -1342,6 +1342,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_peer_err(cfd, 400, "need_service_action");
       free(req); close(cfd); return;
     }
+    /* Residual: service "Shell" / action "ON" rejected while job kind
+     * case-folds (4ed64ef); mesh control posts mixed-case tokens. */
+    for (char *p = svc; *p; p++) *p = (char)tolower((unsigned char)*p);
+    for (char *p = act; *p; p++) *p = (char)tolower((unsigned char)*p);
     char pathf[640];
     int ok = 0;
     int on = (!strcmp(act, "on") || !strcmp(act, "enable"));
@@ -1351,6 +1355,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_peer_err(cfd, 400, "need_service_action");
       free(req); close(cfd); return;
     }
+    /* Canonical action leaf for dual-wire plate. */
+    const char *act_canon = on ? "on" : "off";
     if (!strcmp(svc, "shell")) {
       snprintf(pathf, sizeof pathf, "%s/shell_enabled", ng_workdir());
       const char *v = on ? "1" : "0";
@@ -1389,7 +1395,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"service\":\"%s\",\"action\":\"%s\",\"persist\":true,"
       "\"settings\":\"%s\","
       NG_PEER_HTTP_DUAL_WIRE "}",
-      ok ? "true" : "false", svc, act, sp ? sp : "");
+      ok ? "true" : "false", svc, act_canon, sp ? sp : "");
     free(sp);
     http_response(cfd, ok ? 200 : 400, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
     free(svc); free(act); free(jb);

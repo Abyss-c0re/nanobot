@@ -315,6 +315,11 @@ def main() -> None:
                 # unknown_service — whitelist matches HTTP control plate.
                 service = _nonempty(args.get("service"))
                 action = _nonempty(args.get("action"))
+                # Residual: mixed-case Shell/ON rejected before peer case-fold.
+                if service:
+                    service = service.lower()
+                if action:
+                    action = action.lower()
                 if (
                     not service
                     or not action
