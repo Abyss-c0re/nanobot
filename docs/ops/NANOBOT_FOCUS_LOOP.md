@@ -83,7 +83,7 @@ cd ~/Dev/AI/nanobot
 | GET /jobs list cap = NG_JOBS_KEEP (was 32) | `692ffd6` |
 | Authorization: Bearer peer auth | `2006408` |
 | MCP bridges dual-send Bearer + X-header | `b086bef` |
-| hub events.jsonl rotate at 256KiB | this cycle |
+| hub events.jsonl rotate at 256KiB | `99660fa` |
 
 ## Anti-chaos
 
