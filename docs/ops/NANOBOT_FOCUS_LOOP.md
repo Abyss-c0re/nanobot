@@ -122,7 +122,7 @@ cd ~/Dev/AI/nanobot
 | MCP :18790 info/jobs/health path aliases + slash | `79ef715`  |
 | peer_mcp_bridge start_job running dual-wire plate | `2a7f98e`  |
 | task/models trailing slash aliases | `eeabe10`  |
-| MCP :18790 control/task/models proxy | `093d1bf`  |
+| MCP :18790 control/task/models proxy | `95c2c75`  |
 
 ## Anti-chaos
 
