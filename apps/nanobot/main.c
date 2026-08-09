@@ -57,21 +57,29 @@ static void install_stop_signals(void) {
   if (sigaction(SIGTERM, &sa, NULL) != 0) signal(SIGTERM, on_sig);
 }
 
-/* True if something already holds port (LISTEN). No SO_REUSEADDR on probe. */
+/* True if a peer is actually accepting on port (LISTEN).
+ * Residual: bind-probe without SO_REUSEADDR returns EADDRINUSE on TIME_WAIT
+ * after cool_restart SIGTERM → false already_listening while nothing listens.
+ * Connect to loopback: only a live accept() succeeds; TIME_WAIT does not. */
 static int peer_port_in_use(int port, int bind_lan) {
+  (void)bind_lan;
   if (port <= 0 || port >= 65536) return 0;
   int sfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sfd < 0) return 0;
+  struct timeval tv;
+  tv.tv_sec = 0;
+  tv.tv_usec = 250000; /* 250ms — lab loopback is instant when live */
+  setsockopt(sfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
+  setsockopt(sfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_port = htons((uint16_t)port);
-  addr.sin_addr.s_addr =
-      bind_lan ? htonl(INADDR_ANY) : htonl(INADDR_LOOPBACK);
-  int rc = bind(sfd, (struct sockaddr *)&addr, sizeof addr);
-  int busy = (rc != 0 && errno == EADDRINUSE);
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  int rc = connect(sfd, (struct sockaddr *)&addr, sizeof addr);
+  int live = (rc == 0);
   close(sfd);
-  return busy;
+  return live;
 }
 
 static void print_already_listening(int port, int bind_lan) {

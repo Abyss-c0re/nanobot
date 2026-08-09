@@ -74,7 +74,9 @@ cd ~/Dev/AI/nanobot
 | GET `/peer/v1/jobs` index | `2cbc733` |
 | Jobs GC keep 48 | `583bb38` |
 | `already_listening` + orphan reap | `42824b8` |
-| Mesh dir ensure on start | this cycle |
+| Mesh dir ensure on start | `f55a123` |
+| Jobs GC after done + poll-by-id | this cycle |
+| already_listening connect-probe (not TIME_WAIT) | this cycle |
 
 ## Anti-chaos
 

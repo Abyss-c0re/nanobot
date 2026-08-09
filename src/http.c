@@ -1317,6 +1317,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         free(esc); free(reply); free(payload);
         ng_hub_event("job.done", "id", id, "kind", "prompt");
       }
+      /* Residual: mesh polls GET /jobs/{id} only — never hit collection GC.
+       * After done, prune finished metas so we do not sit at KEEP+1 until next POST. */
+      jobs_gc(jdir);
       _exit(0);
     }
     char *ack = NULL;
@@ -1469,6 +1472,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     http_response(cfd, 200, "application/json", body, blen);
     free(body);
+    /* Mesh mostly polls by id; opportunistic GC keeps jobs/ bounded. */
+    {
+      char jdir[640];
+      snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
+      jobs_gc(jdir);
+    }
     free(req); close(cfd); return;
   }
 
