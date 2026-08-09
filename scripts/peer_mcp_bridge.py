@@ -191,12 +191,18 @@ def _missing(err: str) -> dict:
 
 def start_job(kind: str, prompt: str = "", command: str = "") -> dict:
     """Fire-and-poll: return immediately with job id, then optional short wait."""
-    body: dict = {"kind": kind}
+    # Residual: HTTP accepts kind=watcher with empty payload (579fc86) and
+    # rejects unknown kind (9ac1baa); bridge always 400 need_prompt_or_command
+    # for empty watcher and POSTed typos for RTT waste.
+    k = (kind or "").strip() or "prompt"
+    if k not in ("prompt", "shell", "watcher"):
+        return _missing("unknown_kind")
+    body: dict = {"kind": k}
     if prompt:
         body["prompt"] = prompt
     if command:
         body["command"] = command
-    if not body.get("prompt") and not body.get("command"):
+    if k != "watcher" and not body.get("prompt") and not body.get("command"):
         return _missing("need_prompt_or_command")
     ack = http_json("POST", "/peer/v1/jobs", body, timeout=8)
     jid = ack.get("id")
@@ -304,6 +310,8 @@ def main() -> None:
             elif name in ("nanobot_control",):
                 # Residual: blank action reached peer and once flipped shell off
                 # (HTTP now 400); fail-fast dual-wire before POST.
+                # Residual: unknown service (e.g. nope) still RTT'd to peer
+                # unknown_service — whitelist matches HTTP control plate.
                 service = _nonempty(args.get("service"))
                 action = _nonempty(args.get("action"))
                 if (
@@ -312,6 +320,8 @@ def main() -> None:
                     or action not in ("on", "off", "enable", "disable")
                 ):
                     out = _missing("need_service_action")
+                elif service not in ("shell", "watcher", "ui", "www", "web"):
+                    out = _missing("unknown_service")
                 else:
                     out = http_json(
                         "POST",
