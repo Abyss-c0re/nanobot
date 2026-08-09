@@ -92,6 +92,7 @@ cd ~/Dev/AI/nanobot
 | root discovery health/ready | `b26920b` |
 | `/api/health` + `/api/ready` aliases | `5fe5633` |
 | empty/whitespace peer shell → missing_command | `875f3b7` |
+| MCP ready/health aliases on :18790 | `82a1c28` |
 
 ## Anti-chaos
 
