@@ -32,6 +32,17 @@
 static time_t g_serve_started = 0;
 static pid_t g_serve_pid = 0;
 
+/*
+ * Dual-wire lab/ops peer HTTP plate tail (schema nanobot.peer_http.v1).
+ * Product bus remains SMX2; this HTTP surface is lab/ops only.
+ * Defined early so jobs_gc/orphan helpers can embed the same plate.
+ */
+#define NG_PEER_HTTP_DUAL_WIRE                                                 \
+  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","                  \
+  "\"peer_http_is_product_bus\":false,"                                        \
+  "\"share\":\"state_matrix_only\",\"hold_flash\":1,"                          \
+  "\"llm_is_commander\":false,\"python\":0"
+
 /* Cap finished job artifacts under $HOME/jobs (mesh leaves many done/*.json).
  * Never unlink queued/running. Ids are time-prefixed so lexicographic order
  * is chronological. */
@@ -112,6 +123,70 @@ static void jobs_gc(const char *jdir) {
   }
 }
 
+/* Residual: cool_restart / SIGTERM kills job worker children; metas stay
+ * status=running|queued forever (jobs_gc never drops live). Mesh poll spins.
+ * On listen only — mark orphans error so GC and dual-wire poll can finish. */
+static void jobs_mark_orphans(const char *jdir) {
+  if (!jdir || !jdir[0]) return;
+  DIR *d = opendir(jdir);
+  if (!d) return;
+  struct dirent *de;
+  int marked = 0;
+  while ((de = readdir(d)) != NULL) {
+    const char *name = de->d_name;
+    size_t len = strlen(name);
+    if (len < 6 || strcmp(name + len - 5, ".json") != 0) continue;
+    size_t idlen = len - 5;
+    if (idlen == 0 || idlen >= 32) continue;
+    int digits = 1;
+    for (size_t i = 0; i < idlen; i++) {
+      if (!isdigit((unsigned char)name[i])) {
+        digits = 0;
+        break;
+      }
+    }
+    if (!digits) continue;
+    char mpath[700];
+    snprintf(mpath, sizeof mpath, "%s/%s", jdir, name);
+    char *meta = ng_read_file(mpath, NULL);
+    if (!meta) continue;
+    char *st = ng_json_get_string(meta, "status");
+    int live = (st && (!strcmp(st, "queued") || !strcmp(st, "running")));
+    char *kind = ng_json_get_string(meta, "kind");
+    free(st);
+    free(meta);
+    if (!live) {
+      free(kind);
+      continue;
+    }
+    char id[32];
+    memcpy(id, name, idlen);
+    id[idlen] = 0;
+    /* kind is machine token only (prompt|shell|watcher); never free-text. */
+    const char *k = "unknown";
+    if (kind && (!strcmp(kind, "prompt") || !strcmp(kind, "shell") ||
+                 !strcmp(kind, "watcher")))
+      k = kind;
+    char *jb = NULL;
+    asprintf(&jb,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"action\":\"job\","
+      "\"id\":\"%s\",\"status\":\"error\",\"kind\":\"%s\","
+      "\"error\":\"orphan_restart\","
+      NG_PEER_HTTP_DUAL_WIRE "}\n",
+      id, k);
+    if (jb) {
+      ng_write_file(mpath, jb, strlen(jb));
+      free(jb);
+      marked++;
+      ng_hub_event("job.orphan", "id", id, "kind", k);
+    }
+    free(kind);
+  }
+  closedir(d);
+  if (marked > 0)
+    ng_log("jobs: marked %d orphan running/queued after restart", marked);
+}
+
 static void send_all(int fd, const char *data, size_t n) {
   while (n) {
     ssize_t w = write(fd, data, n);
@@ -122,16 +197,6 @@ static void send_all(int fd, const char *data, size_t n) {
     data += w; n -= (size_t)w;
   }
 }
-
-/*
- * Dual-wire lab/ops peer HTTP plate tail (schema nanobot.peer_http.v1).
- * Product bus remains SMX2; this HTTP surface is lab/ops only.
- */
-#define NG_PEER_HTTP_DUAL_WIRE                                                 \
-  "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","                  \
-  "\"peer_http_is_product_bus\":false,"                                        \
-  "\"share\":\"state_matrix_only\",\"hold_flash\":1,"                          \
-  "\"llm_is_commander\":false,\"python\":0"
 
 /* SSE chat stream helper — top-level (not nested) for portable C compilers.
  * Normal chunks → dual-wire nanobot.peer_http.v1 chat_delta plates.
@@ -2074,6 +2139,14 @@ int ng_http_serve(ng_http_cfg *cfg) {
   /* Dual-wire listen plate only after socket is live (no false ok on EADDRINUSE). */
   if (cfg && cfg->on_listening)
     cfg->on_listening(cfg);
+
+  /* Residual: previous process workers are gone; finish their live metas. */
+  {
+    char jdir[640];
+    snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
+    jobs_mark_orphans(jdir);
+    jobs_gc(jdir);
+  }
 
   g_live_children = 0;
   {
