@@ -308,21 +308,9 @@ class H(BaseHTTPRequestHandler):
                         st if isinstance(st, dict) else {"ok": False, "job": st},
                     )
                     return
-                self._send(
-                    400,
-                    {
-                        "schema": "nanobot.peer_http.v1",
-                        "ok": False,
-                        "error": "bad_id",
-                        "product_wire": "smx2",
-                        "peer_http": "lab_ops_only",
-                        "peer_http_is_product_bus": False,
-                        "share": "state_matrix_only",
-                        "hold_flash": 1,
-                        "llm_is_commander": False,
-                        "python": 0,
-                    },
-                )
+                # Residual: hand-rolled bad_id plate lacked action=error while
+                # peer GET /jobs/{id} and _missing dual-wire both set it.
+                self._send(400, _missing("bad_id"))
                 return
         if path in ready_paths or path in health_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)

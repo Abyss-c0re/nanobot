@@ -42,6 +42,25 @@ def write_msg(m):
     sys.stdout.write(json.dumps(m, ensure_ascii=False, separators=(",", ":")) + "\n")
     sys.stdout.flush()
 
+def _missing(err: str, **extra) -> dict:
+    """Dual-wire fail plate (align peer http_peer_err / HTTP MCP _missing)."""
+    out = {
+        "schema": "nanobot.peer_http.v1",
+        "ok": False,
+        "action": "error",
+        "error": err,
+        "product_wire": "smx2",
+        "peer_http": "lab_ops_only",
+        "peer_http_is_product_bus": False,
+        "share": "state_matrix_only",
+        "hold_flash": 1,
+        "llm_is_commander": False,
+        "python": 0,
+    }
+    out.update(extra)
+    return out
+
+
 def dispatch(name, args):
     if name == "braincube_info": return api.info()
     if name == "braincube_live": return api.bc("live", 15)
@@ -49,7 +68,11 @@ def dispatch(name, args):
     if name == "braincube_export": return api.bc("export", 45)
     if name == "braincell_status": return api.braincell_status()
     if name == "cubalc_run": return api.cubalc_run(str(args.get("board") or ""), str(args.get("source") or ""))
-    return {"error": f"unknown tool {name}"}
+    # Residual: bare {"error":"unknown tool X"} lacked dual-wire + isError false.
+    out = _missing("unknown_tool")
+    if name:
+        out["tool"] = str(name)[:128]
+    return out
 
 def main():
     while True:
