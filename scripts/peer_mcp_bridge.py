@@ -54,6 +54,35 @@ def _settings_port() -> int | None:
     return None
 
 
+def _loopback_if_listening(url: str) -> str:
+    """Prefer 127.0.0.1:port when peer is up on loopback.
+
+    Residual: ~/.nanobot/peer_url is often the LAN IP for Titan mesh. Host MCP
+    then hairpins 192.168.x→self; if the NIC flaps, bridge fails while
+    loopback still works. Opt out: NANOBOT_PEER_FORCE_URL=1.
+    """
+    force = (os.environ.get("NANOBOT_PEER_FORCE_URL") or "").strip().lower()
+    if force in ("1", "true", "yes", "on"):
+        return url
+    try:
+        from urllib.parse import urlparse
+
+        u = urlparse(url)
+        host = (u.hostname or "").lower()
+        if host in ("127.0.0.1", "localhost", "::1", ""):
+            return url
+        port = u.port
+        if port is None:
+            port = 443 if (u.scheme or "http") == "https" else 80
+        import socket
+
+        s = socket.create_connection(("127.0.0.1", int(port)), timeout=0.2)
+        s.close()
+        return f"http://127.0.0.1:{int(port)}"
+    except Exception:
+        return url
+
+
 def peer_base() -> str:
     """Reload each call so peer_url file / env changes apply without MCP restart."""
     base = (os.environ.get("NANOBOT_PEER_URL") or "").strip()
@@ -67,7 +96,7 @@ def peer_base() -> str:
         # Residual: bare 8787 missed lab PORT=18787 when peer_url absent.
         port = _settings_port() or 8787
         base = f"http://127.0.0.1:{port}"
-    return base.rstrip("/")
+    return _loopback_if_listening(base.rstrip("/"))
 
 
 def peer_token() -> str:
