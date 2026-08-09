@@ -27,6 +27,10 @@
 #include <signal.h>
 #include <time.h>
 
+/* Set once listen succeeds — health plate (parent listener, not fork workers). */
+static time_t g_serve_started = 0;
+static pid_t g_serve_pid = 0;
+
 static void send_all(int fd, const char *data, size_t n) {
   while (n) {
     ssize_t w = write(fd, data, n);
@@ -973,13 +977,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
                  strcmp(path, "/health") == 0 ||
                  strcmp(path, "/ready") == 0)) {
-    char body[384];
+    char body[512];
     char *ver = ng_json_escape(NG_VERSION);
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"health\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\",\"role\":\"session-bus\","
+      "\"pid\":%d,\"started\":%ld,"
       NG_PEER_HTTP_DUAL_WIRE "}",
-      ver ? ver : "");
+      ver ? ver : "",
+      (int)(g_serve_pid ? g_serve_pid : getpid()),
+      (long)g_serve_started);
     free(ver);
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
@@ -1666,6 +1673,8 @@ int ng_http_serve(ng_http_cfg *cfg) {
          (cfg && cfg->bind_lan) ? "0.0.0.0" : "127.0.0.1",
          cfg->port, ng_http_max_children(),
          (cfg && cfg->bind_lan) ? " [LAN — peer token required for mutate]" : " [loopback only]");
+  g_serve_started = time(NULL);
+  g_serve_pid = getpid(); /* parent — health is answered in fork workers */
   /* Dual-wire listen plate only after socket is live (no false ok on EADDRINUSE). */
   if (cfg && cfg->on_listening)
     cfg->on_listening(cfg);

@@ -39,14 +39,21 @@ health_ok() {
 echo "cool_restart_peer: home=$HOME_NB port=$PORT bin=$BIN" | tee -a "$LOG"
 old=$(listen_pid || true)
 if [[ -n "${old:-}" ]]; then
-  echo "cool_restart_peer: stop pid=$old" | tee -a "$LOG"
-  kill "$old" 2>/dev/null || true
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    kill -0 "$old" 2>/dev/null || break
-    sleep 0.3
+  echo "cool_restart_peer: stop pid=$old (SIGTERM)" | tee -a "$LOG"
+  # Prefer graceful stop (needs live stop-flag + non-SA_RESTART; see 53583af).
+  kill -TERM "$old" 2>/dev/null || true
+  graceful=0
+  for _ in $(seq 1 20); do
+    if ! kill -0 "$old" 2>/dev/null; then
+      graceful=1
+      break
+    fi
+    sleep 0.25
   done
-  if kill -0 "$old" 2>/dev/null; then
-    echo "cool_restart_peer: SIGKILL $old" | tee -a "$LOG"
+  if [[ "$graceful" == "1" ]]; then
+    echo "cool_restart_peer: graceful_stop pid=$old" | tee -a "$LOG"
+  else
+    echo "cool_restart_peer: SIGKILL $old (SIGTERM timeout)" | tee -a "$LOG"
     kill -9 "$old" 2>/dev/null || true
     sleep 0.3
   fi
