@@ -1709,6 +1709,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     body = body ? body + 4 : "";
     char *cmd = ng_json_get_string(body, "command");
     if (!cmd) cmd = ng_json_get_string(body, "cmd");
+    /* Residual: "" / whitespace command ran as empty shell (ok:true exit 0). */
+    if (cmd) {
+      const char *p = cmd;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(cmd);
+        cmd = NULL;
+      }
+    }
     if (!cmd) {
       http_peer_err(cfd, 400, "missing_command");
       free(req); close(cfd); return;
