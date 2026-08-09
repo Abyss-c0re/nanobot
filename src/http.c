@@ -1293,15 +1293,33 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *prompt = ng_json_get_string(body, "prompt");
     char *cmd = ng_json_get_string(body, "command");
     if (!cmd) cmd = ng_json_get_string(body, "cmd");
+    /* Residual: "" checked only via [0]; whitespace queued empty shell (exit 0)
+     * and empty prompt jobs that still burned an agent turn (sync paths 400). */
+    if (prompt) {
+      const char *p = prompt;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(prompt);
+        prompt = NULL;
+      }
+    }
+    if (cmd) {
+      const char *p = cmd;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(cmd);
+        cmd = NULL;
+      }
+    }
     char *kind_raw = ng_json_get_string(body, "kind"); /* prompt|shell|watcher */
     /* Machine kind token only — never free-text inject into job meta. */
     const char *kind = "prompt";
     if (kind_raw && !strcmp(kind_raw, "shell")) kind = "shell";
     else if (kind_raw && !strcmp(kind_raw, "watcher")) kind = "watcher";
     else if (kind_raw && !strcmp(kind_raw, "prompt")) kind = "prompt";
-    else if (!kind_raw && cmd && (!prompt || !prompt[0])) kind = "shell";
+    else if (!kind_raw && cmd && !prompt) kind = "shell";
     free(kind_raw);
-    if ((!prompt || !prompt[0]) && (!cmd || !cmd[0])) {
+    if (!prompt && !cmd) {
       free(prompt); free(cmd);
       http_peer_err(cfd, 400, "need_prompt_or_command");
       free(req); close(cfd); return;
