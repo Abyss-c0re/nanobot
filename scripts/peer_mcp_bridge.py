@@ -194,7 +194,8 @@ def start_job(kind: str, prompt: str = "", command: str = "") -> dict:
     # Residual: HTTP accepts kind=watcher with empty payload (579fc86) and
     # rejects unknown kind (9ac1baa); bridge always 400 need_prompt_or_command
     # for empty watcher and POSTed typos for RTT waste.
-    k = (kind or "").strip() or "prompt"
+    # Residual: kind "Shell" case-fold (HTTP strcasecmp since same cycle).
+    k = (kind or "").strip().lower() or "prompt"
     if k not in ("prompt", "shell", "watcher"):
         return _missing("unknown_kind")
     body: dict = {"kind": k}

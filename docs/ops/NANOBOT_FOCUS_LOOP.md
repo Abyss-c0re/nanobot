@@ -113,6 +113,7 @@ cd ~/Dev/AI/nanobot
 | jobs index error leaf + fork_failed on queue | `896349c`  |
 | async shell_disabled fail-fast 403 at queue | `99691c3`  |
 | sync shell_disabled HTTP 403 align | `0c8a50a`  |
+| async job kind case-fold (Shell→shell) | *(this push)* |
 
 ## Anti-chaos
 

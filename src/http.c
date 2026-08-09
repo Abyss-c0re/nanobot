@@ -1445,11 +1445,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         }
       }
     }
-    /* Machine kind token only — never free-text inject into job meta. */
+    /* Machine kind token only — never free-text inject into job meta.
+     * Residual: kind "Shell"/"WATCHER" rejected as unknown_kind while mesh
+     * clients sometimes capitalize tokens; case-fold to canonical leaf. */
     const char *kind = "prompt";
-    if (kind_raw && !strcmp(kind_raw, "shell")) kind = "shell";
-    else if (kind_raw && !strcmp(kind_raw, "watcher")) kind = "watcher";
-    else if (kind_raw && !strcmp(kind_raw, "prompt")) kind = "prompt";
+    if (kind_raw && !strcasecmp(kind_raw, "shell")) kind = "shell";
+    else if (kind_raw && !strcasecmp(kind_raw, "watcher")) kind = "watcher";
+    else if (kind_raw && !strcasecmp(kind_raw, "prompt")) kind = "prompt";
     else if (!kind_raw && cmd && !prompt) kind = "shell";
     /* Residual: unknown kind (e.g. "nope") fell through as prompt and burned
      * an agent turn when a prompt body was present. */
