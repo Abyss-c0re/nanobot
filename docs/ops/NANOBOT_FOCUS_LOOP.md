@@ -107,7 +107,7 @@ cd ~/Dev/AI/nanobot
 | empty watcher async jobs allowed | `579fc86` |
 | async jobs unknown kind → unknown_kind | `9ac1baa` |
 | orphan running/queued jobs → error on listen | `29d5e7b`  |
-| async job kind whitespace strip | *(this push)* |
+| async job kind whitespace strip | `415266b`  |
 
 ## Anti-chaos
 
