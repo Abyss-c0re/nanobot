@@ -1115,6 +1115,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0)) {
+    /* Residual: info used raw ng_session_valid without ensure — soft-expired
+     * access_token reported signed_in=false while /api/auth ensure → true. */
+    if (session && agent && ng_agent_needs_browser_session(agent)
+        && !ng_session_valid(session) && !session->login_pending)
+      (void)ng_session_ensure(session);
     int signed_in = session && ng_session_valid(session);
     char body[1024];
     char *ver = ng_json_escape(NG_VERSION);
