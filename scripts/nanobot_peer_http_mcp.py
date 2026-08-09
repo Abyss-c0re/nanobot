@@ -282,12 +282,18 @@ class H(BaseHTTPRequestHandler):
         # :18790 still not_found after info/jobs aliases landed.
         # Residual: GET subagents list on peer/API but :18790 returned not_found.
         # Residual: GET braincube status/live on peer but :18790 not_found (FOCUS #2).
+        # Residual: GET resources on peer (/peer/v1 + /api/v1) but :18790 not_found.
         control_paths = ("/peer/v1/control", "/api/control")
         task_paths = ("/peer/v1/task", "/api/task")
         models_paths = ("/peer/v1/models", "/api/models")
         subagents_paths = ("/peer/v1/subagents", "/api/subagents")
         braincube_paths = ("/peer/v1/braincube", "/api/braincube")
         braincube_live_paths = ("/peer/v1/braincube/live", "/api/braincube/live")
+        resources_paths = (
+            "/peer/v1/resources",
+            "/api/v1/resources",
+            "/api/resources",
+        )
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -326,6 +332,12 @@ class H(BaseHTTPRequestHandler):
             bc = peer_json("GET", "/peer/v1/braincube", timeout=8)
             self._send(
                 200, bc if isinstance(bc, dict) else {"ok": False, "braincube": bc}
+            )
+            return
+        if path in resources_paths:
+            res = peer_json("GET", "/peer/v1/resources", timeout=5)
+            self._send(
+                200, res if isinstance(res, dict) else {"ok": False, "resources": res}
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
