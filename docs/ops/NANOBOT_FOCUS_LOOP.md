@@ -85,7 +85,7 @@ cd ~/Dev/AI/nanobot
 | MCP bridges dual-send Bearer + X-header | `b086bef` |
 | hub events.jsonl rotate at 256KiB | `99660fa` |
 | health/info jobs + jobs_keep leaves | `df0a8d4` |
-| cool_restart installs newer build/host bin | this cycle |
+| cool_restart installs newer build/host bin | `046a943` |
 
 ## Anti-chaos
 
