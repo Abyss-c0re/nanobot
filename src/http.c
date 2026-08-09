@@ -1163,7 +1163,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
 
-  if (is_get && (strcmp(path, "/api/v1/resources") == 0 || strcmp(path, "/peer/v1/resources") == 0)) {
+  /* Residual: trailing slash + /api/resources 404 while /peer/v1/resources worked. */
+  if (is_get && (strcmp(path, "/api/v1/resources") == 0 ||
+                 strcmp(path, "/api/v1/resources/") == 0 ||
+                 strcmp(path, "/api/resources") == 0 ||
+                 strcmp(path, "/api/resources/") == 0 ||
+                 strcmp(path, "/peer/v1/resources") == 0 ||
+                 strcmp(path, "/peer/v1/resources/") == 0)) {
     char *body = ng_resources_json();
     http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
     free(body);
@@ -1174,19 +1180,29 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* /health + /ready: mesh focus loops probe these; same plate, distinct action.
    * Residual: /ready reused action=health → probes could not tell paths apart.
    * Residual: /peer/v1/ready was 404 while bare /ready worked — peer-namespace alias.
-   * Residual: /api/health|/api/ready 404 — API-namespace clients (OpenAPI-ish). */
+   * Residual: /api/health|/api/ready 404 — API-namespace clients (OpenAPI-ish).
+   * Residual: trailing slash on health/ready 404 after resources/models gained slash. */
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
+                 strcmp(path, "/peer/v1/health/") == 0 ||
                  strcmp(path, "/health") == 0 ||
+                 strcmp(path, "/health/") == 0 ||
                  strcmp(path, "/api/health") == 0 ||
+                 strcmp(path, "/api/health/") == 0 ||
                  strcmp(path, "/ready") == 0 ||
+                 strcmp(path, "/ready/") == 0 ||
                  strcmp(path, "/peer/v1/ready") == 0 ||
-                 strcmp(path, "/api/ready") == 0)) {
+                 strcmp(path, "/peer/v1/ready/") == 0 ||
+                 strcmp(path, "/api/ready") == 0 ||
+                 strcmp(path, "/api/ready/") == 0)) {
     char body[640];
     char *ver = ng_json_escape(NG_VERSION);
     int jn = jobs_meta_count();
     int is_ready = (strcmp(path, "/ready") == 0 ||
+                    strcmp(path, "/ready/") == 0 ||
                     strcmp(path, "/peer/v1/ready") == 0 ||
-                    strcmp(path, "/api/ready") == 0);
+                    strcmp(path, "/peer/v1/ready/") == 0 ||
+                    strcmp(path, "/api/ready") == 0 ||
+                    strcmp(path, "/api/ready/") == 0);
     const char *act = is_ready ? "ready" : "health";
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
@@ -1910,8 +1926,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* BrainCube plugin — sensor cubes + MetaCube; live viz for wrapper */
+  /* Residual: trailing slash 404 after models/task/control gained slash aliases. */
   if (is_get && (strcmp(path, "/peer/v1/braincube/live") == 0 ||
-                 strcmp(path, "/api/braincube/live") == 0)) {
+                 strcmp(path, "/peer/v1/braincube/live/") == 0 ||
+                 strcmp(path, "/api/braincube/live") == 0 ||
+                 strcmp(path, "/api/braincube/live/") == 0)) {
     /* allow_loopback=1: local wrapper/CLI without token; remote still needs token */
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     {
@@ -1922,7 +1941,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
   if (is_get && (strcmp(path, "/peer/v1/braincube") == 0 ||
-                 strcmp(path, "/api/braincube") == 0)) {
+                 strcmp(path, "/peer/v1/braincube/") == 0 ||
+                 strcmp(path, "/api/braincube") == 0 ||
+                 strcmp(path, "/api/braincube/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     {
       char *jb = ng_bc_status_json();
@@ -1932,7 +1953,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
   if (is_post && (strcmp(path, "/peer/v1/braincube") == 0 ||
-                  strcmp(path, "/api/braincube") == 0)) {
+                  strcmp(path, "/peer/v1/braincube/") == 0 ||
+                  strcmp(path, "/api/braincube") == 0 ||
+                  strcmp(path, "/api/braincube/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";
@@ -1945,8 +1968,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Subagents: list / spawn / status / cancel (light, max 8, share session) */
+  /* Residual: trailing slash 404/misroute after collection paths gained slash. */
   if (is_get && (strcmp(path, "/peer/v1/subagents") == 0 ||
-                 strcmp(path, "/api/subagents") == 0)) {
+                 strcmp(path, "/peer/v1/subagents/") == 0 ||
+                 strcmp(path, "/api/subagents") == 0 ||
+                 strcmp(path, "/api/subagents/") == 0)) {
     /* GET list is read-only; allow loopback like /api/task so board poll reaps dead PIDs */
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (agent) ng_agent_apply_provider_policy(agent);
