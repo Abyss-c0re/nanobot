@@ -134,7 +134,8 @@ cd ~/Dev/AI/nanobot
 | MCP GET braincube + /live proxy on :18790 | `1944417`  |
 | async shell job timeout 120s + pgroup kill | `70d7262`  |
 | MCP GET resources proxy on :18790 | `cefa6e2`  |
-| peer trailing-slash resources/braincube/health | `$SHA`  |
+| peer trailing-slash resources/braincube/health | `5159c69`  |
+| MCP auth status proxy + peer auth aliases | `8854837`  |
 
 ## Anti-chaos
 
