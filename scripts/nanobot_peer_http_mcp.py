@@ -206,28 +206,37 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         # Mesh probes often hit /peer/v1/* on the HTTP MCP port by mistake —
         # answer them instead of {"error":"not_found"} so focus loops stay quiet.
-        if self.path in ("/peer/v1/health", "/peer/v1/info"):
+        # Residual: /ready|/peer/v1/ready|/api/ready|/api/health were 404 while
+        # peer :18787 answers them (action health|ready).
+        path = self.path.split("?", 1)[0]
+        ready_paths = ("/ready", "/peer/v1/ready", "/api/ready")
+        health_paths = (
+            "/peer/v1/health",
+            "/health",
+            "/api/health",
+            "/",
+            "/mcp",
+        )
+        if path in ("/peer/v1/info",):
             info = peer_json("GET", "/peer/v1/info", timeout=5)
-            if self.path.endswith("/health"):
-                self._send(
-                    200,
-                    {
-                        "schema": "nanobot.peer_http.v1",
-                        "ok": True,
-                        "action": "health",
-                        "service": "blackcube-nanobot-http-mcp",
-                        "port": PORT,
-                        "peer": PEER,
-                        "braincube": bool(_BC),
-                        "info": info,
-                    },
-                )
-            else:
-                self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
+            self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
             return
-        if self.path in ("/", "/health", "/mcp"):
+        if path in ready_paths or path in health_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
-            self._send(200, {"ok": True, "service": "blackcube-nanobot-http-mcp", "port": PORT, "peer": PEER, "braincube": bool(_BC), "tools": [t["name"] for t in TOOLS], "info": info})
+            is_ready = path in ready_paths
+            body = {
+                "schema": "nanobot.peer_http.v1",
+                "ok": True,
+                "action": "ready" if is_ready else "health",
+                "service": "blackcube-nanobot-http-mcp",
+                "port": PORT,
+                "peer": PEER,
+                "braincube": bool(_BC),
+                "info": info,
+            }
+            if path in ("/", "/mcp", "/health"):
+                body["tools"] = [t["name"] for t in TOOLS]
+            self._send(200, body)
             return
         self._send(404, {"error": "not_found"})
 
