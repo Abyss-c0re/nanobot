@@ -128,6 +128,7 @@ cd ~/Dev/AI/nanobot
 | MCP 404 + bridge _missing action=error dual-wire | `2d2ae61`  |
 | MCP unknown_tool dual-wire + isError true | `03174d0`  |
 | MCP bad_id + braincube unknown_tool dual-wire | `bc975cb`  |
+| MCP peer transport fail dual-wire (isError) | `71ee0be`  |
 
 ## Anti-chaos
 
