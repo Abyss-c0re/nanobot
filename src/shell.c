@@ -399,7 +399,7 @@ void ng_cmd_result_free(ng_cmd_result *r) {
   r->output = NULL;
 }
 
-static int ng_shell_is_enabled(void) {
+int ng_shell_is_enabled(void) {
   char path[640];
   snprintf(path, sizeof path, "%s/shell_enabled", ng_workdir());
   FILE *f = fopen(path, "r");

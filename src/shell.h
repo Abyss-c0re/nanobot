@@ -13,6 +13,8 @@ ng_cmd_result ng_run_command(const char *command, int timeout_sec);
 ng_cmd_result ng_run_command_approved(const char *command, int timeout_sec);
 void ng_cmd_result_free(ng_cmd_result *r);
 int ng_command_denied(const char *command);
+/* 1 if shell_enabled (default on), 0 if shell_enabled file says off/disabled. */
+int ng_shell_is_enabled(void);
 /* Write default shell_denylist / shell_allow under NANOBOT_HOME if missing. */
 void ng_shell_ensure_policy_files(void);
 /*

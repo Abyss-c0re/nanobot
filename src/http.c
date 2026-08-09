@@ -1466,6 +1466,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_peer_err(cfd, 400, "need_prompt_or_command");
       free(req); close(cfd); return;
     }
+    /* Residual: shell-off still queued async shell jobs that finished
+     * exit=403 shell_disabled after poll — fail-fast at accept (sync shell
+     * still runs ng_run_command which returns the same token). */
+    {
+      int will_shell = (!strcmp(kind, "shell") || (cmd && cmd[0] && !prompt));
+      if (will_shell && !ng_shell_is_enabled()) {
+        free(prompt); free(cmd);
+        http_peer_err(cfd, 403, "shell_disabled");
+        free(req); close(cfd); return;
+      }
+    }
     /* Residual: prompt jobs queued without login gate; soft-expired access ran
      * agent turns that failed late (sync /peer/v1/prompt ensures first). Shell
      * jobs do not need browser session. */
