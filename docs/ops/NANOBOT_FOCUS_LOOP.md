@@ -131,6 +131,7 @@ cd ~/Dev/AI/nanobot
 | MCP peer transport fail dual-wire (isError) | `71ee0be`  |
 | MCP JSON-RPC parse/invalid body errors | `1e3e503`  |
 | MCP GET subagents proxy on :18790 | `1fc99f3`  |
+| MCP GET braincube + /live proxy on :18790 | `1944417`  |
 
 ## Anti-chaos
 
