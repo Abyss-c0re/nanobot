@@ -51,27 +51,6 @@ def peer_token() -> str:
         return ""
 
 
-def peer_json(method: str, path: str, payload: dict | None = None, timeout: float = 120) -> dict:
-    data = None if payload is None else json.dumps(payload).encode()
-    req = urllib.request.Request(f"{PEER}{path}", data=data, method=method)
-    req.add_header("Content-Type", "application/json")
-    tok = peer_token()
-    if tok:
-        req.add_header("X-Nanobot-Peer-Token", tok)
-        req.add_header("Authorization", f"Bearer {tok}")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode() or "{}")
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "replace")
-        try:
-            return json.loads(body)
-        except Exception:
-            return {"error": body or str(e), "http_status": e.code}
-    except Exception as e:
-        return {"error": str(e)}
-
-
 def _nonempty(s: object) -> str | None:
     """Residual: empty/whitespace MCP args still POSTed; peer 400 after RTT."""
     t = str(s or "").strip()
@@ -93,6 +72,36 @@ def _missing(err: str) -> dict:
         "llm_is_commander": False,
         "python": 0,
     }
+
+
+def peer_json(method: str, path: str, payload: dict | None = None, timeout: float = 120) -> dict:
+    data = None if payload is None else json.dumps(payload).encode()
+    req = urllib.request.Request(f"{PEER}{path}", data=data, method=method)
+    req.add_header("Content-Type", "application/json")
+    tok = peer_token()
+    if tok:
+        req.add_header("X-Nanobot-Peer-Token", tok)
+        req.add_header("Authorization", f"Bearer {tok}")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode() or "{}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        try:
+            return json.loads(body)
+        except Exception:
+            # Residual: bare {"error": body, "http_status": N} lacked dual-wire;
+            # tools/call isError stayed false (ok defaulted True).
+            out = _missing("peer_http_error")
+            out["http_status"] = e.code
+            if body:
+                out["detail"] = body[:512]
+            return out
+    except Exception as e:
+        # Residual: connection/timeout bare {"error": str(e)} → isError false.
+        out = _missing("peer_unreachable")
+        out["detail"] = str(e)[:512]
+        return out
 
 
 TOOLS = [
