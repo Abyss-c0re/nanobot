@@ -1687,7 +1687,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
       memcpy(ids[j], tmp, sizeof tmp);
     }
-    size_t cap = 256 + (size_t)nids * 280;
+    /* Per-entry budget: id/status/kind + optional ok/exit/error + poll. */
+    enum { JOB_IDX_ENTRY = 320 };
+    size_t cap = 256 + (size_t)nids * JOB_IDX_ENTRY;
     char *out = (char *)malloc(cap);
     if (!out) {
       http_peer_err(cfd, 500, "oom");
@@ -1700,7 +1702,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"jobs\","
       "\"count\":%d,\"jobs_keep\":%d,\"jobs\":[", nids, (int)NG_JOBS_KEEP);
     if (wr > 0) used += (size_t)wr;
-    for (int i = 0; i < nids && used + 280 < cap; i++) {
+    for (int i = 0; i < nids && used + JOB_IDX_ENTRY < cap; i++) {
       char mpath[700];
       snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, ids[i]);
       char *meta = ng_read_file(mpath, NULL);
@@ -1726,6 +1728,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
             }
           }
         }
+        /* Residual: job plate ok (done+exit!=0 → false, orphan → false) only on
+         * full poll; index had status/exit/error but mesh dual-wire still needed
+         * to re-derive success without the plate ok leaf. */
+        int has_ok = 0, ok_val = 0;
+        {
+          const char *op = strstr(meta, "\"ok\":");
+          if (op) {
+            op += 5;
+            while (*op == ' ' || *op == '\t') op++;
+            if (strncmp(op, "true", 4) == 0) {
+              has_ok = 1;
+              ok_val = 1;
+            } else if (strncmp(op, "false", 5) == 0) {
+              has_ok = 1;
+              ok_val = 0;
+            }
+          }
+        }
         if (s && s[0]) st = s;
         if (k && k[0]) kind = k;
         /* free later via copies — ng_json_get_string allocates */
@@ -1736,46 +1756,28 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         char *st_esc = ng_json_escape(st);
         char *k_esc = ng_json_escape(kind);
         char *e_esc = (e_own && e_own[0]) ? ng_json_escape(e_own) : NULL;
-        if (e_esc && e_esc[0] && has_exit) {
-          wr = snprintf(out + used, cap - used,
-            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
-            "\"exit\":%d,\"error\":\"%s\",\"poll\":\"/peer/v1/jobs/%s\"}",
-            i ? "," : "",
-            id_esc ? id_esc : ids[i],
-            st_esc ? st_esc : st,
-            k_esc ? k_esc : kind,
-            exit_code, e_esc,
-            id_esc ? id_esc : ids[i]);
-        } else if (e_esc && e_esc[0]) {
-          wr = snprintf(out + used, cap - used,
-            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
-            "\"error\":\"%s\",\"poll\":\"/peer/v1/jobs/%s\"}",
-            i ? "," : "",
-            id_esc ? id_esc : ids[i],
-            st_esc ? st_esc : st,
-            k_esc ? k_esc : kind,
-            e_esc,
-            id_esc ? id_esc : ids[i]);
-        } else if (has_exit) {
-          wr = snprintf(out + used, cap - used,
-            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
-            "\"exit\":%d,\"poll\":\"/peer/v1/jobs/%s\"}",
-            i ? "," : "",
-            id_esc ? id_esc : ids[i],
-            st_esc ? st_esc : st,
-            k_esc ? k_esc : kind,
-            exit_code,
-            id_esc ? id_esc : ids[i]);
-        } else {
-          wr = snprintf(out + used, cap - used,
-            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
-            "\"poll\":\"/peer/v1/jobs/%s\"}",
-            i ? "," : "",
-            id_esc ? id_esc : ids[i],
-            st_esc ? st_esc : st,
-            k_esc ? k_esc : kind,
-            id_esc ? id_esc : ids[i]);
-        }
+        /* Optional dual-wire leaves — one snprintf path (no 8-way branch). */
+        char extra[240];
+        size_t eu = 0;
+        extra[0] = 0;
+        if (has_ok && eu + 16 < sizeof extra)
+          eu += (size_t)snprintf(extra + eu, sizeof extra - eu,
+            ",\"ok\":%s", ok_val ? "true" : "false");
+        if (has_exit && eu + 24 < sizeof extra)
+          eu += (size_t)snprintf(extra + eu, sizeof extra - eu,
+            ",\"exit\":%d", exit_code);
+        if (e_esc && e_esc[0] && eu + 8 + strlen(e_esc) < sizeof extra)
+          eu += (size_t)snprintf(extra + eu, sizeof extra - eu,
+            ",\"error\":\"%s\"", e_esc);
+        wr = snprintf(out + used, cap - used,
+          "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\"%s,"
+          "\"poll\":\"/peer/v1/jobs/%s\"}",
+          i ? "," : "",
+          id_esc ? id_esc : ids[i],
+          st_esc ? st_esc : st,
+          k_esc ? k_esc : kind,
+          extra,
+          id_esc ? id_esc : ids[i]);
         if (wr > 0) used += (size_t)wr;
         free(id_esc); free(st_esc); free(k_esc); free(e_esc);
         free(st_own); free(k_own); free(e_own);
