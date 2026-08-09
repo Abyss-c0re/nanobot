@@ -295,14 +295,30 @@ def main() -> None:
             if name in ("nanobot_info", "host_info"):
                 out = http_json("GET", "/peer/v1/info", timeout=8)
             elif name in ("nanobot_job_status",):
-                out = http_json("GET", f"/peer/v1/jobs/{args.get('id', '')}", timeout=8)
+                # Residual: empty/ws id still hit peer poll path.
+                jid = _nonempty(args.get("id"))
+                if not jid:
+                    out = _missing("bad_id")
+                else:
+                    out = http_json("GET", f"/peer/v1/jobs/{jid}", timeout=8)
             elif name in ("nanobot_control",):
-                out = http_json(
-                    "POST",
-                    "/peer/v1/control",
-                    {"service": args.get("service", ""), "action": args.get("action", "")},
-                    timeout=8,
-                )
+                # Residual: blank action reached peer and once flipped shell off
+                # (HTTP now 400); fail-fast dual-wire before POST.
+                service = _nonempty(args.get("service"))
+                action = _nonempty(args.get("action"))
+                if (
+                    not service
+                    or not action
+                    or action not in ("on", "off", "enable", "disable")
+                ):
+                    out = _missing("need_service_action")
+                else:
+                    out = http_json(
+                        "POST",
+                        "/peer/v1/control",
+                        {"service": service, "action": action},
+                        timeout=8,
+                    )
             elif name in ("nanobot_prompt", "host_prompt"):
                 prompt = _nonempty(args.get("prompt"))
                 if not prompt:
