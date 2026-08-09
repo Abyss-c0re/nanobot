@@ -98,17 +98,37 @@ fi
 
 # Match lab BlackCube flags: LAN + Grok CLI import. Settings PORT applies when
 # CLI port equals default 8787; pass explicit settings port to be honest.
-nohup "$BIN" --home "$HOME_NB" --port "$PORT" --lan --import-grok-cli \
-  >>"$LOG" 2>&1 &
-new=$!
-echo "cool_restart_peer: started pid=$new" | tee -a "$LOG"
-echo "$new" >"$HOME_NB/nanobot.pid"
+start_peer() {
+  nohup "$BIN" --home "$HOME_NB" --port "$PORT" --lan --import-grok-cli \
+    >>"$LOG" 2>&1 &
+  new=$!
+  echo "cool_restart_peer: started pid=$new" | tee -a "$LOG"
+  echo "$new" >"$HOME_NB/nanobot.pid"
+}
 
-ok=0
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-  if health_ok; then ok=1; break; fi
-  sleep 0.4
-done
+wait_health() {
+  ok=0
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    if health_ok; then ok=1; break; fi
+    sleep 0.4
+  done
+}
+
+start_peer
+wait_health
+
+# Residual (pre-f699675 bind-probe / TIME_WAIT): binary can exit 0 with
+# already_listening while nothing accepts — start pid dies, health fails.
+# One retry after short settle; live peer (connect-probe) skips retry.
+if [[ "$ok" != "1" ]]; then
+  if ! kill -0 "$new" 2>/dev/null; then
+    echo "cool_restart_peer: start pid $new exited before health; retry once" | tee -a "$LOG"
+    sleep 1
+    reap_home_orphans ""
+    start_peer
+    wait_health
+  fi
+fi
 
 if [[ "$ok" != "1" ]]; then
   echo "cool_restart_peer: health fail after start" | tee -a "$LOG" >&2

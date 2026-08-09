@@ -77,6 +77,7 @@ cd ~/Dev/AI/nanobot
 | Mesh dir ensure on start | `f55a123` |
 | Jobs GC after done + poll-by-id | `f699675` |
 | already_listening connect-probe (not TIME_WAIT) | `f699675` |
+| cool_restart retry if start pid exits pre-health | this cycle |
 
 ## Anti-chaos
 
