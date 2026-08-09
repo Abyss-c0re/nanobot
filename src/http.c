@@ -1679,6 +1679,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
     {
       int need_browser = agent && ng_agent_needs_browser_session(agent);
+      /* Residual: soft-expired access failed login gate without ensure (info fixed). */
+      if (need_browser && session && !ng_session_valid(session)
+          && !session->login_pending)
+        (void)ng_session_ensure(session);
       if (need_browser && (!session || !ng_session_valid(session))) {
         http_peer_err_flag(cfd, 401, "need_login", "need_login");
         free(req); close(cfd); return;
@@ -1689,6 +1693,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *prompt = ng_json_get_string(body, "prompt");
     if (!prompt) prompt = ng_json_get_string(body, "message");
     if (!prompt) prompt = ng_json_get_string(body, "q");
+    /* Residual: "" / whitespace ran agent empty_prompt plate nested in ok:true. */
+    if (prompt) {
+      const char *p = prompt;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(prompt);
+        prompt = NULL;
+      }
+    }
     if (!prompt) {
       http_peer_err(cfd, 400, "missing_prompt");
       free(req); close(cfd); return;
