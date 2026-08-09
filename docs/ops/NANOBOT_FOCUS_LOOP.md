@@ -94,6 +94,7 @@ cd ~/Dev/AI/nanobot
 | empty/whitespace peer shell → missing_command | `875f3b7` |
 | MCP ready/health aliases on :18790 | `82a1c28` |
 | cool_restart restages newer MCP | `b61c39b` |
+| session_ensure on /peer/v1/info signed_in | `de7d51c` |
 
 ## Anti-chaos
 
