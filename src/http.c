@@ -1448,9 +1448,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       free(req); close(cfd); return;
     }
     size_t used = 0;
+    /* Residual: health/info expose jobs_keep; jobs index only had count — mesh
+     * probes could not compare retain cap without hardcoding NG_JOBS_KEEP. */
     int wr = snprintf(out + used, cap - used,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"jobs\","
-      "\"count\":%d,\"jobs\":[", nids);
+      "\"count\":%d,\"jobs_keep\":%d,\"jobs\":[", nids, (int)NG_JOBS_KEEP);
     if (wr > 0) used += (size_t)wr;
     for (int i = 0; i < nids && used + 200 < cap; i++) {
       char mpath[700];
