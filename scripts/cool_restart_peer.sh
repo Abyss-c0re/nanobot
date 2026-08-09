@@ -53,10 +53,10 @@ health_ok() {
     | grep -q '"ok":true'
 }
 
-# Cap restart log growth (thrash history).
+# Cap restart log growth (thrash history). Align with hub events 256KiB.
 if [[ -f "$LOG" ]]; then
   sz=$(wc -c <"$LOG" 2>/dev/null || echo 0)
-  if [[ "${sz:-0}" -gt 524288 ]]; then
+  if [[ "${sz:-0}" -gt 262144 ]]; then
     mv -f "$LOG" "${LOG}.1" 2>/dev/null || true
   fi
 fi
@@ -162,6 +162,61 @@ curl -fsS -m 3 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1 \
 live=$(listen_pid || true)
 # Post-start: drop any same-home non-listeners (race residual).
 reap_home_orphans "${live:-$new}"
+
+# Residual: MCP HTTP script updates needed manual kill of :18790 (stale pidfile /
+# dual process). If repo script is newer than staged mcp_lan, install + restart.
+MCP_PORT="${NANOBOT_MCP_PORT:-18790}"
+REPO_MCP="${NANOBOT_REPO_MCP:-$REPO_ROOT/scripts/nanobot_peer_http_mcp.py}"
+STAGE_MCP="${NANOBOT_MCP_STAGE:-$HOME_NB/mcp_lan/nanobot_peer_http_mcp.py}"
+MCP_LOG="${HOME_NB}/mcp_lan/http_mcp.log"
+MCP_PIDF="${HOME_NB}/mcp_lan/http_mcp.pid"
+
+mcp_listen_pid() {
+  ss -ltnp 2>/dev/null | awk -v p=":$MCP_PORT" '
+    $1 ~ /LISTEN/ && $4 ~ (p "$") {
+      if (match($0, /pid=[0-9]+/)) {
+        print substr($0, RSTART+4, RLENGTH-4)
+        exit
+      }
+    }'
+}
+
+if [[ -f "$REPO_MCP" ]]; then
+  if [[ ! -f "$STAGE_MCP" ]] || [[ "$REPO_MCP" -nt "$STAGE_MCP" ]]; then
+    mkdir -p "$(dirname "$STAGE_MCP")"
+    cp -f "$REPO_MCP" "$STAGE_MCP"
+    chmod +x "$STAGE_MCP" 2>/dev/null || true
+    echo "cool_restart_peer: installed newer MCP $REPO_MCP -> $STAGE_MCP" | tee -a "$LOG"
+    mold=$(mcp_listen_pid || true)
+    if [[ -n "${mold:-}" ]]; then
+      echo "cool_restart_peer: stop MCP pid=$mold (SIGTERM)" | tee -a "$LOG"
+      kill -TERM "$mold" 2>/dev/null || true
+      for _ in $(seq 1 15); do
+        kill -0 "$mold" 2>/dev/null || break
+        sleep 0.2
+      done
+      kill -0 "$mold" 2>/dev/null && kill -9 "$mold" 2>/dev/null || true
+      sleep 0.3
+    fi
+    nohup /usr/bin/python3 "$STAGE_MCP" >>"$MCP_LOG" 2>&1 &
+    echo $! >"$MCP_PIDF"
+    echo "cool_restart_peer: started MCP pid=$! port=$MCP_PORT" | tee -a "$LOG"
+    mcp_ok=0
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      if curl -fsS -m 2 "http://127.0.0.1:${MCP_PORT}/peer/v1/health" 2>/dev/null \
+           | grep -q '"ok"'; then
+        mcp_ok=1
+        break
+      fi
+      sleep 0.3
+    done
+    if [[ "$mcp_ok" == "1" ]]; then
+      echo "cool_restart_peer: MCP /peer/v1/health ok" | tee -a "$LOG"
+    else
+      echo "cool_restart_peer: MCP health not yet (peer ok; MCP optional)" | tee -a "$LOG"
+    fi
+  fi
+fi
 
 echo "cool_restart_peer: OK port=$PORT pid=${live:-$new}" | tee -a "$LOG"
 exit 0
