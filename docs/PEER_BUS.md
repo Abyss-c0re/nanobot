@@ -24,9 +24,10 @@ Listen address: **all interfaces** (`0.0.0.0`). Restrict with a firewall if the 
 | `/peer/v1/control` | POST | **yes** |
 | `/api/*` (chat/settings/…) | various | yes off-loopback; loopback `127.0.0.1` may skip for local tooling |
 
-Header:
+Header (any one):
 ```http
 X-Nanobot-Peer-Token: <token>
+Authorization: Bearer <token>
 ```
 or JSON field `peer_token`.
 

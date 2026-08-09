@@ -305,6 +305,30 @@ static int require_peer_auth(int cfd, const char *req, int allow_loopback) {
       if (nb_ct_eq(h, nl, need, strlen(need))) ok = 1;
     }
   }
+  /* Residual: mesh/HTTP clients often send only Authorization: Bearer. */
+  if (!ok) {
+    const char *line = NULL;
+    if (!strncmp(req, "Authorization:", 14) || !strncmp(req, "authorization:", 14))
+      line = req;
+    else {
+      const char *p = strstr(req, "\r\nAuthorization:");
+      if (!p) p = strstr(req, "\r\nauthorization:");
+      if (p) line = p + 2;
+    }
+    if (line) {
+      const char *v = strchr(line, ':');
+      if (v) {
+        v++;
+        while (*v == ' ' || *v == '\t') v++;
+        if (!strncmp(v, "Bearer ", 7) || !strncmp(v, "bearer ", 7)) {
+          v += 7;
+          while (*v == ' ' || *v == '\t') v++;
+          size_t nl = strcspn(v, "\r\n");
+          if (nb_ct_eq(v, nl, need, strlen(need))) ok = 1;
+        }
+      }
+    }
+  }
   if (!ok) {
     char *body0 = strstr(req, "\r\n\r\n");
     body0 = body0 ? body0 + 4 : "";
