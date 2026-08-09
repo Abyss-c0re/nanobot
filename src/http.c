@@ -1469,11 +1469,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     char *ack = NULL;
     char *id_esc = ng_json_escape(id);
+    /* Residual: job_queued omitted kind; mesh had to poll meta to learn
+     * prompt|shell|watcher while hub events already carried it. */
     asprintf(&ack,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job_queued\","
-      "\"id\":\"%s\",\"status\":\"queued\",\"poll\":\"/peer/v1/jobs/%s\","
+      "\"id\":\"%s\",\"status\":\"queued\",\"kind\":\"%s\","
+      "\"poll\":\"/peer/v1/jobs/%s\","
       NG_PEER_HTTP_DUAL_WIRE "}",
-      id_esc ? id_esc : "", id_esc ? id_esc : "");
+      id_esc ? id_esc : "", kind, id_esc ? id_esc : "");
     free(id_esc);
     http_response(cfd, 202, "application/json", ack ? ack : "{}", ack ? strlen(ack) : 2);
     free(prompt); free(cmd); free(ack);
