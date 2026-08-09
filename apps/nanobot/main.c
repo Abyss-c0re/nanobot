@@ -196,7 +196,7 @@ static void print_listen_plate(int port, int bind_lan, int hub_mode, int port_ou
           "\"host\":\"%s\",\"port\":%d,\"bind\":\"%s\","
           "\"control_plane\":\"peer_http\",\"mcp\":\"native_stdio\","
           "\"endpoints\":[\"/peer/v1/health\",\"/health\",\"/ready\","
-          "\"/peer/v1/info\",\"/peer/v1/prompt\","
+          "\"/peer/v1/ready\",\"/peer/v1/info\",\"/peer/v1/prompt\","
           "\"/peer/v1/shell\",\"/peer/v1/jobs\"],"
           "\"www\":%s,\"www_root\":\"%s\","
           "\"hub\":%s,\"port_out\":%d,"

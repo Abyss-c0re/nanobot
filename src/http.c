@@ -1079,14 +1079,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   /* ---- Peer bus for other agents / sessions (lab/ops; product bus = SMX2) ---- */
   /* /health + /ready: mesh focus loops probe these; same plate, distinct action.
-   * Residual: /ready reused action=health → probes could not tell paths apart. */
+   * Residual: /ready reused action=health → probes could not tell paths apart.
+   * Residual: /peer/v1/ready was 404 while bare /ready worked — peer-namespace alias. */
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
                  strcmp(path, "/health") == 0 ||
-                 strcmp(path, "/ready") == 0)) {
+                 strcmp(path, "/ready") == 0 ||
+                 strcmp(path, "/peer/v1/ready") == 0)) {
     char body[640];
     char *ver = ng_json_escape(NG_VERSION);
     int jn = jobs_meta_count();
-    const char *act = (strcmp(path, "/ready") == 0) ? "ready" : "health";
+    int is_ready = (strcmp(path, "/ready") == 0 ||
+                    strcmp(path, "/peer/v1/ready") == 0);
+    const char *act = is_ready ? "ready" : "health";
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\",\"role\":\"session-bus\","
@@ -1104,7 +1108,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0)) {
     int signed_in = session && ng_session_valid(session);
-    char body[960];
+    char body[1024];
     char *ver = ng_json_escape(NG_VERSION);
     char *md = ng_json_escape(agent && agent->model ? agent->model : "");
     char *wd = ng_json_escape(ng_workdir());
@@ -1119,6 +1123,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/peer/v1/health\","
       "\"/health\","
       "\"/ready\","
+      "\"/peer/v1/ready\","
       "\"/peer/v1/info\","
       "\"/peer/v1/prompt\","
       "\"/peer/v1/shell\","
