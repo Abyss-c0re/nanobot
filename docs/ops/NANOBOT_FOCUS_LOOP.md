@@ -108,7 +108,7 @@ cd ~/Dev/AI/nanobot
 | async jobs unknown kind → unknown_kind | `9ac1baa` |
 | orphan running/queued jobs → error on listen | `29d5e7b`  |
 | async job kind whitespace strip | `415266b`  |
-| MCP start_job watcher empty + kind/service fail-fast | *(this push)* |
+| MCP start_job watcher empty + kind/service fail-fast | `4498181`  |
 
 ## Anti-chaos
 
