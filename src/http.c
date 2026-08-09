@@ -297,11 +297,14 @@ static void http_text(int fd, int code, const char *body) {
   http_response(fd, code, "text/plain", body, body ? strlen(body) : 0);
 }
 
+/* Residual: error plates had schema/ok/error dual-wire but no action leaf —
+ * mesh could not classify fail responses like health/info/models. */
 static void http_peer_err(int fd, int code, const char *error) {
-  char body[384];
+  char body[400];
   const char *e = (error && error[0]) ? error : "peer_failed";
   snprintf(body, sizeof body,
-           "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"error\":\"%s\","
+           "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+           "\"action\":\"error\",\"error\":\"%s\","
            NG_PEER_HTTP_DUAL_WIRE "}",
            e);
   http_json(fd, code, body);
@@ -310,11 +313,12 @@ static void http_peer_err(int fd, int code, const char *error) {
 /* Same plate with one boolean flag leaf (need_peer_token / need_login). */
 static void http_peer_err_flag(int fd, int code, const char *error,
                                const char *flag_key) {
-  char body[420];
+  char body[440];
   const char *e = (error && error[0]) ? error : "peer_failed";
   const char *f = (flag_key && flag_key[0]) ? flag_key : "flag";
   snprintf(body, sizeof body,
-           "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"error\":\"%s\","
+           "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+           "\"action\":\"error\",\"error\":\"%s\","
            "\"%s\":true," NG_PEER_HTTP_DUAL_WIRE "}",
            e, f);
   http_json(fd, code, body);
