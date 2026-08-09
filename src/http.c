@@ -994,7 +994,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0)) {
     int signed_in = session && ng_session_valid(session);
-    char body[768];
+    char body[896];
     char *ver = ng_json_escape(NG_VERSION);
     char *md = ng_json_escape(agent && agent->model ? agent->model : "");
     char *wd = ng_json_escape(ng_workdir());
@@ -1002,6 +1002,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"info\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\","
       "\"signed_in\":%s,\"model\":\"%s\",\"workdir\":\"%s\","
+      "\"pid\":%d,\"started\":%ld,"
       "\"tools\":[\"prompt\",\"shell\"],"
       "\"endpoints\":["
       "\"/peer/v1/health\","
@@ -1009,13 +1010,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/ready\","
       "\"/peer/v1/info\","
       "\"/peer/v1/prompt\","
-      "\"/peer/v1/shell\""
+      "\"/peer/v1/shell\","
+      "\"/peer/v1/jobs\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "",
       signed_in ? "true" : "false",
       md ? md : "",
-      wd ? wd : "");
+      wd ? wd : "",
+      (int)(g_serve_pid ? g_serve_pid : getpid()),
+      (long)g_serve_started);
     free(ver); free(md); free(wd);
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
