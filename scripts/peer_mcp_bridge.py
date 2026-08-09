@@ -168,6 +168,27 @@ def http_json(method: str, path: str, payload: dict | None = None, timeout: floa
         return {"error": str(e)}
 
 
+def _nonempty(s: object) -> str | None:
+    """Residual: empty/whitespace MCP args still POSTed; peer 400 after RTT."""
+    t = str(s or "").strip()
+    return t if t else None
+
+
+def _missing(err: str) -> dict:
+    return {
+        "schema": "nanobot.peer_http.v1",
+        "ok": False,
+        "error": err,
+        "product_wire": "smx2",
+        "peer_http": "lab_ops_only",
+        "peer_http_is_product_bus": False,
+        "share": "state_matrix_only",
+        "hold_flash": 1,
+        "llm_is_commander": False,
+        "python": 0,
+    }
+
+
 def start_job(kind: str, prompt: str = "", command: str = "") -> dict:
     """Fire-and-poll: return immediately with job id, then optional short wait."""
     body: dict = {"kind": kind}
@@ -175,6 +196,8 @@ def start_job(kind: str, prompt: str = "", command: str = "") -> dict:
         body["prompt"] = prompt
     if command:
         body["command"] = command
+    if not body.get("prompt") and not body.get("command"):
+        return _missing("need_prompt_or_command")
     ack = http_json("POST", "/peer/v1/jobs", body, timeout=8)
     jid = ack.get("id")
     if not jid:
@@ -281,22 +304,28 @@ def main() -> None:
                     timeout=8,
                 )
             elif name in ("nanobot_prompt", "host_prompt"):
-                if sync:
+                prompt = _nonempty(args.get("prompt"))
+                if not prompt:
+                    out = _missing("missing_prompt")
+                elif sync:
                     out = http_json(
-                        "POST", "/peer/v1/prompt", {"prompt": args.get("prompt", "")}, timeout=180
+                        "POST", "/peer/v1/prompt", {"prompt": prompt}, timeout=180
                     )
                 else:
-                    out = start_job("prompt", prompt=args.get("prompt", ""))
+                    out = start_job("prompt", prompt=prompt)
             elif name in ("nanobot_shell", "host_shell"):
-                if sync:
+                command = _nonempty(args.get("command"))
+                if not command:
+                    out = _missing("missing_command")
+                elif sync:
                     out = http_json(
                         "POST",
                         "/peer/v1/shell",
-                        {"command": args.get("command", "")},
+                        {"command": command},
                         timeout=120,
                     )
                 else:
-                    out = start_job("shell", command=args.get("command", ""))
+                    out = start_job("shell", command=command)
             else:
                 out = {"error": f"unknown tool {name}"}
             text = json.dumps(out, indent=2)

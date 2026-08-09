@@ -72,6 +72,27 @@ def peer_json(method: str, path: str, payload: dict | None = None, timeout: floa
         return {"error": str(e)}
 
 
+def _nonempty(s: object) -> str | None:
+    """Residual: empty/whitespace MCP args still POSTed; peer 400 after RTT."""
+    t = str(s or "").strip()
+    return t if t else None
+
+
+def _missing(err: str) -> dict:
+    return {
+        "schema": "nanobot.peer_http.v1",
+        "ok": False,
+        "error": err,
+        "product_wire": "smx2",
+        "peer_http": "lab_ops_only",
+        "peer_http_is_product_bus": False,
+        "share": "state_matrix_only",
+        "hold_flash": 1,
+        "llm_is_commander": False,
+        "python": 0,
+    }
+
+
 TOOLS = [
     {
         "name": "blackcube_nanobot_prompt",
@@ -132,19 +153,27 @@ def handle_rpc(msg: dict) -> dict:
         if name == "blackcube_nanobot_info":
             out = peer_json("GET", "/peer/v1/info", timeout=10)
         elif name == "blackcube_nanobot_prompt":
-            out = peer_json(
-                "POST",
-                "/peer/v1/prompt",
-                {"prompt": str(args.get("prompt") or "")},
-                timeout=180,
-            )
+            prompt = _nonempty(args.get("prompt"))
+            if not prompt:
+                out = _missing("missing_prompt")
+            else:
+                out = peer_json(
+                    "POST",
+                    "/peer/v1/prompt",
+                    {"prompt": prompt},
+                    timeout=180,
+                )
         elif name == "blackcube_nanobot_shell":
-            out = peer_json(
-                "POST",
-                "/peer/v1/shell",
-                {"command": str(args.get("command") or "")},
-                timeout=120,
-            )
+            command = _nonempty(args.get("command"))
+            if not command:
+                out = _missing("missing_command")
+            else:
+                out = peer_json(
+                    "POST",
+                    "/peer/v1/shell",
+                    {"command": command},
+                    timeout=120,
+                )
         elif _BC is not None and name == "braincube_info":
             out = _BC.info()
         elif _BC is not None and name == "braincube_live":
