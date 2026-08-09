@@ -784,17 +784,19 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       else if (strstr(raw, "Invalid") || strstr(raw, "error"))
         hint_tok = "upstream_error";
     }
+    /* Residual: models plate omitted action leaf while health/info/jobs/task
+     * all set action — mesh dual-wire could not identify the response class. */
     if (ok) {
       if (hint_tok) {
         asprintf(&out,
-          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"models\","
           "\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s,\"error\":\"%s\","
           NG_PEER_HTTP_DUAL_WIRE "}",
           base_e ? base_e : "", cur ? cur : "",
           ids && ids[0] == '[' ? ids : "[]", hint_tok);
       } else {
         asprintf(&out,
-          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"models\","
           "\"base_url\":\"%s\",\"model\":\"%s\",\"models\":%s,"
           NG_PEER_HTTP_DUAL_WIRE "}",
           base_e ? base_e : "", cur ? cur : "",
@@ -802,7 +804,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
     } else {
       asprintf(&out,
-        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,\"action\":\"models\","
         "\"base_url\":\"%s\",\"model\":\"%s\",\"models\":[],\"error\":\"%s\","
         NG_PEER_HTTP_DUAL_WIRE "}",
         base_e ? base_e : "", cur ? cur : "",

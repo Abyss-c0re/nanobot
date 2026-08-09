@@ -123,6 +123,7 @@ cd ~/Dev/AI/nanobot
 | peer_mcp_bridge start_job running dual-wire plate | `2a7f98e`  |
 | task/models trailing slash aliases | `eeabe10`  |
 | MCP :18790 control/task/models proxy | `95c2c75`  |
+| models plate action leaf | `ab33888`  |
 
 ## Anti-chaos
 
