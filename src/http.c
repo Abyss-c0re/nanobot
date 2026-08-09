@@ -1193,14 +1193,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0)) {
+  /* Residual: /api/info and trailing slash 404 while health/jobs already
+   * accept /api + slash aliases — mesh OpenAPI-ish probes hit not_found. */
+  if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0 ||
+                 strcmp(path, "/peer/v1/info/") == 0 || strcmp(path, "/peer/v1/hello/") == 0 ||
+                 strcmp(path, "/api/info") == 0 || strcmp(path, "/api/info/") == 0 ||
+                 strcmp(path, "/api/hello") == 0 || strcmp(path, "/api/hello/") == 0)) {
     /* Residual: info used raw ng_session_valid without ensure — soft-expired
      * access_token reported signed_in=false while /api/auth ensure → true. */
     if (session && agent && ng_agent_needs_browser_session(agent)
         && !ng_session_valid(session) && !session->login_pending)
       (void)ng_session_ensure(session);
     int signed_in = session && ng_session_valid(session);
-    char body[1024];
+    /* Room for expanded dual-wire endpoints list (/api/* + control). */
+    char body[1536];
     char *ver = ng_json_escape(NG_VERSION);
     char *md = ng_json_escape(agent && agent->model ? agent->model : "");
     char *wd = ng_json_escape(ng_workdir());
@@ -1219,9 +1225,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/peer/v1/ready\","
       "\"/api/ready\","
       "\"/peer/v1/info\","
+      "\"/api/info\","
       "\"/peer/v1/prompt\","
+      "\"/api/prompt\","
       "\"/peer/v1/shell\","
-      "\"/peer/v1/jobs\""
+      "\"/api/shell\","
+      "\"/peer/v1/jobs\","
+      "\"/api/jobs\","
+      "\"/peer/v1/control\","
+      "\"/api/control\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "",
@@ -1232,12 +1244,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (long)g_serve_started,
       jn, (int)NG_JOBS_KEEP);
     free(ver); free(md); free(wd);
+    if (n < 0 || n >= (int)sizeof body) {
+      http_peer_err(cfd, 500, "oom");
+      free(req); close(cfd); return;
+    }
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
   }
 
-  /* Control plane: shell / watcher / ui — persisted in $HOME/settings */
-  if (is_get && strcmp(path, "/peer/v1/control") == 0) {
+  /* Control plane: shell / watcher / ui — persisted in $HOME/settings.
+   * Residual: /api/control and trailing slash 404 (jobs/health already aliased). */
+  if (is_get && (strcmp(path, "/peer/v1/control") == 0 || strcmp(path, "/peer/v1/control/") == 0 ||
+                 strcmp(path, "/api/control") == 0 || strcmp(path, "/api/control/") == 0)) {
     char sp[640], wp[640];
     snprintf(sp, sizeof sp, "%s/shell_enabled", ng_workdir());
     snprintf(wp, sizeof wp, "%s/watcher_enabled", ng_workdir());
@@ -1291,7 +1309,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_post && strcmp(path, "/peer/v1/control") == 0) {
+  if (is_post && (strcmp(path, "/peer/v1/control") == 0 || strcmp(path, "/peer/v1/control/") == 0 ||
+                  strcmp(path, "/api/control") == 0 || strcmp(path, "/api/control/") == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";
@@ -2017,7 +2036,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(j); free(req); close(cfd); return;
   }
 
-  if (is_post && strcmp(path, "/peer/v1/prompt") == 0) {
+  /* Residual: /api/prompt and trailing slash 404 while /api/jobs already works. */
+  if (is_post && (strcmp(path, "/peer/v1/prompt") == 0 || strcmp(path, "/peer/v1/prompt/") == 0 ||
+                  strcmp(path, "/api/prompt") == 0 || strcmp(path, "/api/prompt/") == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
 
     {
@@ -2063,7 +2084,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_post && strcmp(path, "/peer/v1/shell") == 0) {
+  /* Residual: /api/shell and trailing slash 404 (not /api/shell/approvals). */
+  if (is_post && (strcmp(path, "/peer/v1/shell") == 0 || strcmp(path, "/peer/v1/shell/") == 0 ||
+                  strcmp(path, "/api/shell") == 0 || strcmp(path, "/api/shell/") == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
 
     char *body = strstr(req, "\r\n\r\n");
