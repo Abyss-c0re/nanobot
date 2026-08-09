@@ -79,7 +79,7 @@ cd ~/Dev/AI/nanobot
 | already_listening connect-probe (not TIME_WAIT) | `f699675` |
 | cool_restart retry if start pid exits pre-health | `eb51ed9` |
 | peer_mcp_bridge settings PORT fallback | `3a49722` |
-| peer_mcp_bridge prefer loopback if listening | this cycle |
+| peer_mcp_bridge prefer loopback if listening | `a4614d1` |
 
 ## Anti-chaos
 
