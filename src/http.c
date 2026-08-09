@@ -1364,6 +1364,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     else if (kind_raw && !strcmp(kind_raw, "watcher")) kind = "watcher";
     else if (kind_raw && !strcmp(kind_raw, "prompt")) kind = "prompt";
     else if (!kind_raw && cmd && !prompt) kind = "shell";
+    /* Residual: unknown kind (e.g. "nope") fell through as prompt and burned
+     * an agent turn when a prompt body was present. */
+    else if (kind_raw && kind_raw[0]) {
+      free(kind_raw); free(prompt); free(cmd);
+      http_peer_err(cfd, 400, "unknown_kind");
+      free(req); close(cfd); return;
+    }
     free(kind_raw);
     /* Residual: kind=watcher only flips watcher_enabled; empty payload is valid
      * (prompt/shell still need work). Whitespace already nulled above. */
