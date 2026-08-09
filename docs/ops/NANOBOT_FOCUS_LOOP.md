@@ -104,6 +104,7 @@ cd ~/Dev/AI/nanobot
 | control blank/unknown action → need_service_action | `4c2a04f` |
 | job_queued dual-wire kind leaf | `22f24f1` |
 | peer_mcp_bridge control/job_status empty fail-fast | `ac50990` |
+| empty watcher async jobs allowed | `579fc86` |
 
 ## Anti-chaos
 
