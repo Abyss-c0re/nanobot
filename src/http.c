@@ -969,7 +969,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* ---- Peer bus for other agents / sessions (lab/ops; product bus = SMX2) ---- */
-  if (is_get && strcmp(path, "/peer/v1/health") == 0) {
+  /* /health + /ready: mesh focus loops probe these; keep alias of /peer/v1/health. */
+  if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
+                 strcmp(path, "/health") == 0 ||
+                 strcmp(path, "/ready") == 0)) {
     char body[384];
     char *ver = ng_json_escape(NG_VERSION);
     int n = snprintf(body, sizeof body,
@@ -995,6 +998,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"tools\":[\"prompt\",\"shell\"],"
       "\"endpoints\":["
       "\"/peer/v1/health\","
+      "\"/health\","
+      "\"/ready\","
       "\"/peer/v1/info\","
       "\"/peer/v1/prompt\","
       "\"/peer/v1/shell\""
