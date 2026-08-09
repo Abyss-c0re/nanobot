@@ -119,7 +119,7 @@ cd ~/Dev/AI/nanobot
 | jobs index ok leaf (+ exit/error unified) | `71b2c0c`  |
 | jobs path trailing slash + /api/jobs aliases | `7f1fabe`  |
 | peer path /api + slash aliases (info/prompt/shell/control) | `bbbcd78`  |
-| MCP :18790 info/jobs/health path aliases + slash | `2478ea0`  |
+| MCP :18790 info/jobs/health path aliases + slash | `79ef715`  |
 
 ## Anti-chaos
 
