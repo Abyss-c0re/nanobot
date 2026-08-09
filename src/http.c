@@ -1568,14 +1568,22 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       ng_hub_event("job.running", "id", id, "kind", kind);
       char *payload = ng_read_file(pp, NULL);
       if (!strcmp(kind, "shell") || (cmd && cmd[0] && !prompt)) {
-        ng_cmd_result cr = ng_run_command(payload ? payload : "",
-          agent->timeout_sec > 0 ? agent->timeout_sec : 60);
+        /* Residual: async shell used full agent CMD_TIMEOUT (600s) so mesh
+         * adb pulls stacked non-listening job workers until deadline. */
+        int job_to = agent && agent->timeout_sec > 0 ? agent->timeout_sec
+                                                    : ng_cmd_timeout_sec();
+        if (job_to <= 0 || job_to > NG_JOB_SHELL_TIMEOUT_SEC)
+          job_to = NG_JOB_SHELL_TIMEOUT_SEC;
+        ng_cmd_result cr = ng_run_command(payload ? payload : "", job_to);
         char *esc = ng_json_escape(cr.output ? cr.output : "");
         /* Residual: shell_disabled/personal_acl nested JSON only in output;
          * mesh had to parse nested shell.v1 for a machine error token. */
         char *err_tok = NULL;
         if (cr.output && cr.output[0] == '{')
           err_tok = ng_json_get_string(cr.output, "error");
+        /* Residual: wall timeout was exit=124 only — no machine error leaf. */
+        if ((!err_tok || !err_tok[0]) && cr.exit_code == 124)
+          err_tok = strdup("timeout");
         char *jb = NULL;
         if (err_tok && err_tok[0]) {
           char *ee = ng_json_escape(err_tok);

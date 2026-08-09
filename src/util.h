@@ -15,6 +15,9 @@
 /* Desktop defaults — long agent runs. Override with env (see getters). */
 #define NG_MAX_TURNS 48
 #define NG_CMD_TIMEOUT_SEC 600
+/* Peer async shell jobs (POST /jobs kind=shell): mesh adb pulls must not stack
+ * 600s workers every few minutes. Agent interactive shell keeps CMD_TIMEOUT. */
+#define NG_JOB_SHELL_TIMEOUT_SEC 120
 #define NG_HTTP_TIMEOUT_SEC 600
 #define NG_HTTP_MAX_CHILDREN 24
 #define NG_OUT_MAX (64 * 1024)

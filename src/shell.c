@@ -541,6 +541,10 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
     dup2(pipefd[1], STDOUT_FILENO);
     dup2(pipefd[1], STDERR_FILENO);
     close(pipefd[1]);
+    /* Own process group so timeout can SIGKILL adb/children, not only sh. */
+    if (setpgid(0, 0) != 0) {
+      /* best-effort; parent still kill(pid) */
+    }
     setenv("NANOBOT", "1", 1);
     /* GUI apps need a session bus / display — inherit, never clear */
     {
@@ -597,7 +601,13 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
   time_t deadline = time(NULL) + timeout_sec;
   int timed_out = 0;
   while (1) {
-    if (time(NULL) > deadline) { timed_out = 1; kill(pid, SIGKILL); break; }
+    if (time(NULL) > deadline) {
+      timed_out = 1;
+      /* Residual: kill(sh) left hung adb children under mesh pulls. */
+      kill(-pid, SIGKILL);
+      kill(pid, SIGKILL);
+      break;
+    }
     struct pollfd pfd = { .fd = pipefd[0], .events = POLLIN };
     int pr = poll(&pfd, 1, 200);
     if (pr < 0 && errno == EINTR) continue;
