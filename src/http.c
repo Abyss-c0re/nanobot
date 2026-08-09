@@ -32,6 +32,70 @@
 static time_t g_serve_started = 0;
 static pid_t g_serve_pid = 0;
 
+/* Cap finished job artifacts under $HOME/jobs (mesh leaves many done/*.json).
+ * Never unlink queued/running. Ids are time-prefixed so lexicographic order
+ * is chronological. */
+enum { NG_JOBS_KEEP = 48, NG_JOBS_SCAN = 256 };
+
+static void jobs_gc(const char *jdir) {
+  if (!jdir || !jdir[0]) return;
+  DIR *d = opendir(jdir);
+  if (!d) return;
+  char ids[NG_JOBS_SCAN][32];
+  int n = 0;
+  struct dirent *de;
+  while ((de = readdir(d)) != NULL && n < NG_JOBS_SCAN) {
+    const char *name = de->d_name;
+    size_t len = strlen(name);
+    if (len < 6 || strcmp(name + len - 5, ".json") != 0) continue;
+    size_t idlen = len - 5;
+    if (idlen >= sizeof ids[0]) continue;
+    int ok = 1;
+    for (size_t i = 0; i < idlen; i++) {
+      if (!isdigit((unsigned char)name[i])) {
+        ok = 0;
+        break;
+      }
+    }
+    if (!ok) continue;
+    char mpath[700];
+    snprintf(mpath, sizeof mpath, "%s/%s", jdir, name);
+    char *meta = ng_read_file(mpath, NULL);
+    if (!meta) continue;
+    char *st = ng_json_get_string(meta, "status");
+    int live = (st && (!strcmp(st, "queued") || !strcmp(st, "running")));
+    free(st);
+    free(meta);
+    if (live) continue;
+    memcpy(ids[n], name, idlen);
+    ids[n][idlen] = 0;
+    n++;
+  }
+  closedir(d);
+  if (n <= NG_JOBS_KEEP) return;
+  /* oldest first */
+  for (int i = 1; i < n; i++) {
+    char tmp[32];
+    memcpy(tmp, ids[i], sizeof tmp);
+    int j = i;
+    while (j > 0 && strcmp(ids[j - 1], tmp) > 0) {
+      memcpy(ids[j], ids[j - 1], sizeof ids[j]);
+      j--;
+    }
+    memcpy(ids[j], tmp, sizeof tmp);
+  }
+  int drop = n - NG_JOBS_KEEP;
+  for (int i = 0; i < drop; i++) {
+    char p[700];
+    snprintf(p, sizeof p, "%s/%s.json", jdir, ids[i]);
+    unlink(p);
+    snprintf(p, sizeof p, "%s/%s.in", jdir, ids[i]);
+    unlink(p);
+    snprintf(p, sizeof p, "%s/%s.out", jdir, ids[i]);
+    unlink(p);
+  }
+}
+
 static void send_all(int fd, const char *data, size_t n) {
   while (n) {
     ssize_t w = write(fd, data, n);
@@ -1178,6 +1242,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char jdir[640];
     snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
     mkdir(jdir, 0755);
+    jobs_gc(jdir); /* residual: mesh leaves dozens of done job files */
     char id[32];
     snprintf(id, sizeof id, "%ld%04d", (long)time(NULL), (int)(getpid() % 10000));
     /* Dual-wire job meta — polled via GET /peer/v1/jobs/{id}. */
@@ -1273,6 +1338,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
     char jdir[640];
     snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
+    jobs_gc(jdir);
     DIR *d = opendir(jdir);
     enum { MAX_LIST = 32 };
     char ids[MAX_LIST][32];

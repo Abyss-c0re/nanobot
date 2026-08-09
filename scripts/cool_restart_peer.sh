@@ -36,6 +36,14 @@ health_ok() {
     | grep -q '"ok":true'
 }
 
+# Cap restart log growth (thrash history).
+if [[ -f "$LOG" ]]; then
+  sz=$(wc -c <"$LOG" 2>/dev/null || echo 0)
+  if [[ "${sz:-0}" -gt 524288 ]]; then
+    mv -f "$LOG" "${LOG}.1" 2>/dev/null || true
+  fi
+fi
+
 echo "cool_restart_peer: home=$HOME_NB port=$PORT bin=$BIN" | tee -a "$LOG"
 old=$(listen_pid || true)
 if [[ -n "${old:-}" ]]; then
