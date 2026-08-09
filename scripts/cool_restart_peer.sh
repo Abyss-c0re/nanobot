@@ -59,20 +59,29 @@ if [[ -n "${old:-}" ]]; then
   fi
 fi
 
-# Drop orphan nanobot processes that still claim this home but hold no listen
-# (optional; only when FORCE_ORPHANS=1 to avoid killing unrelated peers).
-if [[ "${FORCE_ORPHANS:-0}" == "1" ]]; then
+# Drop same-home nanobot processes that do not hold the listen socket
+# (bind-fail thrash leftovers / race after SIGTERM). Never touch other homes.
+reap_home_orphans() {
+  local keep="${1:-}"
   for p in $(pgrep -x nanobot 2>/dev/null || true); do
+    [[ -n "$keep" && "$p" == "$keep" ]] && continue
     cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)
     case "$cmd" in
-      *"--home $HOME_NB"*|*"--home=${HOME_NB}"*) 
+      *"--home $HOME_NB"*|*"--home=${HOME_NB}"*)
+        # Keep the process that actually owns LISTEN on PORT.
+        lp=$(listen_pid || true)
+        if [[ -n "$lp" && "$p" == "$lp" ]]; then
+          continue
+        fi
         echo "cool_restart_peer: orphan stop $p" | tee -a "$LOG"
-        kill "$p" 2>/dev/null || true
+        kill -TERM "$p" 2>/dev/null || true
         ;;
     esac
   done
-  sleep 0.4
-fi
+  sleep 0.3
+}
+
+reap_home_orphans ""
 
 if [[ -n "$(listen_pid || true)" ]]; then
   echo "cool_restart_peer: port $PORT still busy after stop" | tee -a "$LOG" >&2
@@ -105,5 +114,9 @@ curl -fsS -m 3 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1 \
   && echo "cool_restart_peer: /health ok" | tee -a "$LOG" \
   || echo "cool_restart_peer: /health not yet (old bin or path); peer/v1 ok" | tee -a "$LOG"
 
-echo "cool_restart_peer: OK port=$PORT pid=$(listen_pid)" | tee -a "$LOG"
+live=$(listen_pid || true)
+# Post-start: drop any same-home non-listeners (race residual).
+reap_home_orphans "${live:-$new}"
+
+echo "cool_restart_peer: OK port=$PORT pid=${live:-$new}" | tee -a "$LOG"
 exit 0

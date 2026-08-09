@@ -18,6 +18,10 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <errno.h>
 
 /* CMake sets NANOBOT_ENABLE_*; default all-on for ad-hoc compiles */
 #ifndef NANOBOT_ENABLE_MCP
@@ -51,6 +55,36 @@ static void install_stop_signals(void) {
   sigemptyset(&sa.sa_mask);
   if (sigaction(SIGINT, &sa, NULL) != 0) signal(SIGINT, on_sig);
   if (sigaction(SIGTERM, &sa, NULL) != 0) signal(SIGTERM, on_sig);
+}
+
+/* True if something already holds port (LISTEN). No SO_REUSEADDR on probe. */
+static int peer_port_in_use(int port, int bind_lan) {
+  if (port <= 0 || port >= 65536) return 0;
+  int sfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sfd < 0) return 0;
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons((uint16_t)port);
+  addr.sin_addr.s_addr =
+      bind_lan ? htonl(INADDR_ANY) : htonl(INADDR_LOOPBACK);
+  int rc = bind(sfd, (struct sockaddr *)&addr, sizeof addr);
+  int busy = (rc != 0 && errno == EADDRINUSE);
+  close(sfd);
+  return busy;
+}
+
+static void print_already_listening(int port, int bind_lan) {
+  const char *host = bind_lan ? "0.0.0.0" : "127.0.0.1";
+  fprintf(stderr,
+          "{\"schema\":\"nanobot.serve.v1\",\"ok\":true,"
+          "\"action\":\"already_listening\",\"port\":%d,\"bind\":\"%s\","
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n",
+          port, bind_lan ? "lan" : "loopback");
+  printf("http://%s:%d/peer/v1/info\n", host, port);
+  fflush(stdout);
 }
 
 /* CLI real-time token printer */
@@ -623,6 +657,15 @@ int main(int argc, char **argv) {
       if (p > 0 && p < 65536) port = p;
     }
     free(ui); free(sw); free(sp);
+  }
+
+  /* Residual: ensure/restart thrash re-execed nanobot while peer live →
+   * auth import + ready spam + bind EADDRINUSE. Already-up is success. */
+  if (want_peer && !oneshot && !mode_mcp && !mode_mcp_list && !mode_mcp_call &&
+      !mode_order && !auth_status && !auth_start && !auth_poll && port > 0 &&
+      peer_port_in_use(port, bind_lan)) {
+    print_already_listening(port, bind_lan);
+    return 0;
   }
 
   /* normalize www path: DIR with index.html, or DIR/www/index.html */
