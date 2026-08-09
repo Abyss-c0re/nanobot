@@ -124,7 +124,7 @@ cd ~/Dev/AI/nanobot
 | task/models trailing slash aliases | `eeabe10`  |
 | MCP :18790 control/task/models proxy | `95c2c75`  |
 | models plate action leaf | `d09d6e8`  |
-| peer error plates action=error | `bbc5e2d`  |
+| peer error plates action=error | `1ab6206`  |
 
 ## Anti-chaos
 
