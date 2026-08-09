@@ -109,6 +109,7 @@ cd ~/Dev/AI/nanobot
 | orphan running/queued jobs → error on listen | `29d5e7b`  |
 | async job kind whitespace strip | `415266b`  |
 | MCP start_job watcher empty + kind/service fail-fast | `4498181`  |
+| shell job/sync error token leaf (shell_disabled) | *(this push)* |
 
 ## Anti-chaos
 

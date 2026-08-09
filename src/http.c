@@ -1518,15 +1518,32 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         ng_cmd_result cr = ng_run_command(payload ? payload : "",
           agent->timeout_sec > 0 ? agent->timeout_sec : 60);
         char *esc = ng_json_escape(cr.output ? cr.output : "");
+        /* Residual: shell_disabled/personal_acl nested JSON only in output;
+         * mesh had to parse nested shell.v1 for a machine error token. */
+        char *err_tok = NULL;
+        if (cr.output && cr.output[0] == '{')
+          err_tok = ng_json_get_string(cr.output, "error");
         char *jb = NULL;
-        asprintf(&jb,
-          "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,\"action\":\"job\","
-          "\"id\":\"%s\",\"status\":\"done\",\"kind\":\"shell\",\"exit\":%d,"
-          "\"output\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
-          cr.exit_code == 0 ? "true" : "false",
-          id, cr.exit_code, esc ? esc : "");
+        if (err_tok && err_tok[0]) {
+          char *ee = ng_json_escape(err_tok);
+          asprintf(&jb,
+            "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,\"action\":\"job\","
+            "\"id\":\"%s\",\"status\":\"done\",\"kind\":\"shell\",\"exit\":%d,"
+            "\"error\":\"%s\",\"output\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
+            cr.exit_code == 0 ? "true" : "false",
+            id, cr.exit_code, ee ? ee : "", esc ? esc : "");
+          free(ee);
+        } else {
+          asprintf(&jb,
+            "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,\"action\":\"job\","
+            "\"id\":\"%s\",\"status\":\"done\",\"kind\":\"shell\",\"exit\":%d,"
+            "\"output\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
+            cr.exit_code == 0 ? "true" : "false",
+            id, cr.exit_code, esc ? esc : "");
+        }
         if (jb) { ng_write_file(mpath, jb, strlen(jb)); free(jb); }
         free(esc);
+        free(err_tok);
         ng_cmd_result_free(&cr);
         free(payload);
         ng_hub_event("job.done", "id", id, "kind", "shell");
@@ -1962,6 +1979,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         }
       }
     }
+    /* Residual: shell_disabled nested only in output; surface machine error. */
+    char *err_tok = NULL;
+    if (!need_appr && cr.output && cr.output[0] == '{')
+      err_tok = ng_json_get_string(cr.output, "error");
     if (need_appr) {
       char *aid_esc = ng_json_escape(aid ? aid : "");
       asprintf(&jb,
@@ -1971,6 +1992,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         NG_PEER_HTTP_DUAL_WIRE "}",
         aid_esc ? aid_esc : "", esc ? esc : "");
       free(aid_esc);
+    } else if (err_tok && err_tok[0]) {
+      char *ee = ng_json_escape(err_tok);
+      asprintf(&jb,
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,"
+        "\"action\":\"shell\",\"exit\":%d,\"error\":\"%s\",\"output\":\"%s\","
+        "\"source\":\"nanobot-peer\","
+        NG_PEER_HTTP_DUAL_WIRE "}",
+        cr.exit_code == 0 ? "true" : "false", cr.exit_code,
+        ee ? ee : "", esc ? esc : "");
+      free(ee);
     } else {
       asprintf(&jb,
         "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":%s,"
@@ -1980,7 +2011,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         cr.exit_code == 0 ? "true" : "false", cr.exit_code, esc ? esc : "");
     }
     http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
-    free(cmd); free(esc); free(jb); free(aid);
+    free(cmd); free(esc); free(jb); free(aid); free(err_tok);
     ng_cmd_result_free(&cr);
     free(req); close(cfd); return;
   }
