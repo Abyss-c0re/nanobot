@@ -97,6 +97,7 @@ cd ~/Dev/AI/nanobot
 | session_ensure on /peer/v1/info signed_in | `de7d51c` |
 | empty prompt 400 + ensure on peer prompt | `3b0e259` |
 | async jobs whitespace → need_prompt_or_command | `3127a38` |
+| /api/chat + subagent whitespace + chat session_ensure | `ec66e08` |
 
 ## Anti-chaos
 
