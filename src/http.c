@@ -1078,18 +1078,21 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* ---- Peer bus for other agents / sessions (lab/ops; product bus = SMX2) ---- */
-  /* /health + /ready: mesh focus loops probe these; keep alias of /peer/v1/health. */
+  /* /health + /ready: mesh focus loops probe these; same plate, distinct action.
+   * Residual: /ready reused action=health → probes could not tell paths apart. */
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
                  strcmp(path, "/health") == 0 ||
                  strcmp(path, "/ready") == 0)) {
     char body[640];
     char *ver = ng_json_escape(NG_VERSION);
     int jn = jobs_meta_count();
+    const char *act = (strcmp(path, "/ready") == 0) ? "ready" : "health";
     int n = snprintf(body, sizeof body,
-      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"health\","
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\",\"role\":\"session-bus\","
       "\"pid\":%d,\"started\":%ld,\"jobs\":%d,\"jobs_keep\":%d,"
       NG_PEER_HTTP_DUAL_WIRE "}",
+      act,
       ver ? ver : "",
       (int)(g_serve_pid ? g_serve_pid : getpid()),
       (long)g_serve_started,
