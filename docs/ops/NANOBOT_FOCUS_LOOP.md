@@ -18,9 +18,32 @@
 | Cube inbox | `~/.nanobot/reports/titan-loop/NEXT_FOR_BLACKCUBE.md` |
 | Titan pack | `~/.nanobot/reports/titan-loop/pulls/` + CROSS_PULSE |
 | Memory | `~/.nanobot/memory/summary.txt` · `core.txt` |
-| Jobs | `~/.nanobot/jobs/` recent |
+| Jobs | `~/.nanobot/jobs/` recent (GC keeps ≤48 finished) |
 | Log | `~/.nanobot/nanobot.log` tail |
+| Status | `~/.nanobot/reports/titan-loop/NANOBOT_LOOP_LAST.md` |
 | Repo | `Dev/AI/nanobot` main |
+
+## Peer health probes
+
+```bash
+curl -sS http://127.0.0.1:18787/health          # alias OK
+curl -sS http://127.0.0.1:18787/peer/v1/health  # pid + started (listener)
+curl -sS http://127.0.0.1:18787/peer/v1/info    # same + signed_in
+curl -sS http://127.0.0.1:18790/peer/v1/health  # HTTP MCP proxy
+```
+
+Settings `PORT=18787` often overrides CLI `--port 8787` when default.
+
+## Cool restart (load new binary / clear deleted-bin)
+
+```bash
+cd ~/Dev/AI/nanobot
+./scripts/cool_restart_peer.sh
+```
+
+- SIGTERM first (needs live stop-flag); reaps same-home orphans  
+- Health-probes; rotates `peer-restart.log` past 512KiB  
+- Double-start exits `already_listening` (rc=0) — no auth spam  
 
 ## Lost focus = when
 
@@ -37,10 +60,25 @@
 2. One bite-size fix in `Dev/AI/nanobot` (or scripts under titanus2 that are nanobot host bridges)  
 3. Test smoke (compile / health curl / unit if any)  
 4. Commit with clear message; **push origin main** when green  
-5. Note in `~/.nanobot/reports/titan-loop/NANOBOT_LOOP.md`
+5. Note in `~/.nanobot/reports/titan-loop/NANOBOT_LOOP.md`  
+6. Overwrite `NANOBOT_LOOP_LAST.md` (UTC, peer ok, push sha, next)
+
+## Product residuals already landed (2026-08-09)
+
+| Fix | SHA / note |
+|-----|------------|
+| Zombie reap + SIGTERM stop flag | `b3ffd3b` · `53583af` |
+| Shell no-reboot prose not 425 | `f56abfd` |
+| `/health` `/ready` aliases | `abdefc0` |
+| Health/info `pid`+`started` | `e5f08f0` · `cd1abc1` |
+| GET `/peer/v1/jobs` index | `2cbc733` |
+| Jobs GC keep 48 | `583bb38` |
+| `already_listening` + orphan reap | `42824b8` |
+| Mesh dir ensure on start | this cycle |
 
 ## Anti-chaos
 
 - One product bite per cycle  
 - No dual flash / no Atlas force-stop  
 - Prefer nanobot MCP for device side effects  
+- Titan human-gated queue (tip1.9 / product_fold) → no re-arm spam  

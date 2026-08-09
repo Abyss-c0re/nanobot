@@ -609,6 +609,20 @@ int main(int argc, char **argv) {
 
   ng_set_workdir(home);
   mkdir(home, 0755);
+  /* Mesh focus loop paths — avoid ENOENT on fresh home (reports/titan-loop). */
+  {
+    char p[700];
+    snprintf(p, sizeof p, "%s/reports", home);
+    mkdir(p, 0755);
+    snprintf(p, sizeof p, "%s/reports/titan-loop", home);
+    mkdir(p, 0755);
+    snprintf(p, sizeof p, "%s/reports/titan-loop/pulls", home);
+    mkdir(p, 0755);
+    snprintf(p, sizeof p, "%s/jobs", home);
+    mkdir(p, 0755);
+    snprintf(p, sizeof p, "%s/approvals", home);
+    mkdir(p, 0755);
+  }
   ng_shell_ensure_policy_files();
 
   /* Pure-C MCP / commander order path — no Python, no LLM (NeuralCube). */
