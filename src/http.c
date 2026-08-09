@@ -1687,7 +1687,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
       memcpy(ids[j], tmp, sizeof tmp);
     }
-    size_t cap = 256 + (size_t)nids * 220;
+    size_t cap = 256 + (size_t)nids * 280;
     char *out = (char *)malloc(cap);
     if (!out) {
       http_peer_err(cfd, 500, "oom");
@@ -1700,7 +1700,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"jobs\","
       "\"count\":%d,\"jobs_keep\":%d,\"jobs\":[", nids, (int)NG_JOBS_KEEP);
     if (wr > 0) used += (size_t)wr;
-    for (int i = 0; i < nids && used + 200 < cap; i++) {
+    for (int i = 0; i < nids && used + 280 < cap; i++) {
       char mpath[700];
       snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, ids[i]);
       char *meta = ng_read_file(mpath, NULL);
@@ -1712,6 +1712,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         /* Residual: error tokens (orphan_restart, shell_disabled) only on
          * full job poll — mesh index could not fail-fast without GET by id. */
         char *e = ng_json_get_string(meta, "error");
+        /* Residual: shell exit codes only on full poll; index lacked exit leaf
+         * so mesh could not sort fail vs ok without GET /jobs/{id}. */
+        int has_exit = 0, exit_code = 0;
+        {
+          const char *ep = strstr(meta, "\"exit\":");
+          if (ep) {
+            ep += 7;
+            while (*ep == ' ' || *ep == '\t') ep++;
+            if (*ep == '-' || isdigit((unsigned char)*ep)) {
+              exit_code = atoi(ep);
+              has_exit = 1;
+            }
+          }
+        }
         if (s && s[0]) st = s;
         if (k && k[0]) kind = k;
         /* free later via copies — ng_json_get_string allocates */
@@ -1722,7 +1736,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         char *st_esc = ng_json_escape(st);
         char *k_esc = ng_json_escape(kind);
         char *e_esc = (e_own && e_own[0]) ? ng_json_escape(e_own) : NULL;
-        if (e_esc && e_esc[0]) {
+        if (e_esc && e_esc[0] && has_exit) {
+          wr = snprintf(out + used, cap - used,
+            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
+            "\"exit\":%d,\"error\":\"%s\",\"poll\":\"/peer/v1/jobs/%s\"}",
+            i ? "," : "",
+            id_esc ? id_esc : ids[i],
+            st_esc ? st_esc : st,
+            k_esc ? k_esc : kind,
+            exit_code, e_esc,
+            id_esc ? id_esc : ids[i]);
+        } else if (e_esc && e_esc[0]) {
           wr = snprintf(out + used, cap - used,
             "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
             "\"error\":\"%s\",\"poll\":\"/peer/v1/jobs/%s\"}",
@@ -1731,6 +1755,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
             st_esc ? st_esc : st,
             k_esc ? k_esc : kind,
             e_esc,
+            id_esc ? id_esc : ids[i]);
+        } else if (has_exit) {
+          wr = snprintf(out + used, cap - used,
+            "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
+            "\"exit\":%d,\"poll\":\"/peer/v1/jobs/%s\"}",
+            i ? "," : "",
+            id_esc ? id_esc : ids[i],
+            st_esc ? st_esc : st,
+            k_esc ? k_esc : kind,
+            exit_code,
             id_esc ? id_esc : ids[i]);
         } else {
           wr = snprintf(out + used, cap - used,

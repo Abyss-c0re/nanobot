@@ -115,6 +115,7 @@ cd ~/Dev/AI/nanobot
 | sync shell_disabled HTTP 403 align | `0c8a50a`  |
 | async job kind case-fold (Shell→shell) | `4ed64ef`  |
 | control service/action case-fold | `ffeab17`  |
+| jobs index exit leaf | *(this push)* |
 
 ## Anti-chaos
 
