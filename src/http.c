@@ -37,6 +37,22 @@ static pid_t g_serve_pid = 0;
  * is chronological. */
 enum { NG_JOBS_KEEP = 48, NG_JOBS_SCAN = 256 };
 
+/* Count $HOME/jobs/*.json for health/info (mesh focus probes). */
+static int jobs_meta_count(void) {
+  char jdir[640];
+  snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
+  DIR *d = opendir(jdir);
+  if (!d) return 0;
+  int n = 0;
+  struct dirent *de;
+  while ((de = readdir(d)) != NULL) {
+    size_t len = strlen(de->d_name);
+    if (len > 5 && strcmp(de->d_name + len - 5, ".json") == 0) n++;
+  }
+  closedir(d);
+  return n;
+}
+
 static void jobs_gc(const char *jdir) {
   if (!jdir || !jdir[0]) return;
   DIR *d = opendir(jdir);
@@ -1066,16 +1082,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
                  strcmp(path, "/health") == 0 ||
                  strcmp(path, "/ready") == 0)) {
-    char body[512];
+    char body[640];
     char *ver = ng_json_escape(NG_VERSION);
+    int jn = jobs_meta_count();
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"health\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\",\"role\":\"session-bus\","
-      "\"pid\":%d,\"started\":%ld,"
+      "\"pid\":%d,\"started\":%ld,\"jobs\":%d,\"jobs_keep\":%d,"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "",
       (int)(g_serve_pid ? g_serve_pid : getpid()),
-      (long)g_serve_started);
+      (long)g_serve_started,
+      jn, (int)NG_JOBS_KEEP);
     free(ver);
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
@@ -1083,15 +1101,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0)) {
     int signed_in = session && ng_session_valid(session);
-    char body[896];
+    char body[960];
     char *ver = ng_json_escape(NG_VERSION);
     char *md = ng_json_escape(agent && agent->model ? agent->model : "");
     char *wd = ng_json_escape(ng_workdir());
+    int jn = jobs_meta_count();
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"info\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\","
       "\"signed_in\":%s,\"model\":\"%s\",\"workdir\":\"%s\","
-      "\"pid\":%d,\"started\":%ld,"
+      "\"pid\":%d,\"started\":%ld,\"jobs\":%d,\"jobs_keep\":%d,"
       "\"tools\":[\"prompt\",\"shell\"],"
       "\"endpoints\":["
       "\"/peer/v1/health\","
@@ -1108,7 +1127,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       md ? md : "",
       wd ? wd : "",
       (int)(g_serve_pid ? g_serve_pid : getpid()),
-      (long)g_serve_started);
+      (long)g_serve_started,
+      jn, (int)NG_JOBS_KEEP);
     free(ver); free(md); free(wd);
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
