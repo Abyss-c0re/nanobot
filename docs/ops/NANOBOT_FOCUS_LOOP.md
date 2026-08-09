@@ -106,7 +106,7 @@ cd ~/Dev/AI/nanobot
 | peer_mcp_bridge control/job_status empty fail-fast | `ac50990` |
 | empty watcher async jobs allowed | `579fc86` |
 | async jobs unknown kind → unknown_kind | `9ac1baa` |
-| orphan running/queued jobs → error on listen | *(this push)* |
+| orphan running/queued jobs → error on listen | `29d5e7b`  |
 
 ## Anti-chaos
 
