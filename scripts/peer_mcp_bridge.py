@@ -153,6 +153,8 @@ def http_json(method: str, path: str, payload: dict | None = None, timeout: floa
     tok = peer_token()
     if tok:
         req.add_header("X-Nanobot-Peer-Token", tok)
+        # Dual-wire with Bearer (server accepts both since 2006408).
+        req.add_header("Authorization", f"Bearer {tok}")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())

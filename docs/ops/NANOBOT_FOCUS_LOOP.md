@@ -82,6 +82,7 @@ cd ~/Dev/AI/nanobot
 | peer_mcp_bridge prefer loopback if listening | `a4614d1` |
 | GET /jobs list cap = NG_JOBS_KEEP (was 32) | `692ffd6` |
 | Authorization: Bearer peer auth | `2006408` |
+| MCP bridges dual-send Bearer + X-header | this cycle |
 
 ## Anti-chaos
 

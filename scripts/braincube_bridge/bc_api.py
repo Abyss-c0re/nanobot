@@ -29,7 +29,9 @@ def http_json(method, path, payload=None, timeout=30):
     req = urllib.request.Request(f"{peer_base()}{path}", data=data, method=method)
     req.add_header('Content-Type', 'application/json')
     tok = peer_token()
-    if tok: req.add_header('X-Nanobot-Peer-Token', tok)
+    if tok:
+        req.add_header('X-Nanobot-Peer-Token', tok)
+        req.add_header('Authorization', f'Bearer {tok}')
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode() or '{}')
