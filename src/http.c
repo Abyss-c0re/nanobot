@@ -999,7 +999,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     int has_img = (image_b64 && image_b64[0])
                || (images_json && strstr(images_json, "base64"));
-    if ((!prompt || !prompt[0]) && !has_img) {
+    /* Residual: whitespace-only prompt skipped [0] check and burned agent turns
+     * (peer /peer/v1/prompt already trims → missing_prompt). */
+    if (prompt) {
+      const char *p = prompt;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(prompt);
+        prompt = NULL;
+      }
+    }
+    if (!prompt && !has_img) {
       free(prompt); free(image_b64); free(image_mime); free(images_json);
       http_peer_err(cfd, 400, "missing_prompt_or_image");
       free(req); close(cfd); return;
@@ -1008,6 +1018,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     /* Outer shell always: @! shell. Local/llama backend: no browser session. */
     int shell_only = (prompt[0] == '@' && prompt[1] == '!' && !has_img);
     int need_browser = agent && ng_agent_needs_browser_session(agent);
+    /* Residual: soft-expired access failed login gate without ensure (info/prompt fixed). */
+    if (!shell_only && need_browser && session && !ng_session_valid(session)
+        && !session->login_pending)
+      (void)ng_session_ensure(session);
     if (!shell_only && need_browser && (!session || !ng_session_valid(session))) {
       if (session && session->login_pending) ng_session_poll_login(session);
       if (!session || !ng_session_valid(session)) {
@@ -1657,7 +1671,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *prompt = ng_json_get_string(body, "prompt");
     char *desc = ng_json_get_string(body, "description");
     char *type = ng_json_get_string(body, "type");
-    if (!prompt || !prompt[0] || !agent) {
+    /* Residual: whitespace-only spawn ran empty subagent (peer prompt trims). */
+    if (prompt) {
+      const char *p = prompt;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(prompt);
+        prompt = NULL;
+      }
+    }
+    if (!prompt || !agent) {
       free(prompt); free(desc); free(type); free(action);
       http_peer_err(cfd, 400, "need_prompt");
       free(req); close(cfd); return;
