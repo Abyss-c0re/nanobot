@@ -79,9 +79,11 @@ def _nonempty(s: object) -> str | None:
 
 
 def _missing(err: str) -> dict:
+    """Dual-wire fail plate (align peer http_peer_err action=error)."""
     return {
         "schema": "nanobot.peer_http.v1",
         "ok": False,
+        "action": "error",
         "error": err,
         "product_wire": "smx2",
         "peer_http": "lab_ops_only",
@@ -335,12 +337,14 @@ class H(BaseHTTPRequestHandler):
                 body["tools"] = [t["name"] for t in TOOLS]
             self._send(200, body)
             return
-        self._send(404, {"error": "not_found"})
+        # Residual: bare {"error":"not_found"} lacked dual-wire action/schema;
+        # mesh could not classify MCP 404 like peer error plates.
+        self._send(404, _missing("not_found"))
 
     def do_POST(self):
         # Accept /mcp, /sse, / for Grok remote MCP
         if not (self.path.startswith("/mcp") or self.path in ("/", "/message")):
-            self._send(404, {"error": "not_found"})
+            self._send(404, _missing("not_found"))
             return
         msg = self._read_json()
         if isinstance(msg, list):

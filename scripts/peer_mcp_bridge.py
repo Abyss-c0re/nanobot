@@ -191,7 +191,8 @@ def _dual_wire(**extra) -> dict:
 
 
 def _missing(err: str) -> dict:
-    return _dual_wire(ok=False, error=err)
+    # Residual: align peer http_peer_err action=error (1ab6206).
+    return _dual_wire(ok=False, action="error", error=err)
 
 
 def start_job(kind: str, prompt: str = "", command: str = "") -> dict:
