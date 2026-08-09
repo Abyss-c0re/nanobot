@@ -26,6 +26,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <time.h>
+#include <dirent.h>
 
 /* Set once listen succeeds — health plate (parent listener, not fork workers). */
 static time_t g_serve_started = 0;
@@ -1263,6 +1264,118 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(id_esc);
     http_response(cfd, 202, "application/json", ack ? ack : "{}", ack ? strlen(ack) : 2);
     free(prompt); free(cmd); free(ack);
+    free(req); close(cfd); return;
+  }
+
+  /* GET /peer/v1/jobs — dual-wire index of recent job metas (no full replies).
+   * Residual: mesh probes hit collection path and got not_found (only /jobs/{id}). */
+  if (is_get && (strcmp(path, "/peer/v1/jobs") == 0 || strcmp(path, "/peer/v1/job") == 0)) {
+    if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
+    char jdir[640];
+    snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
+    DIR *d = opendir(jdir);
+    enum { MAX_LIST = 32 };
+    char ids[MAX_LIST][32];
+    int nids = 0;
+    if (d) {
+      struct dirent *de;
+      while ((de = readdir(d)) != NULL) {
+        const char *name = de->d_name;
+        size_t len = strlen(name);
+        if (len < 6 || strcmp(name + len - 5, ".json") != 0) continue;
+        /* id is digits before .json */
+        int ok = 1;
+        size_t idlen = len - 5;
+        if (idlen >= sizeof ids[0]) continue;
+        for (size_t i = 0; i < idlen; i++) {
+          if (!isdigit((unsigned char)name[i])) { ok = 0; break; }
+        }
+        if (!ok) continue;
+        if (nids < MAX_LIST) {
+          memcpy(ids[nids], name, idlen);
+          ids[nids][idlen] = 0;
+          nids++;
+        } else {
+          /* keep newest-ish: ids are time-prefixed; replace smallest */
+          int worst = 0;
+          for (int i = 1; i < MAX_LIST; i++)
+            if (strcmp(ids[i], ids[worst]) < 0) worst = i;
+          if (strncmp(name, ids[worst], idlen) > 0) {
+            memcpy(ids[worst], name, idlen);
+            ids[worst][idlen] = 0;
+          }
+        }
+      }
+      closedir(d);
+    }
+    /* sort ids descending (newest first) — simple insertion */
+    for (int i = 1; i < nids; i++) {
+      char tmp[32];
+      memcpy(tmp, ids[i], sizeof tmp);
+      int j = i;
+      while (j > 0 && strcmp(ids[j - 1], tmp) < 0) {
+        memcpy(ids[j], ids[j - 1], sizeof ids[j]);
+        j--;
+      }
+      memcpy(ids[j], tmp, sizeof tmp);
+    }
+    size_t cap = 256 + (size_t)nids * 220;
+    char *out = (char *)malloc(cap);
+    if (!out) {
+      http_peer_err(cfd, 500, "oom");
+      free(req); close(cfd); return;
+    }
+    size_t used = 0;
+    int wr = snprintf(out + used, cap - used,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"jobs\","
+      "\"count\":%d,\"jobs\":[", nids);
+    if (wr > 0) used += (size_t)wr;
+    for (int i = 0; i < nids && used + 200 < cap; i++) {
+      char mpath[700];
+      snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, ids[i]);
+      char *meta = ng_read_file(mpath, NULL);
+      const char *st = "unknown";
+      const char *kind = "unknown";
+      if (meta) {
+        char *s = ng_json_get_string(meta, "status");
+        char *k = ng_json_get_string(meta, "kind");
+        if (s && s[0]) st = s;
+        if (k && k[0]) kind = k;
+        /* free later via copies — ng_json_get_string allocates */
+        char *st_own = s;
+        char *k_own = k;
+        char *id_esc = ng_json_escape(ids[i]);
+        char *st_esc = ng_json_escape(st);
+        char *k_esc = ng_json_escape(kind);
+        wr = snprintf(out + used, cap - used,
+          "%s{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"%s\","
+          "\"poll\":\"/peer/v1/jobs/%s\"}",
+          i ? "," : "",
+          id_esc ? id_esc : ids[i],
+          st_esc ? st_esc : st,
+          k_esc ? k_esc : kind,
+          id_esc ? id_esc : ids[i]);
+        if (wr > 0) used += (size_t)wr;
+        free(id_esc); free(st_esc); free(k_esc);
+        free(st_own); free(k_own);
+        free(meta);
+      } else {
+        char *id_esc = ng_json_escape(ids[i]);
+        wr = snprintf(out + used, cap - used,
+          "%s{\"id\":\"%s\",\"status\":\"missing\",\"kind\":\"\","
+          "\"poll\":\"/peer/v1/jobs/%s\"}",
+          i ? "," : "",
+          id_esc ? id_esc : ids[i],
+          id_esc ? id_esc : ids[i]);
+        if (wr > 0) used += (size_t)wr;
+        free(id_esc);
+      }
+    }
+    wr = snprintf(out + used, cap - used,
+      "]," NG_PEER_HTTP_DUAL_WIRE "}");
+    if (wr > 0) used += (size_t)wr;
+    http_response(cfd, 200, "application/json", out, used);
+    free(out);
     free(req); close(cfd); return;
   }
 
