@@ -2002,6 +2002,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_peer_err(cfd, 400, "missing_command");
       free(req); close(cfd); return;
     }
+    /* Residual: sync shell returned HTTP 200 + nested shell.v1 shell_disabled
+     * while async jobs fail-fast 403 (99691c3). Align dual-wire token + status. */
+    if (!ng_shell_is_enabled()) {
+      free(cmd);
+      http_peer_err(cfd, 403, "shell_disabled");
+      free(req); close(cfd); return;
+    }
     ng_log("peer: shell from remote session: %.80s", cmd);
     ng_cmd_result cr = ng_run_command(cmd, agent->timeout_sec > 0 ? agent->timeout_sec : 60);
     char *esc = ng_json_escape(cr.output ? cr.output : "");

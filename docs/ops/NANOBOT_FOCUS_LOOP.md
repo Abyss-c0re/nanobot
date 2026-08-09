@@ -112,6 +112,7 @@ cd ~/Dev/AI/nanobot
 | shell job/sync error token leaf (shell_disabled) | `a79295f`  |
 | jobs index error leaf + fork_failed on queue | `896349c`  |
 | async shell_disabled fail-fast 403 at queue | `99691c3`  |
+| sync shell_disabled HTTP 403 align | *(this push)* |
 
 ## Anti-chaos
 
