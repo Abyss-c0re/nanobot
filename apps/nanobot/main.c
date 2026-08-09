@@ -39,8 +39,19 @@
 #define NANOBOT_ENABLE_PROVIDERS 1
 #endif
 
-static volatile int g_stop = 0;
+static volatile sig_atomic_t g_stop = 0;
 static void on_sig(int s) { (void)s; g_stop = 1; }
+
+/* Install stop signals without SA_RESTART so accept() wakes on SIGTERM. */
+static void install_stop_signals(void) {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sa_handler = on_sig;
+  sa.sa_flags = 0; /* no SA_RESTART */
+  sigemptyset(&sa.sa_mask);
+  if (sigaction(SIGINT, &sa, NULL) != 0) signal(SIGINT, on_sig);
+  if (sigaction(SIGTERM, &sa, NULL) != 0) signal(SIGTERM, on_sig);
+}
 
 /* CLI real-time token printer */
 static void cli_stream_delta(void *ud, const char *chunk, size_t n) {
@@ -1001,8 +1012,7 @@ int main(int argc, char **argv) {
   if (hub_mode && port_out <= 0) port_out = port + 1;
 #endif
 
-  signal(SIGINT, on_sig);
-  signal(SIGTERM, on_sig);
+  install_stop_signals();
 
   if (hub_mode) {
 #if NANOBOT_ENABLE_HUB
@@ -1033,7 +1043,7 @@ int main(int argc, char **argv) {
     .port = port,
     .agent = &agent,
     .session = &session,
-    .stop = 0,
+    .stop = &g_stop, /* live flag — not a one-shot int copy */
     .www_root = www_root,
     .bind_lan = bind_lan,
     .on_listening = ng_http_listening_plate_cb,
@@ -1041,7 +1051,6 @@ int main(int argc, char **argv) {
   };
   int serve_rc = 0;
   while (!g_stop) {
-    http.stop = g_stop;
     serve_rc = ng_http_serve(&http);
     if (serve_rc != 0) break;
     break;

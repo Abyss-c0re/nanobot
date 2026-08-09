@@ -1673,7 +1673,7 @@ int ng_http_serve(ng_http_cfg *cfg) {
   g_live_children = 0;
   {
     time_t last_sub_reap = 0;
-    while (!cfg->stop) {
+    while (!(cfg->stop && *cfg->stop)) {
     reap_children();
     /* Subagents are double-forked (reparented to init); still sweep metas so
      * main stays "idle" with accurate running=0 and no stale "running" PIDs. */
@@ -1700,7 +1700,12 @@ int ng_http_serve(ng_http_cfg *cfg) {
     socklen_t cl = sizeof cli;
     int cfd = accept(sfd, (struct sockaddr *)&cli, &cl);
     if (cfd < 0) {
-      if (errno == EINTR) { reap_children(); continue; }
+      if (errno == EINTR) {
+        reap_children();
+        /* SIGTERM/SIGINT must be non-SA_RESTART so we exit when *stop is set. */
+        if (cfg->stop && *cfg->stop) break;
+        continue;
+      }
       ng_log("accept: %s", strerror(errno));
       break;
     }
