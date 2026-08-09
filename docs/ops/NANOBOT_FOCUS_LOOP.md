@@ -118,7 +118,7 @@ cd ~/Dev/AI/nanobot
 | jobs index exit leaf | `fb48ea9`  |
 | jobs index ok leaf (+ exit/error unified) | `71b2c0c`  |
 | jobs path trailing slash + /api/jobs aliases | `7f1fabe`  |
-| peer path /api + slash aliases (info/prompt/shell/control) | `cc4d886`  |
+| peer path /api + slash aliases (info/prompt/shell/control) | `bbbcd78`  |
 
 ## Anti-chaos
 
