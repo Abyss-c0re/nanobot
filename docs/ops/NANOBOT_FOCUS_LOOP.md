@@ -84,7 +84,7 @@ cd ~/Dev/AI/nanobot
 | Authorization: Bearer peer auth | `2006408` |
 | MCP bridges dual-send Bearer + X-header | `b086bef` |
 | hub events.jsonl rotate at 256KiB | `99660fa` |
-| health/info jobs + jobs_keep leaves | this cycle |
+| health/info jobs + jobs_keep leaves | `df0a8d4` |
 
 ## Anti-chaos
 
