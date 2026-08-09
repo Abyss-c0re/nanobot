@@ -1423,6 +1423,28 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
     }
     char *kind_raw = ng_json_get_string(body, "kind"); /* prompt|shell|watcher */
+    /* Residual: kind " shell " / "\\t" rejected as unknown_kind while "" omitted
+     * and defaulted to prompt|shell inference — strip like control service. */
+    if (kind_raw) {
+      const char *p = kind_raw;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      size_t n = strlen(p);
+      while (n && (p[n - 1] == ' ' || p[n - 1] == '\t' || p[n - 1] == '\n' ||
+                   p[n - 1] == '\r'))
+        n--;
+      if (!n) {
+        free(kind_raw);
+        kind_raw = NULL;
+      } else if (p != kind_raw || p[n] != '\0') {
+        char *t = (char *)malloc(n + 1);
+        if (t) {
+          memcpy(t, p, n);
+          t[n] = 0;
+          free(kind_raw);
+          kind_raw = t;
+        }
+      }
+    }
     /* Machine kind token only — never free-text inject into job meta. */
     const char *kind = "prompt";
     if (kind_raw && !strcmp(kind_raw, "shell")) kind = "shell";
