@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """stdio MCP bridge → any nanobot peer HTTP bus (product-agnostic).
 
-NDJSON (also Content-Length). URL: NANOBOT_PEER_URL | ~/.nanobot/peer_url | http://127.0.0.1:8787
+NDJSON (also Content-Length).
+URL: NANOBOT_PEER_URL | ~/.nanobot/peer_url |
+     http://127.0.0.1:$PORT from ~/.nanobot/settings | :8787 product default
 token: NANOBOT_PEER_TOKEN | ~/.nanobot/peer_token (reread each call)
 Tools: nanobot_* / host_*.
 """
@@ -20,6 +22,7 @@ _TOKEN_FILES = (
 _URL_FILES = (
     os.path.expanduser("~/.nanobot/peer_url"),
 )
+_SETTINGS = os.path.expanduser("~/.nanobot/settings")
 
 
 def _read_first_line(path: str) -> str:
@@ -35,6 +38,22 @@ def _read_first_line(path: str) -> str:
     return ""
 
 
+def _settings_port() -> int | None:
+    """Lab BlackCube often sets PORT=18787; product CLI default remains 8787."""
+    try:
+        with open(_SETTINGS) as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith("PORT="):
+                    continue
+                p = int(line.split("=", 1)[1].strip())
+                if 1 <= p <= 65535:
+                    return p
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def peer_base() -> str:
     """Reload each call so peer_url file / env changes apply without MCP restart."""
     base = (os.environ.get("NANOBOT_PEER_URL") or "").strip()
@@ -45,7 +64,9 @@ def peer_base() -> str:
                 base = line
                 break
     if not base:
-        base = "http://127.0.0.1:8787"
+        # Residual: bare 8787 missed lab PORT=18787 when peer_url absent.
+        port = _settings_port() or 8787
+        base = f"http://127.0.0.1:{port}"
     return base.rstrip("/")
 
 

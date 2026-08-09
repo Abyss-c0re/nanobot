@@ -78,6 +78,7 @@ cd ~/Dev/AI/nanobot
 | Jobs GC after done + poll-by-id | `f699675` |
 | already_listening connect-probe (not TIME_WAIT) | `f699675` |
 | cool_restart retry if start pid exits pre-health | `eb51ed9` |
+| peer_mcp_bridge settings PORT fallback | this cycle |
 
 ## Anti-chaos
 
