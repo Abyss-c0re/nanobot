@@ -1246,6 +1246,32 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       }
     }
     if (!act && en >= 0) act = strdup(en ? "on" : "off");
+    /* Residual: whitespace service/action passed [0] checks; action "  " was
+     * treated as off and flipped shell/watcher (not on|enable|off|disable). */
+    if (svc) {
+      const char *p = svc;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(svc);
+        svc = NULL;
+      } else if (p != svc) {
+        char *t = strdup(p);
+        free(svc);
+        svc = t;
+      }
+    }
+    if (act) {
+      const char *p = act;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(act);
+        act = NULL;
+      } else if (p != act) {
+        char *t = strdup(p);
+        free(act);
+        act = t;
+      }
+    }
     if (!svc || !act) {
       free(svc); free(act);
       http_peer_err(cfd, 400, "need_service_action");
@@ -1254,6 +1280,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char pathf[640];
     int ok = 0;
     int on = (!strcmp(act, "on") || !strcmp(act, "enable"));
+    int off = (!strcmp(act, "off") || !strcmp(act, "disable"));
+    if (!on && !off) {
+      free(svc); free(act);
+      http_peer_err(cfd, 400, "need_service_action");
+      free(req); close(cfd); return;
+    }
     if (!strcmp(svc, "shell")) {
       snprintf(pathf, sizeof pathf, "%s/shell_enabled", ng_workdir());
       const char *v = on ? "1" : "0";
