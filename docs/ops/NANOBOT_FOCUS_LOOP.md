@@ -89,6 +89,7 @@ cd ~/Dev/AI/nanobot
 | `/ready` action=ready (was health) | `66d1217` |
 | `/peer/v1/ready` alias (was 404) | `9a7f613` |
 | jobs_keep on GET /jobs index | `f242007` |
+| root discovery health/ready | `b26920b` |
 
 ## Anti-chaos
 
