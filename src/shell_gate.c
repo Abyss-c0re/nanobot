@@ -52,7 +52,62 @@ void ng_shell_ensure_dangerous_file(void) {
   fclose(f);
 }
 
-static int pattern_in_file(const char *path, const char *command) {
+static int is_ident_char(unsigned char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+         (c >= '0' && c <= '9') || c == '_';
+}
+
+/**
+ * Dangerous-pattern hit with token + prose-negation awareness.
+ *
+ * Residual 2026-08-09: plain strstr("reboot") matched mesh status lines
+ * like "no reboot" / "no_reboot" / "no_force_stop no_flash no_reboot" and
+ * forced approval_required (425) on harmless NEXT_FOR_TITAN / HOST_ACK
+ * writes. Require non-identifier boundaries and skip "no/not/never/without".
+ */
+static int dangerous_token_hit(const char *cmd, const char *pat) {
+  if (!cmd || !pat || !pat[0]) return 0;
+  size_t n = strlen(pat);
+  const char *p = cmd;
+  while ((p = strstr(p, pat)) != NULL) {
+    unsigned char before = (p > cmd) ? (unsigned char)p[-1] : 0;
+    unsigned char after = (unsigned char)p[n];
+    /* mid-token: no_reboot, noreboot, preboot… */
+    if (is_ident_char(before) || is_ident_char(after)) {
+      p += 1;
+      continue;
+    }
+    /* prose negation immediately before: "no reboot", "not reboot", … */
+    const char *s = p;
+    while (s > cmd &&
+           (s[-1] == ' ' || s[-1] == '\t' || s[-1] == '/' || s[-1] == '-'))
+      s--;
+    const char *w = s;
+    while (w > cmd && is_ident_char((unsigned char)w[-1])) w--;
+    size_t wl = (size_t)(s - w);
+    if (wl == 2 && !strncasecmp(w, "no", 2)) {
+      p += 1;
+      continue;
+    }
+    if (wl == 3 && !strncasecmp(w, "not", 3)) {
+      p += 1;
+      continue;
+    }
+    if (wl == 5 && !strncasecmp(w, "never", 5)) {
+      p += 1;
+      continue;
+    }
+    if (wl == 7 && !strncasecmp(w, "without", 7)) {
+      p += 1;
+      continue;
+    }
+    return 1;
+  }
+  return 0;
+}
+
+/* shell_dangerous file: token-aware (not raw substring). */
+static int dangerous_pattern_in_file(const char *path, const char *command) {
   FILE *f = fopen(path, "r");
   if (!f) return 0;
   char line[512];
@@ -62,8 +117,12 @@ static int pattern_in_file(const char *path, const char *command) {
     while (*p == ' ' || *p == '\t') p++;
     if (!*p || *p == '#') continue;
     size_t n = strlen(p);
-    while (n && (p[n-1] == '\n' || p[n-1] == '\r' || p[n-1] == ' ')) p[--n] = 0;
-    if (n && strstr(command, p)) { hit = 1; break; }
+    while (n && (p[n - 1] == '\n' || p[n - 1] == '\r' || p[n - 1] == ' '))
+      p[--n] = 0;
+    if (n && dangerous_token_hit(command, p)) {
+      hit = 1;
+      break;
+    }
   }
   fclose(f);
   return hit;
@@ -100,7 +159,7 @@ static int command_covered_by_shell_allow(const char *command) {
   if (!command || !command[0]) return 0;
   /* known dangerous tokens the app writes into shell_allow */
   for (int i = 0; default_dangerous[i]; i++) {
-    if (strstr(command, default_dangerous[i])
+    if (dangerous_token_hit(command, default_dangerous[i])
         && pattern_allowed_local(default_dangerous[i]))
       return 1;
   }
@@ -139,11 +198,14 @@ ng_shell_class ng_shell_classify(const char *command) {
   snprintf(path, sizeof path, "%s/shell_dangerous", ng_workdir());
   int hit = 0;
   if (access(path, R_OK) == 0)
-    hit = pattern_in_file(path, command);
+    hit = dangerous_pattern_in_file(path, command);
   else {
     for (int i = 0; default_dangerous[i]; i++) {
-      if (strstr(command, default_dangerous[i])) {
-        if (!pattern_allowed_local(default_dangerous[i])) { hit = 1; break; }
+      if (dangerous_token_hit(command, default_dangerous[i])) {
+        if (!pattern_allowed_local(default_dangerous[i])) {
+          hit = 1;
+          break;
+        }
       }
     }
   }
