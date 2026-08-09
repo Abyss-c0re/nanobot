@@ -224,12 +224,13 @@ class H(BaseHTTPRequestHandler):
         pass
 
     def _read_json(self):
+        """Return (obj, err). Residual: bad JSON used to become {} → Method not found: None."""
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else b"{}"
         try:
-            return json.loads(raw.decode() or "{}")
+            return json.loads(raw.decode() or "{}"), None
         except Exception:
-            return {}
+            return None, "parse_error"
 
     def _send(self, code: int, obj: dict):
         body = json.dumps(obj).encode()
@@ -347,11 +348,37 @@ class H(BaseHTTPRequestHandler):
         if not (self.path.startswith("/mcp") or self.path in ("/", "/message")):
             self._send(404, _missing("not_found"))
             return
-        msg = self._read_json()
+        msg, perr = self._read_json()
+        if perr is not None:
+            # JSON-RPC 2.0 Parse error (HTTP 200 body is standard for MCP-over-HTTP).
+            self._send(
+                200,
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32700, "message": "Parse error"},
+                },
+            )
+            return
         if isinstance(msg, list):
-            out = [handle_rpc(m) for m in msg]
+            out = [handle_rpc(m) if isinstance(m, dict) else {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32600, "message": "Invalid Request"},
+            } for m in msg]
             # single-response clients: return last with id
             self._send(200, out if len(out) != 1 else out[0])
+            return
+        if not isinstance(msg, dict):
+            # Residual: JSON null/number/string fell into handle_rpc → Method not found.
+            self._send(
+                200,
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32600, "message": "Invalid Request"},
+                },
+            )
             return
         self._send(200, handle_rpc(msg))
 

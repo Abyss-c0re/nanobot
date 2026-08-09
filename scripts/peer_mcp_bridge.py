@@ -117,27 +117,50 @@ def peer_token() -> str:
 
 
 def read_message() -> dict | None:
+    """Read one JSON-RPC message. Residual: bad JSON crashed the stdio loop."""
     line = sys.stdin.buffer.readline()
     if not line:
         return None
-    if line.lower().startswith(b"content-length:"):
-        headers: dict[str, str] = {}
-        while True:
-            if line in (b"\r\n", b"\n"):
-                break
-            if b":" in line:
-                k, v = line.decode("utf-8", "replace").split(":", 1)
-                headers[k.strip().lower()] = v.strip()
-            line = sys.stdin.buffer.readline()
-            if not line:
-                return None
-        n = int(headers.get("content-length", "0"))
-        body = sys.stdin.buffer.read(n) if n else b"{}"
-        return json.loads(body.decode("utf-8"))
-    text = line.decode("utf-8", "replace").strip()
-    if not text:
+    try:
+        if line.lower().startswith(b"content-length:"):
+            headers: dict[str, str] = {}
+            while True:
+                if line in (b"\r\n", b"\n"):
+                    break
+                if b":" in line:
+                    k, v = line.decode("utf-8", "replace").split(":", 1)
+                    headers[k.strip().lower()] = v.strip()
+                line = sys.stdin.buffer.readline()
+                if not line:
+                    return None
+            n = int(headers.get("content-length", "0"))
+            body = sys.stdin.buffer.read(n) if n else b"{}"
+            msg = json.loads(body.decode("utf-8"))
+        else:
+            text = line.decode("utf-8", "replace").strip()
+            if not text:
+                return read_message()
+            msg = json.loads(text)
+    except Exception:
+        # Keep bridge alive; JSON-RPC Parse error (align HTTP MCP -32700).
+        write_message(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32700, "message": "Parse error"},
+            }
+        )
         return read_message()
-    return json.loads(text)
+    if not isinstance(msg, dict):
+        write_message(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32600, "message": "Invalid Request"},
+            }
+        )
+        return read_message()
+    return msg
 
 
 def write_message(msg: dict) -> None:
