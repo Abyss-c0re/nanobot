@@ -117,6 +117,7 @@ cd ~/Dev/AI/nanobot
 | control service/action case-fold | `ffeab17`  |
 | jobs index exit leaf | `fb48ea9`  |
 | jobs index ok leaf (+ exit/error unified) | `71b2c0c`  |
+| jobs path trailing slash + /api/jobs aliases | `de44635`  |
 
 ## Anti-chaos
 

@@ -1402,8 +1402,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* Async jobs: accept work immediately, poll result — keeps peer responsive */
-  if (is_post && (strcmp(path, "/peer/v1/jobs") == 0 || strcmp(path, "/peer/v1/job") == 0)) {
+  /* Async jobs: accept work immediately, poll result — keeps peer responsive.
+   * Residual: POST /peer/v1/jobs/ (trailing slash) and /api/jobs fell through
+   * to not_found while collection without slash worked. */
+  if (is_post && (strcmp(path, "/peer/v1/jobs") == 0 || strcmp(path, "/peer/v1/job") == 0 ||
+                  strcmp(path, "/peer/v1/jobs/") == 0 || strcmp(path, "/peer/v1/job/") == 0 ||
+                  strcmp(path, "/api/jobs") == 0 || strcmp(path, "/api/job") == 0 ||
+                  strcmp(path, "/api/jobs/") == 0 || strcmp(path, "/api/job/") == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";
@@ -1634,8 +1639,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* GET /peer/v1/jobs — dual-wire index of recent job metas (no full replies).
-   * Residual: mesh probes hit collection path and got not_found (only /jobs/{id}). */
-  if (is_get && (strcmp(path, "/peer/v1/jobs") == 0 || strcmp(path, "/peer/v1/job") == 0)) {
+   * Residual: mesh probes hit collection path and got not_found (only /jobs/{id}).
+   * Residual: GET .../jobs/ (trailing slash) matched /jobs/{id} with empty id →
+   * bad_id; /api/jobs was 404 while health/ready already had /api aliases. */
+  if (is_get && (strcmp(path, "/peer/v1/jobs") == 0 || strcmp(path, "/peer/v1/job") == 0 ||
+                 strcmp(path, "/peer/v1/jobs/") == 0 || strcmp(path, "/peer/v1/job/") == 0 ||
+                 strcmp(path, "/api/jobs") == 0 || strcmp(path, "/api/job") == 0 ||
+                 strcmp(path, "/api/jobs/") == 0 || strcmp(path, "/api/job/") == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
     char jdir[640];
     snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
@@ -1802,11 +1812,38 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_get && strncmp(path, "/peer/v1/jobs/", 14) == 0) {
+  /* Residual: /api/jobs/{id} 404; id with trailing slash failed isdigit → bad_id. */
+  if (is_get && (strncmp(path, "/peer/v1/jobs/", 14) == 0 ||
+                 strncmp(path, "/peer/v1/job/", 13) == 0 ||
+                 strncmp(path, "/api/jobs/", 10) == 0 ||
+                 strncmp(path, "/api/job/", 9) == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
-    const char *id = path + 14;
+    const char *idraw = path;
+    if (strncmp(path, "/peer/v1/jobs/", 14) == 0) idraw = path + 14;
+    else if (strncmp(path, "/peer/v1/job/", 13) == 0) idraw = path + 13;
+    else if (strncmp(path, "/api/jobs/", 10) == 0) idraw = path + 10;
+    else idraw = path + 9;
+    /* strip one trailing slash so /jobs/123/ still polls */
+    char idbuf[40];
+    size_t idlen = 0;
+    while (idraw[idlen] && idraw[idlen] != '/' && idlen + 1 < sizeof idbuf) {
+      idbuf[idlen] = idraw[idlen];
+      idlen++;
+    }
+    idbuf[idlen] = 0;
+    /* only allow optional final slash, no mid-path segments */
+    if (idraw[idlen] == '/') {
+      if (idraw[idlen + 1] != 0) {
+        http_peer_err(cfd, 400, "bad_id");
+        free(req); close(cfd); return;
+      }
+    } else if (idraw[idlen] != 0) {
+      http_peer_err(cfd, 400, "bad_id");
+      free(req); close(cfd); return;
+    }
+    const char *id = idbuf;
     /* job ids are digits only (time+pid) */
-    if (!id[0] || strchr(id, '/') || strstr(id, "..")) {
+    if (!id[0] || strstr(id, "..")) {
       http_peer_err(cfd, 400, "bad_id");
       free(req); close(cfd); return;
     }
