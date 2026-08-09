@@ -618,7 +618,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_get && strcmp(path, "/activate") == 0) {
+  /* Residual: trailing slash 404 on /activate while bare path worked. */
+  if (is_get && (strcmp(path, "/activate") == 0 || strcmp(path, "/activate/") == 0)) {
     const char *u = NULL;
     if (session) {
       if (!session->login_pending && !ng_session_valid(session))
