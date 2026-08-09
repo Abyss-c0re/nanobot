@@ -129,6 +129,7 @@ cd ~/Dev/AI/nanobot
 | MCP unknown_tool dual-wire + isError true | `03174d0`  |
 | MCP bad_id + braincube unknown_tool dual-wire | `bc975cb`  |
 | MCP peer transport fail dual-wire (isError) | `71ee0be`  |
+| MCP JSON-RPC parse/invalid body errors | `1e3e503`  |
 
 ## Anti-chaos
 
