@@ -100,6 +100,7 @@ cd ~/Dev/AI/nanobot
 | /api/chat + subagent whitespace + chat session_ensure | `ec66e08` |
 | async prompt jobs session_ensure + need_login | `60642f4` |
 | MCP empty/ws prompt+shell fail-fast | `3d47992` |
+| subagent spawn session_ensure + need_login | `e06e2ad` |
 
 ## Anti-chaos
 
