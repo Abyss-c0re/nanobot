@@ -1699,6 +1699,19 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       http_peer_err(cfd, 400, "need_prompt");
       free(req); close(cfd); return;
     }
+    /* Residual: spawn had no login gate; soft-expired access failed late in
+     * the subagent worker (prompt/jobs ensure first). */
+    {
+      int need_browser = ng_agent_needs_browser_session(agent);
+      if (need_browser && session && !ng_session_valid(session)
+          && !session->login_pending)
+        (void)ng_session_ensure(session);
+      if (need_browser && (!session || !ng_session_valid(session))) {
+        free(prompt); free(desc); free(type); free(action);
+        http_peer_err_flag(cfd, 401, "need_login", "need_login");
+        free(req); close(cfd); return;
+      }
+    }
     if (!ng_subagent_enabled()) {
       free(prompt); free(desc); free(type); free(action);
       http_peer_err(cfd, 503, "subagents_disabled");
