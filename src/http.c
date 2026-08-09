@@ -531,11 +531,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         free(req); close(cfd); return;
       }
     }
-    /* Dual-wire root plate — machine endpoints only (no free-text hint essay). */
+    /* Dual-wire root plate — machine endpoints only (no free-text hint essay).
+     * Residual: omitted health/ready probes while /peer/v1/info listed them. */
     const char *body =
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"root\","
       "\"service\":\"nanobot\",\"role\":\"cli-api\","
-      "\"endpoints\":[\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
+      "\"endpoints\":["
+      "\"/peer/v1/health\",\"/health\",\"/ready\",\"/peer/v1/ready\","
+      "\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
       "\"/peer/v1/task\",\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/task\","
       "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/subagents\"],"
       "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
