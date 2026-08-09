@@ -80,6 +80,7 @@ cd ~/Dev/AI/nanobot
 | cool_restart retry if start pid exits pre-health | `eb51ed9` |
 | peer_mcp_bridge settings PORT fallback | `3a49722` |
 | peer_mcp_bridge prefer loopback if listening | `a4614d1` |
+| GET /jobs list cap = NG_JOBS_KEEP (was 32) | this cycle |
 
 ## Anti-chaos
 

@@ -1343,7 +1343,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
     jobs_gc(jdir);
     DIR *d = opendir(jdir);
-    enum { MAX_LIST = 32 };
+    /* Match GC keep so mesh index can see every retained finished meta. */
+    enum { MAX_LIST = NG_JOBS_KEEP };
     char ids[MAX_LIST][32];
     int nids = 0;
     if (d) {
