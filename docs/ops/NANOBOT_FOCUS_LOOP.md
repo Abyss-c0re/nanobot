@@ -136,6 +136,7 @@ cd ~/Dev/AI/nanobot
 | MCP GET resources proxy on :18790 | `cefa6e2`  |
 | peer trailing-slash resources/braincube/health | `5159c69`  |
 | MCP auth status proxy + peer auth aliases | `8854837`  |
+| MCP /activate dual-wire + peer slash | `9d30a9e`  |
 
 ## Anti-chaos
 
