@@ -86,6 +86,7 @@ cd ~/Dev/AI/nanobot
 | hub events.jsonl rotate at 256KiB | `99660fa` |
 | health/info jobs + jobs_keep leaves | `df0a8d4` |
 | cool_restart installs newer build/host bin | `046a943` |
+| `/ready` action=ready (was health) | `66d1217` |
 
 ## Anti-chaos
 
