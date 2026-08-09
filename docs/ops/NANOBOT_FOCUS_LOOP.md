@@ -75,8 +75,8 @@ cd ~/Dev/AI/nanobot
 | Jobs GC keep 48 | `583bb38` |
 | `already_listening` + orphan reap | `42824b8` |
 | Mesh dir ensure on start | `f55a123` |
-| Jobs GC after done + poll-by-id | this cycle |
-| already_listening connect-probe (not TIME_WAIT) | this cycle |
+| Jobs GC after done + poll-by-id | `f699675` |
+| already_listening connect-probe (not TIME_WAIT) | `f699675` |
 
 ## Anti-chaos
 
