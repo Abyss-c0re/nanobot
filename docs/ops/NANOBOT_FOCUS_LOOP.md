@@ -95,6 +95,7 @@ cd ~/Dev/AI/nanobot
 | MCP ready/health aliases on :18790 | `82a1c28` |
 | cool_restart restages newer MCP | `b61c39b` |
 | session_ensure on /peer/v1/info signed_in | `de7d51c` |
+| empty prompt 400 + ensure on peer prompt | `3b0e259` |
 
 ## Anti-chaos
 
