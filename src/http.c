@@ -637,7 +637,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/status") == 0)) {
+  /* Residual: trailing slash 404 on /api/auth while bare path worked (mesh probes). */
+  if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/auth/") == 0 ||
+                 strcmp(path, "/api/status") == 0 || strcmp(path, "/api/status/") == 0 ||
+                 strcmp(path, "/peer/v1/auth") == 0 || strcmp(path, "/peer/v1/auth/") == 0 ||
+                 strcmp(path, "/peer/v1/status") == 0 ||
+                 strcmp(path, "/peer/v1/status/") == 0)) {
     int need_browser = agent && ng_agent_needs_browser_session(agent);
     /* Soft-expired access_token still counts as signed-in after a successful refresh.
      * Skip ensure while device-login is pending — refresh cannot help and spam-logs

@@ -283,6 +283,7 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET subagents list on peer/API but :18790 returned not_found.
         # Residual: GET braincube status/live on peer but :18790 not_found (FOCUS #2).
         # Residual: GET resources on peer (/peer/v1 + /api/v1) but :18790 not_found.
+        # Residual: GET /api/auth|/api/status on peer but :18790 not_found (signed_in probes).
         control_paths = ("/peer/v1/control", "/api/control")
         task_paths = ("/peer/v1/task", "/api/task")
         models_paths = ("/peer/v1/models", "/api/models")
@@ -293,6 +294,12 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/resources",
             "/api/v1/resources",
             "/api/resources",
+        )
+        auth_paths = (
+            "/api/auth",
+            "/api/status",
+            "/peer/v1/auth",
+            "/peer/v1/status",
         )
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
@@ -338,6 +345,13 @@ class H(BaseHTTPRequestHandler):
             res = peer_json("GET", "/peer/v1/resources", timeout=5)
             self._send(
                 200, res if isinstance(res, dict) else {"ok": False, "resources": res}
+            )
+            return
+        if path in auth_paths:
+            # Peer auth plate is /api/auth (not under /peer/v1 historically).
+            auth = peer_json("GET", "/api/auth", timeout=5)
+            self._send(
+                200, auth if isinstance(auth, dict) else {"ok": False, "auth": auth}
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
