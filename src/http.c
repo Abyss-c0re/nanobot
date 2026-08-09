@@ -1365,7 +1365,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     else if (kind_raw && !strcmp(kind_raw, "prompt")) kind = "prompt";
     else if (!kind_raw && cmd && !prompt) kind = "shell";
     free(kind_raw);
-    if (!prompt && !cmd) {
+    /* Residual: kind=watcher only flips watcher_enabled; empty payload is valid
+     * (prompt/shell still need work). Whitespace already nulled above. */
+    if (!prompt && !cmd && strcmp(kind, "watcher") != 0) {
       free(prompt); free(cmd);
       http_peer_err(cfd, 400, "need_prompt_or_command");
       free(req); close(cfd); return;
