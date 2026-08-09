@@ -1267,6 +1267,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh OpenAPI-ish probes hit /version|/api/version|/peer/v1/version
+   * and got not_found while health/info already expose NG_VERSION. */
+  if (is_get && (strcmp(path, "/version") == 0 || strcmp(path, "/version/") == 0 ||
+                 strcmp(path, "/api/version") == 0 || strcmp(path, "/api/version/") == 0 ||
+                 strcmp(path, "/peer/v1/version") == 0 ||
+                 strcmp(path, "/peer/v1/version/") == 0)) {
+    char body[512];
+    char *ver = ng_json_escape(NG_VERSION);
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"version\","
+      "\"service\":\"nanobot-peer\",\"version\":\"%s\","
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ver ? ver : "");
+    free(ver);
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: /api/info and trailing slash 404 while health/jobs already
    * accept /api + slash aliases — mesh OpenAPI-ish probes hit not_found. */
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0 ||

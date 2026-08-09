@@ -286,6 +286,7 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET /api/auth|/api/status on peer but :18790 not_found (signed_in probes).
         # Residual: GET /activate on peer (302|login_not_ready) but :18790 not_found.
         # Residual: GET /api/settings after peer gained GET settings plate.
+        # Residual: GET /version dual-wire after peer gained version plate.
         control_paths = ("/peer/v1/control", "/api/control")
         task_paths = ("/peer/v1/task", "/api/task")
         models_paths = ("/peer/v1/models", "/api/models")
@@ -305,6 +306,7 @@ class H(BaseHTTPRequestHandler):
         )
         activate_paths = ("/activate",)
         settings_paths = ("/api/settings", "/peer/v1/settings")
+        version_paths = ("/version", "/api/version", "/peer/v1/version")
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -381,6 +383,12 @@ class H(BaseHTTPRequestHandler):
             stg = peer_json("GET", "/api/settings", timeout=5)
             self._send(
                 200, stg if isinstance(stg, dict) else {"ok": False, "settings": stg}
+            )
+            return
+        if path in version_paths:
+            ver = peer_json("GET", "/api/version", timeout=5)
+            self._send(
+                200, ver if isinstance(ver, dict) else {"ok": False, "version": ver}
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
