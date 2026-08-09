@@ -132,6 +132,7 @@ cd ~/Dev/AI/nanobot
 | MCP JSON-RPC parse/invalid body errors | `1e3e503`  |
 | MCP GET subagents proxy on :18790 | `1fc99f3`  |
 | MCP GET braincube + /live proxy on :18790 | `1944417`  |
+| async shell job timeout 120s + pgroup kill | `70d7262`  |
 
 ## Anti-chaos
 
