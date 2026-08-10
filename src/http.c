@@ -607,6 +607,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strncmp(path, "/mercure", 8) ||
         !strcmp(path, "/.well-known/gnap-as-rs") ||
         !strcmp(path, "/gnap-as-rs") ||
+        !strncmp(path, "/.well-known/csaf", 17) ||
+        !strcmp(path, "/csaf/provider-metadata.json") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1667,7 +1669,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3515,6 +3517,47 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", gnap, sizeof gnap - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: security/mesh probes hit /.well-known/csaf/provider-metadata.json
+   * and got not_found. Lab ops is not a CSAF provider — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/csaf/provider-metadata.json") == 0 ||
+       strcmp(path, "/.well-known/csaf/provider-metadata.json/") == 0 ||
+       strcmp(path, "/.well-known/csaf") == 0 ||
+       strcmp(path, "/.well-known/csaf/") == 0 ||
+       strcmp(path, "/csaf/provider-metadata.json") == 0 ||
+       strcmp(path, "/csaf/provider-metadata.json/") == 0 ||
+       strcmp(path, "/api/csaf/provider-metadata.json") == 0 ||
+       strcmp(path, "/api/csaf") == 0 ||
+       strcmp(path, "/peer/v1/csaf/provider-metadata.json") == 0 ||
+       strcmp(path, "/peer/v1/csaf") == 0)) {
+    static const char csaf[] =
+      "{"
+      "\"canonical_url\":\"\","
+      "\"distributions\":[],"
+      "\"public_openpgp_keys\":[],"
+      "\"role\":\"\","
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"csaf\","
+      "\"csaf\":false,"
+      "\"provider\":false,"
+      "\"security_txt\":\"/.well-known/security.txt\","
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", csaf, sizeof csaf - 1);
     free(req); close(cfd); return;
   }
 

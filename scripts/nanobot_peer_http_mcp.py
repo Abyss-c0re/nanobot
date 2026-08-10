@@ -820,6 +820,16 @@ class H(BaseHTTPRequestHandler):
             "/api/gnap-as-rs",
             "/peer/v1/gnap-as-rs",
         )
+        # Residual: GET csaf provider-metadata after empty CSAF plate.
+        csaf_paths = (
+            "/.well-known/csaf/provider-metadata.json",
+            "/.well-known/csaf",
+            "/csaf/provider-metadata.json",
+            "/api/csaf/provider-metadata.json",
+            "/api/csaf",
+            "/peer/v1/csaf/provider-metadata.json",
+            "/peer/v1/csaf",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1752,6 +1762,15 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "gnap_as_rs": doc},
+            )
+            return
+        if path in csaf_paths:
+            doc = peer_json(
+                "GET", "/.well-known/csaf/provider-metadata.json", timeout=5
+            )
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "csaf": doc},
             )
             return
         if path in humans_paths:
