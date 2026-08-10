@@ -848,6 +848,15 @@ class H(BaseHTTPRequestHandler):
             "/api/jmap",
             "/peer/v1/jmap",
         )
+        # Residual: GET stun-key after empty STUN TLS key plate.
+        stun_key_paths = (
+            "/.well-known/stun-key",
+            "/.well-known/stun-key.json",
+            "/stun-key",
+            "/stun-key.json",
+            "/api/stun-key",
+            "/peer/v1/stun-key",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1803,6 +1812,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "jmap": doc},
+            )
+            return
+        if path in stun_key_paths:
+            doc = peer_json("GET", "/.well-known/stun-key", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "stun_key": doc},
             )
             return
         if path in humans_paths:
