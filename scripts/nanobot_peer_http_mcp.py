@@ -947,6 +947,15 @@ class H(BaseHTTPRequestHandler):
             "/api/ni",
             "/peer/v1/ni",
         )
+        # Residual: GET vapid after empty Web Push VAPID plate.
+        vapid_paths = (
+            "/.well-known/vapid",
+            "/.well-known/vapid.json",
+            "/vapid",
+            "/vapid.json",
+            "/api/vapid",
+            "/peer/v1/vapid",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1979,6 +1988,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "ni": doc},
+            )
+            return
+        if path in vapid_paths:
+            doc = peer_json("GET", "/.well-known/vapid", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "vapid": doc},
             )
             return
         if path in humans_paths:
