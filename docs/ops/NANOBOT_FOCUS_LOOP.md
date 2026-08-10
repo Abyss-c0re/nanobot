@@ -243,6 +243,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known mcp.json dual-wire + MCP | `b1765bb`  |
 | GET well-known web-bot-auth dual-wire + MCP | `58866a4`  |
 | GET well-known sbom dual-wire + MCP | `9e6519f`  |
+| GET well-known privacy-pass dual-wire + MCP | `6247397`  |
 ## Anti-chaos
 
 - One product bite per cycle  
