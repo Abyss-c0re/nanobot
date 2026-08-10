@@ -569,6 +569,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
         !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
         !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt") ||
+        !strcmp(path, "/trust.txt") || !strcmp(path, "/.well-known/trust.txt") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1628,7 +1629,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"oauth_client_registration\",\"openid_federation\","
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
-        "\"did_configuration\""
+        "\"did_configuration\",\"trust_txt\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2736,6 +2737,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "Preferred-Languages: en\n"
       "Canonical: https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", sectxt, sizeof sectxt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/crawler probes hit /trust.txt and /.well-known/trust.txt
+   * and got not_found. Lab ops peer has no org trust memberships — empty plate. */
+  if (is_get && (strcmp(path, "/trust.txt") == 0 ||
+                 strcmp(path, "/trust.txt/") == 0 ||
+                 strcmp(path, "/.well-known/trust.txt") == 0 ||
+                 strcmp(path, "/.well-known/trust.txt/") == 0 ||
+                 strcmp(path, "/api/trust.txt") == 0 ||
+                 strcmp(path, "/peer/v1/trust.txt") == 0)) {
+    static const char trust[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "# trust.txt — no public membership / control edges declared\n"
+      "# Companion: /.well-known/security.txt\n"
+      "# See: https://github.com/Abyss-c0re/nanobot\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", trust, sizeof trust - 1);
     free(req); close(cfd); return;
   }
 

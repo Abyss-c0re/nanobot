@@ -633,6 +633,13 @@ class H(BaseHTTPRequestHandler):
             "/api/security.txt",
             "/peer/v1/security.txt",
         )
+        # Residual: GET trust.txt after peer gained empty trust plate.
+        trust_txt_paths = (
+            "/trust.txt",
+            "/.well-known/trust.txt",
+            "/api/trust.txt",
+            "/peer/v1/trust.txt",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1283,6 +1290,31 @@ class H(BaseHTTPRequestHandler):
                     "peer_path": "/.well-known/security.txt",
                     "contact": "https://github.com/Abyss-c0re/nanobot/security/advisories/new",
                     "policy": "https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in trust_txt_paths:
+            # Peer serves text/plain empty trust plate; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "trust_txt",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/.well-known/trust.txt",
+                    "trust_txt": True,
+                    "memberships": [],
+                    "control": [],
+                    "security_txt": "/.well-known/security.txt",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,
