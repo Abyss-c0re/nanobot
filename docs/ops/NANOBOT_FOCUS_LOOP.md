@@ -275,6 +275,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known nodeinfo/2.2 matrix root PAR webauthn-origins fed nest dual-wire + MCP | `18375cd`  |
 | GET well-known passkey enroll/manage UMA/OID4VCI/FIDO nest DID/nostr dual-wire + MCP | `159997f`  |
 | GET well-known discovery autoconfig/DWN/org + OAuth logout/CIBA residual dual-wire + MCP | `c452661`  |
+| GET well-known OIDC logout/revocation URIs nodeinfo/2.3 matrix/support dual-wire + MCP | `f672d64`  |
 ## Anti-chaos
 
 - One product bite per cycle  
