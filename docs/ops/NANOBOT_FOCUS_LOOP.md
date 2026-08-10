@@ -141,6 +141,7 @@ cd ~/Dev/AI/nanobot
 | GET version dual-wire + MCP proxy | `a60d122`  |
 | GET mcp/servers slash + MCP proxy | `7f3dbbc`  |
 | GET log dual-wire + MCP proxy | `cf08e49`  |
+| GET bare /hello info alias + MCP | `831fc00`  |
 
 ## Anti-chaos
 
