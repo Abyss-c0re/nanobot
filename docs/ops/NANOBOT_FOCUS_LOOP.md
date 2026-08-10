@@ -187,6 +187,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known mta-sts.txt dual-wire + MCP | `d3a0587`  |
 | GET well-known caldav|carddav dual-wire + MCP | `8712af6`  |
 | GET well-known api-catalog dual-wire + MCP | `1944cf5`  |
+| GET well-known agent-card.json dual-wire + MCP | `1d52f3f`  |
 ## Anti-chaos
 
 - One product bite per cycle  
