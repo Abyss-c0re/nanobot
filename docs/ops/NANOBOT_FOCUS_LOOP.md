@@ -161,6 +161,7 @@ cd ~/Dev/AI/nanobot
 | GET humans.txt + empty sitemap dual-wire + MCP | `16529dc`  |
 | GET llms.txt dual-wire + MCP | `789e029`  |
 | GET favicon.svg dual-wire + MCP | `7f505bb`  |
+| GET service-worker.js no-PWA dual-wire + MCP | `65dcb8d`  |
 
 ## Anti-chaos
 
