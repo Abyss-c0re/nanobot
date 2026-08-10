@@ -576,6 +576,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strncmp(path, "/openpgpkey", 11) ||
         !strcmp(path, "/sshfp") || !strcmp(path, "/.well-known/sshfp") ||
         !strcmp(path, "/sshfp.json") || !strcmp(path, "/.well-known/sshfp.json") ||
+        !strcmp(path, "/jwks.json") || !strcmp(path, "/.well-known/jwks.json") ||
+        !strcmp(path, "/jwks") || !strcmp(path, "/.well-known/jwks") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1636,7 +1638,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2891,6 +2893,48 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"python\":0"
       "}";
     http_response(cfd, 200, "application/json", sshfp, sizeof sshfp - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OIDC/mesh probes hit /.well-known/jwks.json and got not_found.
+   * Lab ops is not an OIDC AS — empty JWKS (jwks_uri stays empty on openid plate). */
+  if (is_get && (strcmp(path, "/jwks.json") == 0 ||
+                 strcmp(path, "/jwks.json/") == 0 ||
+                 strcmp(path, "/jwks") == 0 ||
+                 strcmp(path, "/jwks/") == 0 ||
+                 strcmp(path, "/.well-known/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/jwks.json/") == 0 ||
+                 strcmp(path, "/.well-known/jwks") == 0 ||
+                 strcmp(path, "/.well-known/jwks/") == 0 ||
+                 strcmp(path, "/api/jwks.json") == 0 ||
+                 strcmp(path, "/api/jwks") == 0 ||
+                 strcmp(path, "/peer/v1/jwks.json") == 0 ||
+                 strcmp(path, "/peer/v1/jwks") == 0 ||
+                 strcmp(path, "/.well-known/oauth-authorization-server/jwks") == 0 ||
+                 strcmp(path, "/.well-known/openid-configuration/jwks") == 0)) {
+    static const char jwks[] =
+      "{"
+      "\"keys\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"jwks\","
+      "\"jwks\":false,"
+      "\"oidc_provider\":false,"
+      "\"openid_configuration\":\"/.well-known/openid-configuration\","
+      "\"oauth_authorization_server\":\"/.well-known/oauth-authorization-server\","
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", jwks, sizeof jwks - 1);
     free(req); close(cfd); return;
   }
 

@@ -674,6 +674,19 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/sshfp",
             "/peer/v1/sshfp.json",
         )
+        # Residual: GET jwks after peer gained empty JWKS plate.
+        jwks_paths = (
+            "/.well-known/jwks.json",
+            "/.well-known/jwks",
+            "/jwks.json",
+            "/jwks",
+            "/api/jwks.json",
+            "/api/jwks",
+            "/peer/v1/jwks.json",
+            "/peer/v1/jwks",
+            "/.well-known/oauth-authorization-server/jwks",
+            "/.well-known/openid-configuration/jwks",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1446,6 +1459,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "sshfp": doc},
+            )
+            return
+        if path in jwks_paths:
+            doc = peer_json("GET", "/.well-known/jwks.json", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "jwks": doc},
             )
             return
         if path in humans_paths:
