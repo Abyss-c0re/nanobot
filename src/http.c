@@ -583,7 +583,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/change-password") ||
         !strcmp(path, "/sellers.json") ||
         !strcmp(path, "/.well-known/ai-plugin.json") ||
-        !strcmp(path, "/ai-plugin.json"))
+        !strcmp(path, "/ai-plugin.json") ||
+        !strcmp(path, "/.well-known/assetlinks.json") ||
+        !strcmp(path, "/assetlinks.json"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1559,7 +1561,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
         "\"browserconfig\",\"change_password\",\"sellers\","
-        "\"apple_touch_icon\",\"ai_plugin\""
+        "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1700,6 +1702,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", aiplug, sizeof aiplug - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: Android/mesh probes hit /.well-known/assetlinks.json and got
+   * not_found. Lab ops has no app link statements — empty DAL array. */
+  if (is_get && (strcmp(path, "/.well-known/assetlinks.json") == 0 ||
+                 strcmp(path, "/.well-known/assetlinks.json/") == 0 ||
+                 strcmp(path, "/assetlinks.json") == 0 ||
+                 strcmp(path, "/assetlinks.json/") == 0 ||
+                 strcmp(path, "/api/assetlinks.json") == 0 ||
+                 strcmp(path, "/peer/v1/assetlinks.json") == 0)) {
+    static const char assetlinks[] = "[]";
+    http_response(cfd, 200, "application/json", assetlinks,
+                  sizeof assetlinks - 1);
     free(req); close(cfd); return;
   }
 

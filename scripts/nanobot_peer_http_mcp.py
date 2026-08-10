@@ -411,6 +411,13 @@ class H(BaseHTTPRequestHandler):
             "/api/ai-plugin.json",
             "/peer/v1/ai-plugin.json",
         )
+        # Residual: GET assetlinks.json after peer gained empty DAL plate.
+        assetlinks_paths = (
+            "/.well-known/assetlinks.json",
+            "/assetlinks.json",
+            "/api/assetlinks.json",
+            "/peer/v1/assetlinks.json",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -705,6 +712,28 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/.well-known/ai-plugin.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "ai_plugin": doc}
+            )
+            return
+        if path in assetlinks_paths:
+            # Peer serves empty DAL []; MCP dual-wire JSON (not a raw array).
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "assetlinks",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "application/json",
+                    "peer_path": "/.well-known/assetlinks.json",
+                    "statements": [],
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
             )
             return
         if path in crossdomain_paths:
