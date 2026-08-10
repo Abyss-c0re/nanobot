@@ -257,7 +257,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known tls-rpt dual-wire + MCP | `43872e7`  |
 | GET well-known bimi dual-wire + MCP | `a449bb2`  |
 | GET well-known statements.json dual-wire + MCP | `b804f04`  |
-| GET well-known mta-sts extensionless dual-wire + MCP | PENDING |
+| GET well-known mta-sts extensionless dual-wire + MCP | `53c63f8`  |
 ## Anti-chaos
 
 - One product bite per cycle  
