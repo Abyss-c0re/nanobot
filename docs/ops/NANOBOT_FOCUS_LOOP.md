@@ -159,6 +159,7 @@ cd ~/Dev/AI/nanobot
 | GET web app manifest dual-wire + MCP | `737d6c6`  |
 | GET schema dual-wire + MCP | `27e3256`  |
 | GET humans.txt + empty sitemap dual-wire + MCP | `16529dc`  |
+| GET llms.txt dual-wire + MCP | `789e029`  |
 
 ## Anti-chaos
 
