@@ -411,6 +411,15 @@ class H(BaseHTTPRequestHandler):
             "/api/ai-plugin.json",
             "/peer/v1/ai-plugin.json",
         )
+        # Residual: GET agent-card after peer gained private A2A card plate.
+        agent_card_paths = (
+            "/.well-known/agent-card.json",
+            "/.well-known/agent.json",
+            "/agent-card.json",
+            "/agent.json",
+            "/api/agent-card.json",
+            "/peer/v1/agent-card.json",
+        )
         # Residual: GET assetlinks.json after peer gained empty DAL plate.
         assetlinks_paths = (
             "/.well-known/assetlinks.json",
@@ -833,6 +842,14 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/.well-known/ai-plugin.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "ai_plugin": doc}
+            )
+            return
+        if path in agent_card_paths:
+            # Peer serves private agent-card; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/agent-card.json", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "agent_card": doc},
             )
             return
         if path in assetlinks_paths:

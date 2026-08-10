@@ -616,6 +616,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/carddav") ||
         !strcmp(path, "/.well-known/api-catalog") ||
         !strcmp(path, "/api-catalog") ||
+        !strcmp(path, "/.well-known/agent-card.json") ||
+        !strcmp(path, "/.well-known/agent.json") ||
+        !strcmp(path, "/agent-card.json") ||
+        !strcmp(path, "/agent.json") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1603,7 +1607,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"oauth_protected_resource\",\"dnt_policy\","
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
         "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\","
-        "\"caldav\",\"carddav\",\"api_catalog\""
+        "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1744,6 +1748,53 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", aiplug, sizeof aiplug - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: A2A/mesh probes hit /.well-known/agent-card.json and got
+   * not_found. Lab ops is not a public agent host — private card plate. */
+  if (is_get && (strcmp(path, "/.well-known/agent-card.json") == 0 ||
+                 strcmp(path, "/.well-known/agent-card.json/") == 0 ||
+                 strcmp(path, "/.well-known/agent.json") == 0 ||
+                 strcmp(path, "/.well-known/agent.json/") == 0 ||
+                 strcmp(path, "/agent-card.json") == 0 ||
+                 strcmp(path, "/agent-card.json/") == 0 ||
+                 strcmp(path, "/agent.json") == 0 ||
+                 strcmp(path, "/agent.json/") == 0 ||
+                 strcmp(path, "/api/agent-card.json") == 0 ||
+                 strcmp(path, "/peer/v1/agent-card.json") == 0)) {
+    static const char acard[] =
+      "{"
+      "\"name\":\"nanobot peer HTTP\","
+      "\"description\":\"Lab ops peer bus (not product SMX2). Not a public A2A agent.\","
+      "\"url\":\"/peer/v1/health\","
+      "\"provider\":{\"organization\":\"Abyss-c0re\",\"url\":\"https://github.com/Abyss-c0re/nanobot\"},"
+      "\"version\":\"0.5.3\","
+      "\"documentationUrl\":\"https://github.com/Abyss-c0re/nanobot\","
+      "\"capabilities\":{"
+        "\"streaming\":false,"
+        "\"pushNotifications\":false,"
+        "\"stateTransitionHistory\":false"
+      "},"
+      "\"authentication\":{\"schemes\":[]},"
+      "\"defaultInputModes\":[\"text\"],"
+      "\"defaultOutputModes\":[\"text\"],"
+      "\"skills\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"agent_card\","
+        "\"agent_card\":true,"
+        "\"public_agent\":false,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", acard, sizeof acard - 1);
     free(req); close(cfd); return;
   }
 
