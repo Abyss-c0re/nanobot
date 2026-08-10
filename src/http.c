@@ -853,7 +853,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/assetlinks.json") ||
         !strcmp(path, "/assetlinks.json") ||
         !strcmp(path, "/.well-known/apple-app-site-association") ||
+        !strcmp(path, "/.well-known/apple-app-site-association.json") ||
         !strcmp(path, "/apple-app-site-association") ||
+        !strcmp(path, "/apple-app-site-association.json") ||
         !strcmp(path, "/.well-known/gpc.json") ||
         !strcmp(path, "/gpc.json") ||
         !strcmp(path, "/.well-known/dnt-policy.txt") ||
@@ -875,9 +877,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/host-meta") ||
         !strcmp(path, "/host-meta.json") ||
         !strcmp(path, "/.well-known/matrix/client") ||
+        !strcmp(path, "/.well-known/matrix/client.json") ||
         !strcmp(path, "/.well-known/matrix/server") ||
+        !strcmp(path, "/.well-known/matrix/server.json") ||
         !strcmp(path, "/matrix/client") ||
+        !strcmp(path, "/matrix/client.json") ||
         !strcmp(path, "/matrix/server") ||
+        !strcmp(path, "/matrix/server.json") ||
         !strcmp(path, "/.well-known/tdmrep.json") ||
         !strcmp(path, "/tdmrep.json") ||
         !strcmp(path, "/.well-known/mta-sts.txt") ||
@@ -2143,8 +2149,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/apple-app-site-association") == 0 ||
        strcmp(path, "/.well-known/apple-app-site-association/") == 0 ||
+       strcmp(path, "/.well-known/apple-app-site-association.json") == 0 ||
        strcmp(path, "/apple-app-site-association") == 0 ||
        strcmp(path, "/apple-app-site-association/") == 0 ||
+       strcmp(path, "/apple-app-site-association.json") == 0 ||
        strcmp(path, "/api/apple-app-site-association") == 0 ||
        strcmp(path, "/peer/v1/apple-app-site-association") == 0)) {
     static const char aasa[] =
@@ -2531,8 +2539,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * not_found. Lab ops is not a Matrix client discovery host — empty plate. */
   if (is_get && (strcmp(path, "/.well-known/matrix/client") == 0 ||
                  strcmp(path, "/.well-known/matrix/client/") == 0 ||
+                 strcmp(path, "/.well-known/matrix/client.json") == 0 ||
                  strcmp(path, "/matrix/client") == 0 ||
                  strcmp(path, "/matrix/client/") == 0 ||
+                 strcmp(path, "/matrix/client.json") == 0 ||
                  strcmp(path, "/api/matrix/client") == 0 ||
                  strcmp(path, "/peer/v1/matrix/client") == 0)) {
     static const char mc[] =
@@ -2560,8 +2570,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * not_found. Lab ops is not a Matrix homeserver — empty m.server plate. */
   if (is_get && (strcmp(path, "/.well-known/matrix/server") == 0 ||
                  strcmp(path, "/.well-known/matrix/server/") == 0 ||
+                 strcmp(path, "/.well-known/matrix/server.json") == 0 ||
                  strcmp(path, "/matrix/server") == 0 ||
                  strcmp(path, "/matrix/server/") == 0 ||
+                 strcmp(path, "/matrix/server.json") == 0 ||
                  strcmp(path, "/api/matrix/server") == 0 ||
                  strcmp(path, "/peer/v1/matrix/server") == 0)) {
     static const char ms[] =

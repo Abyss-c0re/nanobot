@@ -430,7 +430,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET AASA after peer gained empty Universal Links plate.
         aasa_paths = (
             "/.well-known/apple-app-site-association",
+            "/.well-known/apple-app-site-association.json",
             "/apple-app-site-association",
+            "/apple-app-site-association.json",
             "/api/apple-app-site-association",
             "/peer/v1/apple-app-site-association",
         )
@@ -528,14 +530,18 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET matrix client discovery after peer gained empty plate.
         matrix_client_paths = (
             "/.well-known/matrix/client",
+            "/.well-known/matrix/client.json",
             "/matrix/client",
+            "/matrix/client.json",
             "/api/matrix/client",
             "/peer/v1/matrix/client",
         )
         # Residual: GET matrix server discovery after peer gained empty plate.
         matrix_server_paths = (
             "/.well-known/matrix/server",
+            "/.well-known/matrix/server.json",
             "/matrix/server",
+            "/matrix/server.json",
             "/api/matrix/server",
             "/peer/v1/matrix/server",
         )
