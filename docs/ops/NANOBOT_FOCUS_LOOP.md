@@ -153,6 +153,7 @@ cd ~/Dev/AI/nanobot
 | GET swagger/docs openapi aliases + MCP | `07f7dc7`  |
 | GET livez/readyz/healthz probe aliases + MCP | `65ea4f6`  |
 | GET uptime dual-wire + MCP | `f1e5201`  |
+| GET bare /status auth alias + MCP | `af20287`  |
 
 ## Anti-chaos
 
