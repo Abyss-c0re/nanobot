@@ -708,6 +708,17 @@ class H(BaseHTTPRequestHandler):
             "/api/apple-developer-merchantid-domain-association",
             "/peer/v1/apple-developer-merchantid-domain-association",
         )
+        # Residual: GET nostr.json after empty NIP-05 plate.
+        nostr_paths = (
+            "/.well-known/nostr.json",
+            "/.well-known/nostr",
+            "/nostr.json",
+            "/nostr",
+            "/api/nostr.json",
+            "/api/nostr",
+            "/peer/v1/nostr.json",
+            "/peer/v1/nostr",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1518,6 +1529,13 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "apple_merchantid_domain_association": doc},
+            )
+            return
+        if path in nostr_paths:
+            doc = peer_json("GET", "/.well-known/nostr.json", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "nostr": doc},
             )
             return
         if path in humans_paths:
