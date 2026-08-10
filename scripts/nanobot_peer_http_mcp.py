@@ -388,6 +388,8 @@ class H(BaseHTTPRequestHandler):
             "/api/capabilities",
             "/peer/v1/capabilities",
         )
+        # Residual: GET schema dual-wire after peer gained schema plate.
+        schema_paths = ("/schema", "/api/schema", "/peer/v1/schema")
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -519,6 +521,12 @@ class H(BaseHTTPRequestHandler):
             cap = peer_json("GET", "/api/capabilities", timeout=5)
             self._send(
                 200, cap if isinstance(cap, dict) else {"ok": False, "capabilities": cap}
+            )
+            return
+        if path in schema_paths:
+            sch = peer_json("GET", "/api/schema", timeout=5)
+            self._send(
+                200, sch if isinstance(sch, dict) else {"ok": False, "schema_plate": sch}
             )
             return
         if path in favicon_paths:

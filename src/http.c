@@ -1505,7 +1505,40 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "},"
       "\"discovery\":["
         "\"/peer/v1/health\",\"/peer/v1/info\",\"/openapi.json\","
-        "\"/version\",\"/metrics\",\"/whoami\",\"/capabilities\""
+        "\"/version\",\"/metrics\",\"/whoami\",\"/capabilities\",\"/schema\""
+      "],"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ver ? ver : "");
+    free(ver);
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes hit /schema|/api/schema|/peer/v1/schema and got
+   * not_found while openapi/capabilities already list wire plates. */
+  if (is_get && (strcmp(path, "/schema") == 0 || strcmp(path, "/schema/") == 0 ||
+                 strcmp(path, "/api/schema") == 0 || strcmp(path, "/api/schema/") == 0 ||
+                 strcmp(path, "/peer/v1/schema") == 0 ||
+                 strcmp(path, "/peer/v1/schema/") == 0)) {
+    char body[1200];
+    char *ver = ng_json_escape(NG_VERSION);
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"schema\","
+      "\"service\":\"nanobot-peer\",\"version\":\"%s\","
+      "\"openapi\":\"/openapi.json\","
+      "\"plates\":["
+        "\"nanobot.peer_http.v1\","
+        "\"nanobot.auth.v1\","
+        "\"nanobot.shell.v1\","
+        "\"nanobot.task.v1\","
+        "\"nanobot.task_reminder.v1\","
+        "\"nanobot.mcp.v1\","
+        "\"nanobot.braincell.v1\""
+      "],"
+      "\"actions\":["
+        "\"health\",\"ready\",\"ping\",\"livez\",\"readyz\",\"healthz\","
+        "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
+        "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
