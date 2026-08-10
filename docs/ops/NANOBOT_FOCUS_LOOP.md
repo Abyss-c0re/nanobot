@@ -263,7 +263,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known passkey/oid4vci/webauthn/did-cfg .json alias dual-wire + MCP | `b986db7`  |
 | GET well-known oauth-reg/webfinger/nodeinfo/api-catalog .json alias dual-wire + MCP | `02821a4`  |
 | GET well-known matrix/aasa .json alias dual-wire + MCP | `f539331`  |
-| GET well-known tdmrep/gpc/ai-plugin/assetlinks extensionless dual-wire + MCP | `PENDING`  |
+| GET well-known tdmrep/gpc/ai-plugin/assetlinks extensionless dual-wire + MCP | `4f8fdb6`  |
 ## Anti-chaos
 
 - One product bite per cycle  
