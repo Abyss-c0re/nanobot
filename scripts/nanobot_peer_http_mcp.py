@@ -956,6 +956,15 @@ class H(BaseHTTPRequestHandler):
             "/api/vapid",
             "/peer/v1/vapid",
         )
+        # Residual: GET hoba after empty HOBA (RFC 7486) plate.
+        hoba_paths = (
+            "/.well-known/hoba",
+            "/.well-known/hoba.json",
+            "/hoba",
+            "/hoba.json",
+            "/api/hoba",
+            "/peer/v1/hoba",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1995,6 +2004,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "vapid": doc},
+            )
+            return
+        if path in hoba_paths:
+            doc = peer_json("GET", "/.well-known/hoba", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "hoba": doc},
             )
             return
         if path in humans_paths:

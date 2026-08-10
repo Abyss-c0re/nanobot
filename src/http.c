@@ -635,6 +635,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/vapid") || !strncmp(path, "/vapid/", 7) ||
         !strcmp(path, "/vapid.json") || !strcmp(path, "/api/vapid") ||
         !strcmp(path, "/peer/v1/vapid") ||
+        !strcmp(path, "/.well-known/hoba") || !strncmp(path, "/.well-known/hoba/", 17) ||
+        !strcmp(path, "/.well-known/hoba.json") ||
+        !strcmp(path, "/hoba") || !strncmp(path, "/hoba/", 6) ||
+        !strcmp(path, "/hoba.json") || !strcmp(path, "/api/hoba") ||
+        !strcmp(path, "/peer/v1/hoba") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1695,7 +1700,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -4096,6 +4101,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", vapid, sizeof vapid - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/auth probes hit /.well-known/hoba and got not_found.
+   * Lab ops does not offer HOBA (RFC 7486) — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/hoba") == 0 ||
+       strcmp(path, "/.well-known/hoba/") == 0 ||
+       strncmp(path, "/.well-known/hoba/", 17) == 0 ||
+       strcmp(path, "/hoba") == 0 ||
+       strcmp(path, "/hoba/") == 0 ||
+       strcmp(path, "/api/hoba") == 0 ||
+       strcmp(path, "/peer/v1/hoba") == 0 ||
+       strcmp(path, "/.well-known/hoba.json") == 0 ||
+       strcmp(path, "/hoba.json") == 0)) {
+    static const char hoba[] =
+      "{"
+      "\"origins\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"hoba\","
+      "\"hoba\":false,"
+      "\"http_origin_bound_auth\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", hoba, sizeof hoba - 1);
     free(req); close(cfd); return;
   }
 
