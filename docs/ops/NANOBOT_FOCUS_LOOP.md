@@ -195,6 +195,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known fido2-configuration dual-wire + MCP | `48c0bdd`  |
 | GET well-known webauthn dual-wire + MCP | `7a72967`  |
 | GET well-known did.json dual-wire + MCP | `b976d6c`  |
+| GET well-known did-configuration dual-wire + MCP | `d2efacd`  |
 ## Anti-chaos
 
 - One product bite per cycle  
