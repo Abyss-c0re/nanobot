@@ -534,6 +534,13 @@ class H(BaseHTTPRequestHandler):
             "/api/openid-configuration",
             "/peer/v1/openid-configuration",
         )
+        # Residual: GET openid-federation after peer gained non-entity plate.
+        openid_fed_paths = (
+            "/.well-known/openid-federation",
+            "/openid-federation",
+            "/api/openid-federation",
+            "/peer/v1/openid-federation",
+        )
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
@@ -1031,6 +1038,16 @@ class H(BaseHTTPRequestHandler):
             )
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "openid": doc}
+            )
+            return
+        if path in openid_fed_paths:
+            # Peer serves non-entity openid-federation; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/openid-federation", timeout=5
+            )
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "openid_federation": doc},
             )
             return
         if path in oauth_as_paths:

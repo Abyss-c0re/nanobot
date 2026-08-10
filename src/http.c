@@ -622,6 +622,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/agent.json") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
+        !strcmp(path, "/.well-known/openid-federation") ||
+        !strcmp(path, "/openid-federation") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
@@ -1610,7 +1612,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
         "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\","
         "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\","
-        "\"oauth_client_registration\""
+        "\"oauth_client_registration\",\"openid_federation\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2248,6 +2250,44 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", oidc, sizeof oidc - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OIDC/mesh probes hit /.well-known/openid-federation and got
+   * not_found. Lab ops is not an OpenID Federation entity — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/openid-federation") == 0 ||
+       strcmp(path, "/.well-known/openid-federation/") == 0 ||
+       strcmp(path, "/openid-federation") == 0 ||
+       strcmp(path, "/openid-federation/") == 0 ||
+       strcmp(path, "/api/openid-federation") == 0 ||
+       strcmp(path, "/peer/v1/openid-federation") == 0)) {
+    static const char oif[] =
+      "{"
+      "\"iss\":\"\","
+      "\"sub\":\"\","
+      "\"iat\":0,"
+      "\"exp\":0,"
+      "\"jwks\":{\"keys\":[]},"
+      "\"metadata\":{},"
+      "\"authority_hints\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"openid_federation\","
+        "\"openid_federation\":false,"
+        "\"oidc_provider\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", oif, sizeof oif - 1);
     free(req); close(cfd); return;
   }
 
