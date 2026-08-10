@@ -6627,6 +6627,84 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh probes /control/shell|watcher|ui and /watcher got not_found
+   * while control plate already exposes enabled leaves. Nested dual-wire status. */
+  if (is_get &&
+      (strcmp(path, "/peer/v1/control/shell") == 0 ||
+       strcmp(path, "/peer/v1/control/shell/") == 0 ||
+       strcmp(path, "/api/control/shell") == 0 ||
+       strcmp(path, "/api/control/shell/") == 0 ||
+       strcmp(path, "/peer/v1/control/watcher") == 0 ||
+       strcmp(path, "/peer/v1/control/watcher/") == 0 ||
+       strcmp(path, "/api/control/watcher") == 0 ||
+       strcmp(path, "/api/control/watcher/") == 0 ||
+       strcmp(path, "/peer/v1/control/ui") == 0 ||
+       strcmp(path, "/peer/v1/control/ui/") == 0 ||
+       strcmp(path, "/api/control/ui") == 0 ||
+       strcmp(path, "/api/control/ui/") == 0 ||
+       strcmp(path, "/peer/v1/watcher") == 0 ||
+       strcmp(path, "/peer/v1/watcher/") == 0 ||
+       strcmp(path, "/api/watcher") == 0 ||
+       strcmp(path, "/api/watcher/") == 0)) {
+    const char *svc = "shell";
+    const char *action = "control_shell";
+    if (strstr(path, "watcher")) {
+      svc = "watcher";
+      action = "control_watcher";
+    } else if (strstr(path, "/ui") || strstr(path, "/ui/")) {
+      svc = "ui";
+      action = "control_ui";
+    }
+    int enabled = 0;
+    if (!strcmp(svc, "shell")) {
+      char sp[640];
+      snprintf(sp, sizeof sp, "%s/shell_enabled", ng_workdir());
+      enabled = 1;
+      FILE *f = fopen(sp, "r");
+      if (f) {
+        char b[16] = {0};
+        if (fgets(b, sizeof b, f) &&
+            (b[0] == '0' || !strncasecmp(b, "off", 3)))
+          enabled = 0;
+        fclose(f);
+      }
+    } else if (!strcmp(svc, "watcher")) {
+      char wp[640];
+      snprintf(wp, sizeof wp, "%s/watcher_enabled", ng_workdir());
+      enabled = 0;
+      FILE *f = fopen(wp, "r");
+      if (f) {
+        char b[16] = {0};
+        if (fgets(b, sizeof b, f) &&
+            (b[0] == '1' || !strncasecmp(b, "on", 2)))
+          enabled = 1;
+        fclose(f);
+      }
+    } else {
+      char *u = ng_settings_get("UI");
+      if (u && (!strcasecmp(u, "on") || !strcmp(u, "1") ||
+                !strcasecmp(u, "true")))
+        enabled = 1;
+      free(u);
+      if (!enabled && cfg->www_root && cfg->www_root[0]) enabled = 1;
+    }
+    char jb[640];
+    int n = snprintf(
+        jb, sizeof jb,
+        "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+        "\"action\":\"%s\",\"service\":\"%s\",\"enabled\":%s,"
+        "\"method\":\"POST\",\"methods\":[\"POST\"],"
+        "\"control\":\"/peer/v1/control\","
+        "\"body\":{\"service\":\"%s\",\"action\":\"on|off\"},"
+        "\"persist\":true," NG_PEER_HTTP_DUAL_WIRE "}",
+        action, svc, enabled ? "true" : "false", svc);
+    if (n > 0 && n < (int)sizeof jb)
+      http_response(cfd, 200, "application/json", jb, (size_t)n);
+    else
+      http_peer_err(cfd, 500, "oom");
+    free(req); close(cfd); return;
+  }
+
   if (is_post && (strcmp(path, "/peer/v1/control") == 0 || strcmp(path, "/peer/v1/control/") == 0 ||
                   strcmp(path, "/api/control") == 0 || strcmp(path, "/api/control/") == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }

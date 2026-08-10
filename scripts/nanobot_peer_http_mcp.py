@@ -394,7 +394,20 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET /version dual-wire after peer gained version plate.
         # Residual: GET /api|/peer/v1/mcp/servers after peer slash aliases.
         # Residual: GET /api/log dual-wire after peer slash + /peer/v1/log.
-        control_paths = ("/peer/v1/control", "/api/control")
+        # Residual: nested /control/shell|watcher|ui + /watcher on peer after
+        # control plate; mesh on :18790 still not_found.
+        control_paths = (
+            "/peer/v1/control",
+            "/api/control",
+            "/peer/v1/control/shell",
+            "/api/control/shell",
+            "/peer/v1/control/watcher",
+            "/api/control/watcher",
+            "/peer/v1/control/ui",
+            "/api/control/ui",
+            "/peer/v1/watcher",
+            "/api/watcher",
+        )
         task_paths = ("/peer/v1/task", "/api/task")
         models_paths = ("/peer/v1/models", "/api/models")
         subagents_paths = ("/peer/v1/subagents", "/api/subagents")
@@ -1715,7 +1728,15 @@ class H(BaseHTTPRequestHandler):
             self._send(200, jobs if isinstance(jobs, dict) else {"ok": False, "jobs": jobs})
             return
         if path in control_paths:
-            ctl = peer_json("GET", "/peer/v1/control", timeout=5)
+            # Nested paths proxy to matching peer plate (not always root control).
+            peer_path = path if path.startswith("/peer/") else path.replace(
+                "/api/", "/peer/v1/", 1
+            )
+            if peer_path in ("/peer/v1/control", "/peer/v1/control/"):
+                peer_path = "/peer/v1/control"
+            ctl = peer_json("GET", peer_path, timeout=5)
+            if not isinstance(ctl, dict):
+                ctl = peer_json("GET", "/peer/v1/control", timeout=5)
             self._send(200, ctl if isinstance(ctl, dict) else {"ok": False, "control": ctl})
             return
         if path in task_paths:
