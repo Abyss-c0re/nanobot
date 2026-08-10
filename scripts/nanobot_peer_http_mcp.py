@@ -902,6 +902,15 @@ class H(BaseHTTPRequestHandler):
             "/api/est",
             "/peer/v1/est",
         )
+        # Residual: GET pki-validation after empty domain-validation plate.
+        pki_validation_paths = (
+            "/.well-known/pki-validation",
+            "/.well-known/pki-validation.json",
+            "/pki-validation",
+            "/pki-validation.json",
+            "/api/pki-validation",
+            "/peer/v1/pki-validation",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1899,6 +1908,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "est": doc},
+            )
+            return
+        if path in pki_validation_paths:
+            doc = peer_json("GET", "/.well-known/pki-validation", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "pki_validation": doc},
             )
             return
         if path in humans_paths:
