@@ -191,6 +191,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known oauth-client-registration dual-wire + MCP | `d08e716`  |
 | GET well-known openid-federation dual-wire + MCP | `4286247`  |
 | GET well-known uma2-configuration dual-wire + MCP | `2db6635`  |
+| GET well-known openid-credential-issuer dual-wire + MCP | `0d41e20`  |
 ## Anti-chaos
 
 - One product bite per cycle  
