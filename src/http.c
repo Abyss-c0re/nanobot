@@ -1033,9 +1033,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* ---- Outbound MCP servers (agent connects TO remote MCPs) ---- */
+  /* ---- Outbound MCP servers (agent connects TO remote MCPs) ----
+   * Residual: trailing slash 404 on /api|/peer/v1/mcp/servers while bare worked. */
   if (is_get && (strcmp(path, "/api/mcp/servers") == 0 ||
-                 strcmp(path, "/peer/v1/mcp/servers") == 0)) {
+                 strcmp(path, "/api/mcp/servers/") == 0 ||
+                 strcmp(path, "/peer/v1/mcp/servers") == 0 ||
+                 strcmp(path, "/peer/v1/mcp/servers/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *body = ng_mcp_servers_list_json();
     http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
@@ -1043,7 +1046,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
   if (is_post && (strcmp(path, "/api/mcp/servers") == 0 ||
-                  strcmp(path, "/peer/v1/mcp/servers") == 0)) {
+                  strcmp(path, "/api/mcp/servers/") == 0 ||
+                  strcmp(path, "/peer/v1/mcp/servers") == 0 ||
+                  strcmp(path, "/peer/v1/mcp/servers/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";
@@ -1058,8 +1063,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     free(req); close(cfd); return;
   }
+  /* Residual: trailing slash 404 on mcp/probe after servers gained slash. */
   if (is_post && (strcmp(path, "/api/mcp/probe") == 0 ||
-                  strcmp(path, "/peer/v1/mcp/probe") == 0)) {
+                  strcmp(path, "/api/mcp/probe/") == 0 ||
+                  strcmp(path, "/peer/v1/mcp/probe") == 0 ||
+                  strcmp(path, "/peer/v1/mcp/probe/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *body = strstr(req, "\r\n\r\n");
     body = body ? body + 4 : "";
