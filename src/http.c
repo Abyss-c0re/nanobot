@@ -1337,13 +1337,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * Residual: /peer/v1/ready was 404 while bare /ready worked — peer-namespace alias.
    * Residual: /api/health|/api/ready 404 — API-namespace clients (OpenAPI-ish).
    * Residual: trailing slash on health/ready 404 after resources/models gained slash.
-   * Residual: /ping|/api/ping|/peer/v1/ping not_found while health already lives. */
+   * Residual: /ping|/api/ping|/peer/v1/ping not_found while health already lives.
+   * Residual: k8s-style /livez|/readyz|/healthz|/alive (+ dual-wire) not_found. */
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
                  strcmp(path, "/peer/v1/health/") == 0 ||
                  strcmp(path, "/health") == 0 ||
                  strcmp(path, "/health/") == 0 ||
                  strcmp(path, "/api/health") == 0 ||
                  strcmp(path, "/api/health/") == 0 ||
+                 strcmp(path, "/api/v1/health") == 0 ||
+                 strcmp(path, "/api/v1/health/") == 0 ||
+                 strcmp(path, "/.well-known/health") == 0 ||
+                 strcmp(path, "/.well-known/health/") == 0 ||
                  strcmp(path, "/ready") == 0 ||
                  strcmp(path, "/ready/") == 0 ||
                  strcmp(path, "/peer/v1/ready") == 0 ||
@@ -1355,7 +1360,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/ping") == 0 ||
                  strcmp(path, "/api/ping/") == 0 ||
                  strcmp(path, "/peer/v1/ping") == 0 ||
-                 strcmp(path, "/peer/v1/ping/") == 0)) {
+                 strcmp(path, "/peer/v1/ping/") == 0 ||
+                 strcmp(path, "/livez") == 0 || strcmp(path, "/livez/") == 0 ||
+                 strcmp(path, "/api/livez") == 0 || strcmp(path, "/api/livez/") == 0 ||
+                 strcmp(path, "/peer/v1/livez") == 0 ||
+                 strcmp(path, "/peer/v1/livez/") == 0 ||
+                 strcmp(path, "/readyz") == 0 || strcmp(path, "/readyz/") == 0 ||
+                 strcmp(path, "/api/readyz") == 0 || strcmp(path, "/api/readyz/") == 0 ||
+                 strcmp(path, "/peer/v1/readyz") == 0 ||
+                 strcmp(path, "/peer/v1/readyz/") == 0 ||
+                 strcmp(path, "/healthz") == 0 || strcmp(path, "/healthz/") == 0 ||
+                 strcmp(path, "/api/healthz") == 0 ||
+                 strcmp(path, "/api/healthz/") == 0 ||
+                 strcmp(path, "/peer/v1/healthz") == 0 ||
+                 strcmp(path, "/peer/v1/healthz/") == 0 ||
+                 strcmp(path, "/alive") == 0 || strcmp(path, "/alive/") == 0 ||
+                 strcmp(path, "/api/alive") == 0 || strcmp(path, "/api/alive/") == 0 ||
+                 strcmp(path, "/peer/v1/alive") == 0 ||
+                 strcmp(path, "/peer/v1/alive/") == 0)) {
     char body[640];
     char *ver = ng_json_escape(NG_VERSION);
     int jn = jobs_meta_count();
@@ -1365,13 +1387,36 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                     strcmp(path, "/peer/v1/ready/") == 0 ||
                     strcmp(path, "/api/ready") == 0 ||
                     strcmp(path, "/api/ready/") == 0);
+    int is_readyz = (strcmp(path, "/readyz") == 0 || strcmp(path, "/readyz/") == 0 ||
+                     strcmp(path, "/api/readyz") == 0 ||
+                     strcmp(path, "/api/readyz/") == 0 ||
+                     strcmp(path, "/peer/v1/readyz") == 0 ||
+                     strcmp(path, "/peer/v1/readyz/") == 0);
     int is_ping = (strcmp(path, "/ping") == 0 ||
                    strcmp(path, "/ping/") == 0 ||
                    strcmp(path, "/api/ping") == 0 ||
                    strcmp(path, "/api/ping/") == 0 ||
                    strcmp(path, "/peer/v1/ping") == 0 ||
                    strcmp(path, "/peer/v1/ping/") == 0);
-    const char *act = is_ready ? "ready" : (is_ping ? "ping" : "health");
+    int is_livez = (strcmp(path, "/livez") == 0 || strcmp(path, "/livez/") == 0 ||
+                    strcmp(path, "/api/livez") == 0 || strcmp(path, "/api/livez/") == 0 ||
+                    strcmp(path, "/peer/v1/livez") == 0 ||
+                    strcmp(path, "/peer/v1/livez/") == 0 ||
+                    strcmp(path, "/alive") == 0 || strcmp(path, "/alive/") == 0 ||
+                    strcmp(path, "/api/alive") == 0 || strcmp(path, "/api/alive/") == 0 ||
+                    strcmp(path, "/peer/v1/alive") == 0 ||
+                    strcmp(path, "/peer/v1/alive/") == 0);
+    int is_healthz = (strcmp(path, "/healthz") == 0 || strcmp(path, "/healthz/") == 0 ||
+                      strcmp(path, "/api/healthz") == 0 ||
+                      strcmp(path, "/api/healthz/") == 0 ||
+                      strcmp(path, "/peer/v1/healthz") == 0 ||
+                      strcmp(path, "/peer/v1/healthz/") == 0);
+    const char *act = is_readyz ? "readyz"
+                      : is_ready ? "ready"
+                      : is_ping ? "ping"
+                      : is_livez ? "livez"
+                      : is_healthz ? "healthz"
+                      : "health";
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\",\"role\":\"session-bus\","

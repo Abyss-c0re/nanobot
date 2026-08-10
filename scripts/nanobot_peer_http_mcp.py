@@ -259,6 +259,17 @@ class H(BaseHTTPRequestHandler):
         if path != "/" and path.endswith("/"):
             path = path.rstrip("/") or "/"
         ready_paths = ("/ready", "/peer/v1/ready", "/api/ready")
+        # Residual: k8s-style probes after peer gained livez/readyz/healthz/alive.
+        readyz_paths = ("/readyz", "/api/readyz", "/peer/v1/readyz")
+        livez_paths = (
+            "/livez",
+            "/api/livez",
+            "/peer/v1/livez",
+            "/alive",
+            "/api/alive",
+            "/peer/v1/alive",
+        )
+        healthz_paths = ("/healthz", "/api/healthz", "/peer/v1/healthz")
         # Residual: GET /ping dual-wire after peer gained ping plate.
         ping_paths = ("/ping", "/api/ping", "/peer/v1/ping")
         # Residual: GET /api|/api/v1|/peer/v1 index after peer namespace plates.
@@ -267,6 +278,8 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/health",
             "/health",
             "/api/health",
+            "/api/v1/health",
+            "/.well-known/health",
             "/",
             "/mcp",
         )
@@ -525,14 +538,31 @@ class H(BaseHTTPRequestHandler):
                 200, idx if isinstance(idx, dict) else {"ok": False, "index": idx}
             )
             return
-        if path in ready_paths or path in health_paths or path in ping_paths:
+        if (
+            path in ready_paths
+            or path in readyz_paths
+            or path in livez_paths
+            or path in healthz_paths
+            or path in health_paths
+            or path in ping_paths
+        ):
             info = peer_json("GET", "/peer/v1/info", timeout=5)
-            is_ready = path in ready_paths
-            is_ping = path in ping_paths
+            if path in readyz_paths:
+                act = "readyz"
+            elif path in ready_paths:
+                act = "ready"
+            elif path in ping_paths:
+                act = "ping"
+            elif path in livez_paths:
+                act = "livez"
+            elif path in healthz_paths:
+                act = "healthz"
+            else:
+                act = "health"
             body = {
                 "schema": "nanobot.peer_http.v1",
                 "ok": True,
-                "action": "ready" if is_ready else ("ping" if is_ping else "health"),
+                "action": act,
                 "service": "blackcube-nanobot-http-mcp",
                 "port": PORT,
                 "peer": PEER,
