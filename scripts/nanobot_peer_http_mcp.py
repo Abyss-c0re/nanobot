@@ -1037,6 +1037,16 @@ class H(BaseHTTPRequestHandler):
             "/api/web-bot-auth",
             "/peer/v1/web-bot-auth",
         )
+        # Residual: GET sbom after empty supply-chain plate.
+        sbom_paths = (
+            "/.well-known/sbom",
+            "/.well-known/sbom.json",
+            "/.well-known/supply-chain",
+            "/sbom",
+            "/sbom.json",
+            "/api/sbom",
+            "/peer/v1/sbom",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2141,6 +2151,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "web_bot_auth": doc},
+            )
+            return
+        if path in sbom_paths:
+            doc = peer_json("GET", "/.well-known/sbom", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "sbom": doc},
             )
             return
         if path in humans_paths:
