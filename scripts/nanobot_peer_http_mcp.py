@@ -771,6 +771,13 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/privacy-sandbox-attestations.json",
             "/peer/v1/privacy-sandbox-attestations",
         )
+        # Residual: GET no-federation resource after empty ActivityPub plate.
+        no_federation_paths = (
+            "/.well-known/resource-that-should-not-be-used-for-federation",
+            "/resource-that-should-not-be-used-for-federation",
+            "/api/resource-that-should-not-be-used-for-federation",
+            "/peer/v1/resource-that-should-not-be-used-for-federation",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1651,6 +1658,17 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "privacy_sandbox_attestations": doc},
+            )
+            return
+        if path in no_federation_paths:
+            doc = peer_json(
+                "GET",
+                "/.well-known/resource-that-should-not-be-used-for-federation",
+                timeout=5,
+            )
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "no_federation": doc},
             )
             return
         if path in humans_paths:
