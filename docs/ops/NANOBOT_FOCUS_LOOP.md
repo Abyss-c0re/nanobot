@@ -164,6 +164,7 @@ cd ~/Dev/AI/nanobot
 | GET service-worker.js no-PWA dual-wire + MCP | `65dcb8d`  |
 | GET ads.txt/app-ads.txt no-sellers dual-wire + MCP | `0832f96`  |
 | GET crossdomain.xml deny-all dual-wire + MCP | `28fa002`  |
+| GET browserconfig.xml dual-wire + MCP | `475349f`  |
 
 ## Anti-chaos
 
