@@ -589,7 +589,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/apple-app-site-association") ||
         !strcmp(path, "/apple-app-site-association") ||
         !strcmp(path, "/.well-known/gpc.json") ||
-        !strcmp(path, "/gpc.json"))
+        !strcmp(path, "/gpc.json") ||
+        !strcmp(path, "/.well-known/openid-configuration") ||
+        !strcmp(path, "/openid-configuration"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1566,7 +1568,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
         "\"browserconfig\",\"change_password\",\"sellers\","
         "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\","
-        "\"apple_app_site_association\",\"gpc\""
+        "\"apple_app_site_association\",\"gpc\","
+        "\"openid_configuration\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1782,6 +1785,46 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", gpc, sizeof gpc - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OIDC/mesh probes hit /.well-known/openid-configuration and got
+   * not_found. Lab ops is not an OIDC OP — honest plate; auth is /api/auth. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/openid-configuration") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/") == 0 ||
+       strcmp(path, "/openid-configuration") == 0 ||
+       strcmp(path, "/openid-configuration/") == 0 ||
+       strcmp(path, "/api/openid-configuration") == 0 ||
+       strcmp(path, "/peer/v1/openid-configuration") == 0)) {
+    static const char oidc[] =
+      "{"
+      "\"issuer\":\"\","
+      "\"authorization_endpoint\":\"/api/auth\","
+      "\"token_endpoint\":\"\","
+      "\"userinfo_endpoint\":\"\","
+      "\"jwks_uri\":\"\","
+      "\"response_types_supported\":[],"
+      "\"subject_types_supported\":[],"
+      "\"id_token_signing_alg_values_supported\":[],"
+      "\"scopes_supported\":[],"
+      "\"claims_supported\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"openid_configuration\","
+        "\"oidc_provider\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", oidc, sizeof oidc - 1);
     free(req); close(cfd); return;
   }
 

@@ -432,6 +432,13 @@ class H(BaseHTTPRequestHandler):
             "/api/gpc.json",
             "/peer/v1/gpc.json",
         )
+        # Residual: GET openid-configuration after peer gained non-OP plate.
+        openid_paths = (
+            "/.well-known/openid-configuration",
+            "/openid-configuration",
+            "/api/openid-configuration",
+            "/peer/v1/openid-configuration",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -764,6 +771,15 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/.well-known/gpc.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "gpc": doc}
+            )
+            return
+        if path in openid_paths:
+            # Peer serves non-OP openid-configuration; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/openid-configuration", timeout=5
+            )
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "openid": doc}
             )
             return
         if path in crossdomain_paths:
