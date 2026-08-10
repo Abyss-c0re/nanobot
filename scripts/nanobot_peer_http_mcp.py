@@ -460,6 +460,15 @@ class H(BaseHTTPRequestHandler):
             "/api/nodeinfo",
             "/peer/v1/nodeinfo",
         )
+        # Residual: GET host-meta after peer gained empty RFC 6415 JRD plate.
+        host_meta_paths = (
+            "/.well-known/host-meta",
+            "/.well-known/host-meta.json",
+            "/host-meta",
+            "/host-meta.json",
+            "/api/host-meta",
+            "/peer/v1/host-meta",
+        )
         # Residual: GET openid-configuration after peer gained non-OP plate.
         openid_paths = (
             "/.well-known/openid-configuration",
@@ -862,6 +871,14 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "nodeinfo": doc},
+            )
+            return
+        if path in host_meta_paths:
+            # Peer serves empty host-meta JRD; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/host-meta", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "host_meta": doc},
             )
             return
         if path in openid_paths:
