@@ -893,6 +893,15 @@ class H(BaseHTTPRequestHandler):
             "/api/timezone",
             "/peer/v1/timezone",
         )
+        # Residual: GET est after empty EST enrollment plate (RFC 7030).
+        est_paths = (
+            "/.well-known/est",
+            "/.well-known/est.json",
+            "/est",
+            "/est.json",
+            "/api/est",
+            "/peer/v1/est",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1883,6 +1892,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "timezone": doc},
+            )
+            return
+        if path in est_paths:
+            doc = peer_json("GET", "/.well-known/est", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "est": doc},
             )
             return
         if path in humans_paths:
