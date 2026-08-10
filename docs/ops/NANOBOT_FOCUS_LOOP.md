@@ -145,6 +145,7 @@ cd ~/Dev/AI/nanobot
 | GET bare /settings alias + MCP | `28ee7d7`  |
 | GET ping dual-wire + MCP | `d223473`  |
 | GET backend dual-wire + MCP | `8e6bec9`  |
+| GET api/peer namespace index + MCP | `81b80cd`  |
 
 ## Anti-chaos
 
