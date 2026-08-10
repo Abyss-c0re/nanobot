@@ -266,11 +266,13 @@ class H(BaseHTTPRequestHandler):
             "/",
             "/mcp",
         )
+        # Residual: bare /hello after peer gained bare hello → info alias.
         info_paths = (
             "/peer/v1/info",
             "/api/info",
             "/peer/v1/hello",
             "/api/hello",
+            "/hello",
         )
         jobs_coll = (
             "/peer/v1/jobs",

@@ -1296,11 +1296,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Residual: /api/info and trailing slash 404 while health/jobs already
-   * accept /api + slash aliases — mesh OpenAPI-ish probes hit not_found. */
+   * accept /api + slash aliases — mesh OpenAPI-ish probes hit not_found.
+   * Residual: bare /hello 404 while /api/hello and /peer/v1/hello already info. */
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0 ||
                  strcmp(path, "/peer/v1/info/") == 0 || strcmp(path, "/peer/v1/hello/") == 0 ||
                  strcmp(path, "/api/info") == 0 || strcmp(path, "/api/info/") == 0 ||
-                 strcmp(path, "/api/hello") == 0 || strcmp(path, "/api/hello/") == 0)) {
+                 strcmp(path, "/api/hello") == 0 || strcmp(path, "/api/hello/") == 0 ||
+                 strcmp(path, "/hello") == 0 || strcmp(path, "/hello/") == 0)) {
     /* Residual: info used raw ng_session_valid without ensure — soft-expired
      * access_token reported signed_in=false while /api/auth ensure → true. */
     if (session && agent && ng_agent_needs_browser_session(agent)
