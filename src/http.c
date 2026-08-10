@@ -608,6 +608,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/matrix/server") ||
         !strcmp(path, "/.well-known/tdmrep.json") ||
         !strcmp(path, "/tdmrep.json") ||
+        !strcmp(path, "/.well-known/mta-sts.txt") ||
+        !strcmp(path, "/mta-sts.txt") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1594,7 +1596,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"openid_configuration\",\"oauth_authorization_server\","
         "\"oauth_protected_resource\",\"dnt_policy\","
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
-        "\"matrix_client\",\"matrix_server\",\"tdmrep\""
+        "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1839,6 +1841,22 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", tdm, sizeof tdm - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mail/mesh probes hit /.well-known/mta-sts.txt (RFC 8461) and
+   * got not_found. Lab ops is not an MTA — mode none policy plate. */
+  if (is_get && (strcmp(path, "/.well-known/mta-sts.txt") == 0 ||
+                 strcmp(path, "/.well-known/mta-sts.txt/") == 0 ||
+                 strcmp(path, "/mta-sts.txt") == 0 ||
+                 strcmp(path, "/mta-sts.txt/") == 0 ||
+                 strcmp(path, "/api/mta-sts.txt") == 0 ||
+                 strcmp(path, "/peer/v1/mta-sts.txt") == 0)) {
+    static const char mta[] =
+      "version: STSv1\n"
+      "mode: none\n"
+      "max_age: 86400\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", mta, sizeof mta - 1);
     free(req); close(cfd); return;
   }
 

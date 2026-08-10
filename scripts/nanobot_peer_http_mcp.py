@@ -439,6 +439,13 @@ class H(BaseHTTPRequestHandler):
             "/api/tdmrep.json",
             "/peer/v1/tdmrep.json",
         )
+        # Residual: GET mta-sts.txt after peer gained RFC 8461 mode=none plate.
+        mta_sts_paths = (
+            "/.well-known/mta-sts.txt",
+            "/mta-sts.txt",
+            "/api/mta-sts.txt",
+            "/peer/v1/mta-sts.txt",
+        )
         # Residual: GET dnt-policy.txt after peer gained DNT honor plate.
         dnt_paths = (
             "/.well-known/dnt-policy.txt",
@@ -850,6 +857,31 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/.well-known/tdmrep.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "tdmrep": doc}
+            )
+            return
+        if path in mta_sts_paths:
+            # Peer serves text/plain MTA-STS mode=none; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "mta_sts",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/.well-known/mta-sts.txt",
+                    "version": "STSv1",
+                    "mode": "none",
+                    "max_age": 86400,
+                    "mta_sts": False,
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
             )
             return
         if path in dnt_paths:
