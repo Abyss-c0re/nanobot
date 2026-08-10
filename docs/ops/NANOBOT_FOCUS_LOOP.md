@@ -168,6 +168,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known change-password dual-wire + MCP | `3871489`  |
 | GET sellers.json empty dual-wire + MCP | `7ea4893`  |
 | GET apple-touch-icon dual-wire + MCP | `dedf9cd`  |
+| GET well-known ai-plugin.json dual-wire + MCP | `2476103`  |
 
 ## Anti-chaos
 
