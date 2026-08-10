@@ -365,6 +365,7 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/docs",
         )
         # Residual: /favicon.svg dual-wire after peer gained SVG alias plate.
+        # Residual: apple-touch-icon after peer gained Safari touch-icon plate.
         favicon_paths = (
             "/favicon.ico",
             "/favicon",
@@ -373,6 +374,11 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/favicon.svg",
             "/api/favicon.ico",
             "/peer/v1/favicon.ico",
+            "/apple-touch-icon.png",
+            "/apple-touch-icon-precomposed.png",
+            "/apple-touch-icon",
+            "/api/apple-touch-icon.png",
+            "/peer/v1/apple-touch-icon.png",
         )
         # Residual: GET service-worker.js after peer gained no-PWA plate.
         service_worker_paths = (
@@ -604,17 +610,22 @@ class H(BaseHTTPRequestHandler):
             return
         if path in favicon_paths:
             # Peer serves image/svg+xml; MCP mesh probes want dual-wire JSON.
-            peer_path = (
-                "/favicon.svg"
-                if path.endswith(".svg") or path.endswith("favicon.svg")
-                else "/favicon.ico"
-            )
+            is_apple = "apple-touch-icon" in path
+            if is_apple:
+                peer_path = "/apple-touch-icon.png"
+                action = "apple_touch_icon"
+            elif path.endswith(".svg") or path.endswith("favicon.svg"):
+                peer_path = "/favicon.svg"
+                action = "favicon"
+            else:
+                peer_path = "/favicon.ico"
+                action = "favicon"
             self._send(
                 200,
                 {
                     "schema": "nanobot.peer_http.v1",
                     "ok": True,
-                    "action": "favicon",
+                    "action": action,
                     "service": "blackcube-nanobot-http-mcp",
                     "content_type": "image/svg+xml",
                     "peer_path": peer_path,

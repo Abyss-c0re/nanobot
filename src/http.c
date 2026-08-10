@@ -562,6 +562,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openapi.yaml") || !strcmp(path, "/openapi.json") ||
         !strcmp(path, "/openapi") || !strcmp(path, "/favicon.ico") ||
         !strcmp(path, "/favicon") || !strcmp(path, "/favicon.svg") ||
+        !strcmp(path, "/apple-touch-icon.png") ||
+        !strcmp(path, "/apple-touch-icon-precomposed.png") ||
+        !strcmp(path, "/apple-touch-icon") ||
         !strcmp(path, "/swagger.json") ||
         !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
         !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
@@ -1553,7 +1556,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
-        "\"browserconfig\",\"change_password\",\"sellers\""
+        "\"browserconfig\",\"change_password\",\"sellers\","
+        "\"apple_touch_icon\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1563,14 +1567,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Residual: mesh/browser probes hit /favicon.ico|/favicon.svg and got
-   * not_found (noisy 404 without www_root). Tiny cyan-cube SVG. */
+   * not_found (noisy 404 without www_root). Tiny cyan-cube SVG.
+   * Residual: Safari hits /apple-touch-icon(.png|-precomposed.png) same plate. */
   if (is_get && (strcmp(path, "/favicon.ico") == 0 || strcmp(path, "/favicon.ico/") == 0 ||
                  strcmp(path, "/favicon") == 0 || strcmp(path, "/favicon/") == 0 ||
                  strcmp(path, "/favicon.svg") == 0 || strcmp(path, "/favicon.svg/") == 0 ||
                  strcmp(path, "/api/favicon.svg") == 0 ||
                  strcmp(path, "/peer/v1/favicon.svg") == 0 ||
                  strcmp(path, "/api/favicon.ico") == 0 ||
-                 strcmp(path, "/peer/v1/favicon.ico") == 0)) {
+                 strcmp(path, "/peer/v1/favicon.ico") == 0 ||
+                 strcmp(path, "/apple-touch-icon.png") == 0 ||
+                 strcmp(path, "/apple-touch-icon.png/") == 0 ||
+                 strcmp(path, "/apple-touch-icon-precomposed.png") == 0 ||
+                 strcmp(path, "/apple-touch-icon-precomposed.png/") == 0 ||
+                 strcmp(path, "/apple-touch-icon") == 0 ||
+                 strcmp(path, "/apple-touch-icon/") == 0 ||
+                 strcmp(path, "/api/apple-touch-icon.png") == 0 ||
+                 strcmp(path, "/peer/v1/apple-touch-icon.png") == 0)) {
     static const char favicon_svg[] =
       "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\">"
       "<rect width=\"32\" height=\"32\" fill=\"#0a0a0a\"/>"
