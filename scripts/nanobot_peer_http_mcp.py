@@ -938,6 +938,15 @@ class H(BaseHTTPRequestHandler):
             "/api/acme-challenge",
             "/peer/v1/acme-challenge",
         )
+        # Residual: GET ni after empty Named Information plate.
+        ni_paths = (
+            "/.well-known/ni",
+            "/.well-known/ni.json",
+            "/ni",
+            "/ni.json",
+            "/api/ni",
+            "/peer/v1/ni",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1963,6 +1972,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "acme_challenge": doc},
+            )
+            return
+        if path in ni_paths:
+            doc = peer_json("GET", "/.well-known/ni", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "ni": doc},
             )
             return
         if path in humans_paths:
