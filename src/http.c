@@ -1294,14 +1294,33 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
 
-  /* Residual: trailing slash + /api/resources 404 while /peer/v1/resources worked. */
+  /* Residual: trailing slash + /api/resources 404 while /peer/v1/resources worked.
+   * Residual: /metrics|/api/metrics|/peer/v1/metrics not_found — same host plate,
+   * action=metrics for mesh Prometheus-ish probes. */
   if (is_get && (strcmp(path, "/api/v1/resources") == 0 ||
                  strcmp(path, "/api/v1/resources/") == 0 ||
                  strcmp(path, "/api/resources") == 0 ||
                  strcmp(path, "/api/resources/") == 0 ||
                  strcmp(path, "/peer/v1/resources") == 0 ||
-                 strcmp(path, "/peer/v1/resources/") == 0)) {
+                 strcmp(path, "/peer/v1/resources/") == 0 ||
+                 strcmp(path, "/metrics") == 0 || strcmp(path, "/metrics/") == 0 ||
+                 strcmp(path, "/api/metrics") == 0 || strcmp(path, "/api/metrics/") == 0 ||
+                 strcmp(path, "/peer/v1/metrics") == 0 ||
+                 strcmp(path, "/peer/v1/metrics/") == 0)) {
     char *body = ng_resources_json();
+    int is_metrics = (strcmp(path, "/metrics") == 0 || strcmp(path, "/metrics/") == 0 ||
+                      strcmp(path, "/api/metrics") == 0 ||
+                      strcmp(path, "/api/metrics/") == 0 ||
+                      strcmp(path, "/peer/v1/metrics") == 0 ||
+                      strcmp(path, "/peer/v1/metrics/") == 0);
+    if (is_metrics && body) {
+      /* resources=20 chars action leaf; metrics=18 — shrink in place */
+      char *p = strstr(body, "\"action\":\"resources\"");
+      if (p) {
+        memcpy(p, "\"action\":\"metrics\"", 18);
+        memmove(p + 18, p + 20, strlen(p + 20) + 1);
+      }
+    }
     http_response(cfd, 200, "application/json", body ? body : "{}", body ? strlen(body) : 2);
     free(body);
     free(req); close(cfd); return;

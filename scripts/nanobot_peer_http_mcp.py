@@ -306,6 +306,8 @@ class H(BaseHTTPRequestHandler):
             "/api/v1/resources",
             "/api/resources",
         )
+        # Residual: GET /metrics dual-wire after peer gained metrics plate.
+        metrics_paths = ("/metrics", "/api/metrics", "/peer/v1/metrics")
         # Residual: GET /whoami dual-wire after peer gained whoami plate.
         auth_paths = (
             "/api/auth",
@@ -366,6 +368,12 @@ class H(BaseHTTPRequestHandler):
             res = peer_json("GET", "/peer/v1/resources", timeout=5)
             self._send(
                 200, res if isinstance(res, dict) else {"ok": False, "resources": res}
+            )
+            return
+        if path in metrics_paths:
+            met = peer_json("GET", "/api/metrics", timeout=5)
+            self._send(
+                200, met if isinstance(met, dict) else {"ok": False, "metrics": met}
             )
             return
         if path in auth_paths:
