@@ -618,6 +618,37 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh probes hit bare /api|/api/v1|/peer/v1 namespace roots and
+   * got not_found while / already lists dual-wire endpoints. */
+  if (is_get && (strcmp(path, "/api") == 0 || strcmp(path, "/api/") == 0 ||
+                 strcmp(path, "/api/v1") == 0 || strcmp(path, "/api/v1/") == 0 ||
+                 strcmp(path, "/peer/v1") == 0 || strcmp(path, "/peer/v1/") == 0)) {
+    const char *ns =
+      (strcmp(path, "/peer/v1") == 0 || strcmp(path, "/peer/v1/") == 0) ? "peer/v1" :
+      (strcmp(path, "/api/v1") == 0 || strcmp(path, "/api/v1/") == 0) ? "api/v1" : "api";
+    char body[1400];
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"index\","
+      "\"service\":\"nanobot-peer\",\"namespace\":\"%s\","
+      "\"endpoints\":["
+      "\"/peer/v1/health\",\"/health\",\"/api/health\","
+      "\"/ready\",\"/peer/v1/ready\",\"/api/ready\","
+      "\"/ping\",\"/api/ping\",\"/peer/v1/ping\","
+      "\"/version\",\"/api/version\",\"/peer/v1/version\","
+      "\"/peer/v1/info\",\"/api/info\",\"/hello\","
+      "\"/peer/v1/prompt\",\"/api/prompt\",\"/peer/v1/shell\",\"/api/shell\","
+      "\"/peer/v1/jobs\",\"/api/jobs\",\"/peer/v1/control\",\"/api/control\","
+      "\"/peer/v1/task\",\"/api/task\",\"/peer/v1/models\",\"/api/models\","
+      "\"/api/settings\",\"/settings\",\"/api/backend\",\"/peer/v1/backend\","
+      "\"/api/auth\",\"/api/chat\",\"/api/braincube\",\"/api/subagents\","
+      "\"/api/log\",\"/peer/v1/log\",\"/api/mcp/servers\""
+      "],"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ns);
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: trailing slash 404 on /activate while bare path worked. */
   if (is_get && (strcmp(path, "/activate") == 0 || strcmp(path, "/activate/") == 0)) {
     const char *u = NULL;

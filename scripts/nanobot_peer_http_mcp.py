@@ -261,6 +261,8 @@ class H(BaseHTTPRequestHandler):
         ready_paths = ("/ready", "/peer/v1/ready", "/api/ready")
         # Residual: GET /ping dual-wire after peer gained ping plate.
         ping_paths = ("/ping", "/api/ping", "/peer/v1/ping")
+        # Residual: GET /api|/api/v1|/peer/v1 index after peer namespace plates.
+        index_paths = ("/api", "/api/v1", "/peer/v1")
         health_paths = (
             "/peer/v1/health",
             "/health",
@@ -437,6 +439,12 @@ class H(BaseHTTPRequestHandler):
                 # peer GET /jobs/{id} and _missing dual-wire both set it.
                 self._send(400, _missing("bad_id"))
                 return
+        if path in index_paths:
+            idx = peer_json("GET", path, timeout=5)
+            self._send(
+                200, idx if isinstance(idx, dict) else {"ok": False, "index": idx}
+            )
+            return
         if path in ready_paths or path in health_paths or path in ping_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             is_ready = path in ready_paths
