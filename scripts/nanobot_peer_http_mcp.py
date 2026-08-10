@@ -548,6 +548,13 @@ class H(BaseHTTPRequestHandler):
             "/api/uma2-configuration",
             "/peer/v1/uma2-configuration",
         )
+        # Residual: GET openid-credential-issuer after peer gained non-OID4VCI plate.
+        oid4vci_paths = (
+            "/.well-known/openid-credential-issuer",
+            "/openid-credential-issuer",
+            "/api/openid-credential-issuer",
+            "/peer/v1/openid-credential-issuer",
+        )
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
@@ -1065,6 +1072,18 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "uma2": doc},
+            )
+            return
+        if path in oid4vci_paths:
+            # Peer serves non-issuer openid-credential-issuer; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/openid-credential-issuer", timeout=5
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "openid_credential_issuer": doc},
             )
             return
         if path in oauth_as_paths:

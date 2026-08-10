@@ -626,6 +626,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openid-federation") ||
         !strcmp(path, "/.well-known/uma2-configuration") ||
         !strcmp(path, "/uma2-configuration") ||
+        !strcmp(path, "/.well-known/openid-credential-issuer") ||
+        !strcmp(path, "/openid-credential-issuer") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
@@ -1615,7 +1617,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\","
         "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\","
         "\"oauth_client_registration\",\"openid_federation\","
-        "\"uma2_configuration\""
+        "\"uma2_configuration\",\"openid_credential_issuer\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2335,6 +2337,46 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", uma2, sizeof uma2 - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OID4VCI/mesh probes hit /.well-known/openid-credential-issuer
+   * and got not_found. Lab ops is not a credential issuer — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/openid-credential-issuer") == 0 ||
+       strcmp(path, "/.well-known/openid-credential-issuer/") == 0 ||
+       strcmp(path, "/openid-credential-issuer") == 0 ||
+       strcmp(path, "/openid-credential-issuer/") == 0 ||
+       strcmp(path, "/api/openid-credential-issuer") == 0 ||
+       strcmp(path, "/peer/v1/openid-credential-issuer") == 0)) {
+    static const char oci[] =
+      "{"
+      "\"credential_issuer\":\"\","
+      "\"authorization_servers\":[],"
+      "\"credential_endpoint\":\"\","
+      "\"batch_credential_endpoint\":\"\","
+      "\"deferred_credential_endpoint\":\"\","
+      "\"notification_endpoint\":\"\","
+      "\"credential_response_encryption\":{},"
+      "\"credential_configurations_supported\":{},"
+      "\"display\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"openid_credential_issuer\","
+        "\"openid_credential_issuer\":false,"
+        "\"oid4vci\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", oci, sizeof oci - 1);
     free(req); close(cfd); return;
   }
 
