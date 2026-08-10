@@ -238,6 +238,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known browserid dual-wire + MCP | `52fad8e`  |
 | GET well-known idp-proxy dual-wire + MCP | `7d18a45`  |
 | GET well-known dnt dual-wire + MCP | `bf70d85`  |
+| GET well-known funding-manifest-urls dual-wire + MCP | `6da0b78`  |
 ## Anti-chaos
 
 - One product bite per cycle  
