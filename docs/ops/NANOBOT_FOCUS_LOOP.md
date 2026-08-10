@@ -150,6 +150,7 @@ cd ~/Dev/AI/nanobot
 | GET metrics dual-wire + MCP | `6f6c52d`  |
 | GET openapi + favicon dual-wire + MCP | `eb401a6`  |
 | GET capabilities dual-wire + MCP | `5e6aad6`  |
+| GET swagger/docs openapi aliases + MCP | `07f7dc7`  |
 
 ## Anti-chaos
 
