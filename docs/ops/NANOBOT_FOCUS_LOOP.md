@@ -205,6 +205,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known related-website-set.json dual-wire + MCP | `9f0fc00`  |
 | GET well-known microsoft-identity-association dual-wire + MCP | `d3f7ba2`  |
 | GET well-known apple-merchantid-domain-association dual-wire + MCP | `b51df6d`  |
+| GET well-known nostr.json dual-wire + MCP | `6217807`  |
 ## Anti-chaos
 
 - One product bite per cycle  
