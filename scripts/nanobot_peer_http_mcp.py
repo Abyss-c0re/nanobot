@@ -648,9 +648,15 @@ class H(BaseHTTPRequestHandler):
         oauth_reg_paths = (
             "/.well-known/oauth-client-registration",
             "/.well-known/oauth-client-registration.json",
+            "/.well-known/oauth-client-registration/register",
+            "/.well-known/oauth-authorization-server/register",
+            "/.well-known/oauth-authorization-server/registration",
+            "/.well-known/openid-configuration/registration",
+            "/.well-known/openid-configuration/register",
             "/oauth-client-registration",
             "/oauth-client-registration.json",
             "/api/oauth-client-registration",
+            "/api/oauth-client-registration.json",
             "/peer/v1/oauth-client-registration",
         )
         # Residual: GET oauth-protected-resource after peer gained RFC 9728 plate.
@@ -758,6 +764,10 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/webauthn/jwks.json",
             "/.well-known/openid-federation/jwks",
             "/.well-known/openid-federation/jwks.json",
+            "/.well-known/passkey-endpoints/jwks",
+            "/.well-known/passkey-endpoints/jwks.json",
+            "/.well-known/did-configuration/jwks",
+            "/.well-known/did-configuration/jwks.json",
         )
         # Residual: GET related-website-set after empty RWS plate.
         related_website_set_paths = (
@@ -776,7 +786,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET apple merchantid domain association after empty plate.
         apple_merchantid_domain_association_paths = (
             "/.well-known/apple-developer-merchantid-domain-association",
+            "/.well-known/apple-developer-merchantid-domain-association.json",
             "/apple-developer-merchantid-domain-association",
+            "/apple-developer-merchantid-domain-association.json",
             "/api/apple-developer-merchantid-domain-association",
             "/peer/v1/apple-developer-merchantid-domain-association",
         )

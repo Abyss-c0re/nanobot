@@ -592,12 +592,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/webauthn/jwks.json") ||
         !strcmp(path, "/.well-known/openid-federation/jwks") ||
         !strcmp(path, "/.well-known/openid-federation/jwks.json") ||
+        !strcmp(path, "/.well-known/passkey-endpoints/jwks") ||
+        !strcmp(path, "/.well-known/passkey-endpoints/jwks.json") ||
+        !strcmp(path, "/.well-known/did-configuration/jwks") ||
+        !strcmp(path, "/.well-known/did-configuration/jwks.json") ||
         !strcmp(path, "/.well-known/related-website-set.json") ||
         !strcmp(path, "/related-website-set.json") ||
         !strcmp(path, "/.well-known/microsoft-identity-association.json") ||
         !strcmp(path, "/microsoft-identity-association.json") ||
         !strcmp(path, "/.well-known/apple-developer-merchantid-domain-association") ||
+        !strcmp(path, "/.well-known/apple-developer-merchantid-domain-association.json") ||
         !strcmp(path, "/apple-developer-merchantid-domain-association") ||
+        !strcmp(path, "/apple-developer-merchantid-domain-association.json") ||
         !strcmp(path, "/.well-known/nostr.json") || !strcmp(path, "/.well-known/nostr") ||
         !strcmp(path, "/nostr.json") || !strcmp(path, "/nostr") ||
         !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/.well-known/atproto-did.json") ||
@@ -985,8 +991,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/oauth-authorization-server.json") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
         !strcmp(path, "/.well-known/oauth-client-registration.json") ||
+        !strcmp(path, "/.well-known/oauth-client-registration/register") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/register") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/registration") ||
+        !strcmp(path, "/.well-known/openid-configuration/registration") ||
+        !strcmp(path, "/.well-known/openid-configuration/register") ||
         !strcmp(path, "/oauth-client-registration") ||
         !strcmp(path, "/oauth-client-registration.json") ||
+        !strcmp(path, "/api/oauth-client-registration.json") ||
         !strcmp(path, "/.well-known/oauth-protected-resource") ||
         !strcmp(path, "/.well-known/oauth-protected-resource.json") ||
         !strcmp(path, "/oauth-protected-resource") ||
@@ -3037,10 +3049,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/oauth-client-registration") == 0 ||
        strcmp(path, "/.well-known/oauth-client-registration/") == 0 ||
        strcmp(path, "/.well-known/oauth-client-registration.json") == 0 ||
+       strcmp(path, "/.well-known/oauth-client-registration/register") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/register") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/registration") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/registration") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/register") == 0 ||
        strcmp(path, "/oauth-client-registration") == 0 ||
        strcmp(path, "/oauth-client-registration/") == 0 ||
        strcmp(path, "/oauth-client-registration.json") == 0 ||
        strcmp(path, "/api/oauth-client-registration") == 0 ||
+       strcmp(path, "/api/oauth-client-registration.json") == 0 ||
        strcmp(path, "/peer/v1/oauth-client-registration") == 0)) {
     static const char oauth_reg[] =
       "{"
@@ -3371,7 +3389,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/webauthn/jwks") == 0 ||
                  strcmp(path, "/.well-known/webauthn/jwks.json") == 0 ||
                  strcmp(path, "/.well-known/openid-federation/jwks") == 0 ||
-                 strcmp(path, "/.well-known/openid-federation/jwks.json") == 0)) {
+                 strcmp(path, "/.well-known/openid-federation/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/passkey-endpoints/jwks") == 0 ||
+                 strcmp(path, "/.well-known/passkey-endpoints/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/did-configuration/jwks") == 0 ||
+                 strcmp(path, "/.well-known/did-configuration/jwks.json") == 0)) {
     static const char jwks[] =
       "{"
       "\"keys\":[],"
@@ -3468,8 +3490,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/apple-developer-merchantid-domain-association") == 0 ||
        strcmp(path, "/.well-known/apple-developer-merchantid-domain-association/") == 0 ||
+       strcmp(path, "/.well-known/apple-developer-merchantid-domain-association.json") == 0 ||
        strcmp(path, "/apple-developer-merchantid-domain-association") == 0 ||
        strcmp(path, "/apple-developer-merchantid-domain-association/") == 0 ||
+       strcmp(path, "/apple-developer-merchantid-domain-association.json") == 0 ||
        strcmp(path, "/api/apple-developer-merchantid-domain-association") == 0 ||
        strcmp(path, "/peer/v1/apple-developer-merchantid-domain-association") == 0)) {
     static const char amd[] =
