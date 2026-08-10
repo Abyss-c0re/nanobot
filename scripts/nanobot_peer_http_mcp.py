@@ -1067,6 +1067,15 @@ class H(BaseHTTPRequestHandler):
             "/api/ohttp-gateway",
             "/peer/v1/ohttp-gateway",
         )
+        # Residual: GET masque after empty MASQUE proxy plate.
+        masque_paths = (
+            "/.well-known/masque",
+            "/.well-known/masque.json",
+            "/masque",
+            "/masque.json",
+            "/api/masque",
+            "/peer/v1/masque",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2192,6 +2201,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "ohttp_gateway": doc},
+            )
+            return
+        if path in masque_paths:
+            doc = peer_json("GET", "/.well-known/masque", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "masque": doc},
             )
             return
         if path in humans_paths:
