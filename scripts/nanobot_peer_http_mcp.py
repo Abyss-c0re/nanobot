@@ -1107,6 +1107,15 @@ class H(BaseHTTPRequestHandler):
             "/api/solid",
             "/peer/v1/solid",
         )
+        # Residual: GET web-app-origin-association after empty PWA association plate.
+        web_app_origin_association_paths = (
+            "/.well-known/web-app-origin-association",
+            "/.well-known/web-app-origin-association.json",
+            "/web-app-origin-association",
+            "/web-app-origin-association.json",
+            "/api/web-app-origin-association",
+            "/peer/v1/web-app-origin-association",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2260,6 +2269,17 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "solid": doc},
+            )
+            return
+        if path in web_app_origin_association_paths:
+            doc = peer_json(
+                "GET", "/.well-known/web-app-origin-association", timeout=5
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "web_app_origin_association": doc},
             )
             return
         if path in humans_paths:
