@@ -250,7 +250,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known bluesky dual-wire + MCP | `2418999`  |
 | GET well-known solid dual-wire + MCP | `cc5cbfc`  |
 | GET well-known web-app-origin-association dual-wire + MCP | `6b5704e`  |
-| GET well-known doq|dns-query dual-wire + MCP | PENDING |
+| GET well-known doq|dns-query dual-wire + MCP | `3e52743`  |
 ## Anti-chaos
 
 - One product bite per cycle  
