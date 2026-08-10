@@ -1076,6 +1076,19 @@ class H(BaseHTTPRequestHandler):
             "/api/masque",
             "/peer/v1/masque",
         )
+        # Residual: GET doh|dot after empty DoH/DoT plate.
+        doh_paths = (
+            "/.well-known/doh",
+            "/.well-known/doh.json",
+            "/.well-known/dot",
+            "/.well-known/dot.json",
+            "/doh",
+            "/dot",
+            "/api/doh",
+            "/peer/v1/doh",
+            "/api/dot",
+            "/peer/v1/dot",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2208,6 +2221,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "masque": doc},
+            )
+            return
+        if path in doh_paths:
+            doc = peer_json("GET", "/.well-known/doh", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "doh": doc},
             )
             return
         if path in humans_paths:
