@@ -1047,6 +1047,15 @@ class H(BaseHTTPRequestHandler):
             "/api/sbom",
             "/peer/v1/sbom",
         )
+        # Residual: GET privacy-pass after empty Privacy Pass plate.
+        privacy_pass_paths = (
+            "/.well-known/privacy-pass",
+            "/.well-known/privacy-pass.json",
+            "/privacy-pass",
+            "/privacy-pass.json",
+            "/api/privacy-pass",
+            "/peer/v1/privacy-pass",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2158,6 +2167,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "sbom": doc},
+            )
+            return
+        if path in privacy_pass_paths:
+            doc = peer_json("GET", "/.well-known/privacy-pass", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "privacy_pass": doc},
             )
             return
         if path in humans_paths:
