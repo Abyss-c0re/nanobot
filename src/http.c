@@ -602,6 +602,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/host-meta.json") ||
         !strcmp(path, "/host-meta") ||
         !strcmp(path, "/host-meta.json") ||
+        !strcmp(path, "/.well-known/matrix/client") ||
+        !strcmp(path, "/.well-known/matrix/server") ||
+        !strcmp(path, "/matrix/client") ||
+        !strcmp(path, "/matrix/server") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1587,7 +1591,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"apple_app_site_association\",\"gpc\","
         "\"openid_configuration\",\"oauth_authorization_server\","
         "\"oauth_protected_resource\",\"dnt_policy\","
-        "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\""
+        "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
+        "\"matrix_client\",\"matrix_server\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1944,6 +1949,63 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/jrd+json", hm, sizeof hm - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: Matrix/mesh probes hit /.well-known/matrix/client and got
+   * not_found. Lab ops is not a Matrix client discovery host — empty plate. */
+  if (is_get && (strcmp(path, "/.well-known/matrix/client") == 0 ||
+                 strcmp(path, "/.well-known/matrix/client/") == 0 ||
+                 strcmp(path, "/matrix/client") == 0 ||
+                 strcmp(path, "/matrix/client/") == 0 ||
+                 strcmp(path, "/api/matrix/client") == 0 ||
+                 strcmp(path, "/peer/v1/matrix/client") == 0)) {
+    static const char mc[] =
+      "{"
+      "\"m.homeserver\":{\"base_url\":\"\"},"
+      "\"m.identity_server\":{\"base_url\":\"\"},"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"matrix_client\","
+        "\"matrix\":false,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", mc, sizeof mc - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: Matrix federation probes hit /.well-known/matrix/server and got
+   * not_found. Lab ops is not a Matrix homeserver — empty m.server plate. */
+  if (is_get && (strcmp(path, "/.well-known/matrix/server") == 0 ||
+                 strcmp(path, "/.well-known/matrix/server/") == 0 ||
+                 strcmp(path, "/matrix/server") == 0 ||
+                 strcmp(path, "/matrix/server/") == 0 ||
+                 strcmp(path, "/api/matrix/server") == 0 ||
+                 strcmp(path, "/peer/v1/matrix/server") == 0)) {
+    static const char ms[] =
+      "{"
+      "\"m.server\":\"\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"matrix_server\","
+        "\"matrix\":false,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", ms, sizeof ms - 1);
     free(req); close(cfd); return;
   }
 

@@ -469,6 +469,20 @@ class H(BaseHTTPRequestHandler):
             "/api/host-meta",
             "/peer/v1/host-meta",
         )
+        # Residual: GET matrix client discovery after peer gained empty plate.
+        matrix_client_paths = (
+            "/.well-known/matrix/client",
+            "/matrix/client",
+            "/api/matrix/client",
+            "/peer/v1/matrix/client",
+        )
+        # Residual: GET matrix server discovery after peer gained empty plate.
+        matrix_server_paths = (
+            "/.well-known/matrix/server",
+            "/matrix/server",
+            "/api/matrix/server",
+            "/peer/v1/matrix/server",
+        )
         # Residual: GET openid-configuration after peer gained non-OP plate.
         openid_paths = (
             "/.well-known/openid-configuration",
@@ -879,6 +893,22 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "host_meta": doc},
+            )
+            return
+        if path in matrix_client_paths:
+            # Peer serves empty Matrix client discovery; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/matrix/client", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "matrix_client": doc},
+            )
+            return
+        if path in matrix_server_paths:
+            # Peer serves empty Matrix server discovery; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/matrix/server", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "matrix_server": doc},
             )
             return
         if path in openid_paths:
