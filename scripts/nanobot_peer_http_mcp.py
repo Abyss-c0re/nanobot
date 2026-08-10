@@ -477,7 +477,7 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/api-catalog",
         )
         # Residual: GET dnt-policy.txt after peer gained DNT honor plate.
-        dnt_paths = (
+        dnt_policy_paths = (
             "/.well-known/dnt-policy.txt",
             "/dnt-policy.txt",
             "/api/dnt-policy.txt",
@@ -992,6 +992,16 @@ class H(BaseHTTPRequestHandler):
             "/api/idp-proxy",
             "/peer/v1/idp-proxy",
         )
+        # Residual: GET dnt after DNT companion plate (with dnt-policy.txt).
+        # Name must not collide with dnt_policy_paths (policy txt plate).
+        dnt_signal_paths = (
+            "/.well-known/dnt",
+            "/.well-known/dnt.json",
+            "/dnt",
+            "/dnt.json",
+            "/api/dnt",
+            "/peer/v1/dnt",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1359,7 +1369,7 @@ class H(BaseHTTPRequestHandler):
                 doc if isinstance(doc, dict) else {"ok": False, "api_catalog": doc},
             )
             return
-        if path in dnt_paths:
+        if path in dnt_policy_paths:
             # Peer serves text/plain DNT policy; MCP dual-wire JSON.
             self._send(
                 200,
@@ -2059,6 +2069,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "idp_proxy": doc},
+            )
+            return
+        if path in dnt_signal_paths:
+            doc = peer_json("GET", "/.well-known/dnt", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "dnt": doc},
             )
             return
         if path in humans_paths:
