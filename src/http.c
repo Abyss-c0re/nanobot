@@ -614,6 +614,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/carddav") ||
         !strcmp(path, "/caldav") ||
         !strcmp(path, "/carddav") ||
+        !strcmp(path, "/.well-known/api-catalog") ||
+        !strcmp(path, "/api-catalog") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1601,7 +1603,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"oauth_protected_resource\",\"dnt_policy\","
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
         "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\","
-        "\"caldav\",\"carddav\""
+        "\"caldav\",\"carddav\",\"api_catalog\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1862,6 +1864,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "mode: none\n"
       "max_age: 86400\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", mta, sizeof mta - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/API probes hit /.well-known/api-catalog (RFC 9727) and
+   * got not_found. Point catalog at live peer OpenAPI (lab ops only). */
+  if (is_get && (strcmp(path, "/.well-known/api-catalog") == 0 ||
+                 strcmp(path, "/.well-known/api-catalog/") == 0 ||
+                 strcmp(path, "/api-catalog") == 0 ||
+                 strcmp(path, "/api-catalog/") == 0 ||
+                 strcmp(path, "/api/api-catalog") == 0 ||
+                 strcmp(path, "/peer/v1/api-catalog") == 0)) {
+    static const char cat[] =
+      "{"
+      "\"linkset\":[{"
+        "\"anchor\":\"/\","
+        "\"item\":["
+          "{\"href\":\"/openapi.json\",\"type\":\"application/json\"},"
+          "{\"href\":\"/openapi.yaml\",\"type\":\"application/yaml\"},"
+          "{\"href\":\"/peer/v1/health\",\"type\":\"application/json\"},"
+          "{\"href\":\"/peer/v1/info\",\"type\":\"application/json\"}"
+        "]"
+      "}],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"api_catalog\","
+        "\"api_catalog\":true,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/linkset+json", cat, sizeof cat - 1);
     free(req); close(cfd); return;
   }
 

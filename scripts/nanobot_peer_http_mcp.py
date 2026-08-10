@@ -460,6 +460,13 @@ class H(BaseHTTPRequestHandler):
             "/api/carddav",
             "/peer/v1/carddav",
         )
+        # Residual: GET api-catalog after peer gained RFC 9727 linkset plate.
+        api_catalog_paths = (
+            "/.well-known/api-catalog",
+            "/api-catalog",
+            "/api/api-catalog",
+            "/peer/v1/api-catalog",
+        )
         # Residual: GET dnt-policy.txt after peer gained DNT honor plate.
         dnt_paths = (
             "/.well-known/dnt-policy.txt",
@@ -910,6 +917,14 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/.well-known/carddav", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "carddav": doc}
+            )
+            return
+        if path in api_catalog_paths:
+            # Peer serves API catalog linkset; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/api-catalog", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "api_catalog": doc},
             )
             return
         if path in dnt_paths:
