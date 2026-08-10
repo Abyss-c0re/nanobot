@@ -866,6 +866,15 @@ class H(BaseHTTPRequestHandler):
             "/api/thread",
             "/peer/v1/thread",
         )
+        # Residual: GET coap after empty CoAP endpoints plate.
+        coap_paths = (
+            "/.well-known/coap",
+            "/.well-known/coap.json",
+            "/coap",
+            "/coap.json",
+            "/api/coap",
+            "/peer/v1/coap",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1835,6 +1844,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "thread": doc},
+            )
+            return
+        if path in coap_paths:
+            doc = peer_json("GET", "/.well-known/coap", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "coap": doc},
             )
             return
         if path in humans_paths:
