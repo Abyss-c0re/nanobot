@@ -859,7 +859,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/dnt-policy.txt") ||
         !strcmp(path, "/dnt-policy.txt") ||
         !strcmp(path, "/.well-known/passkey-endpoints") ||
+        !strcmp(path, "/.well-known/passkey-endpoints.json") ||
         !strcmp(path, "/passkey-endpoints") ||
+        !strcmp(path, "/passkey-endpoints.json") ||
         !strcmp(path, "/.well-known/webfinger") ||
         !strcmp(path, "/webfinger") ||
         !strcmp(path, "/.well-known/nodeinfo") ||
@@ -904,17 +906,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/uma2-configuration") ||
         !strcmp(path, "/uma2-configuration.json") ||
         !strcmp(path, "/.well-known/openid-credential-issuer") ||
+        !strcmp(path, "/.well-known/openid-credential-issuer.json") ||
         !strcmp(path, "/openid-credential-issuer") ||
+        !strcmp(path, "/openid-credential-issuer.json") ||
         !strcmp(path, "/.well-known/fido2-configuration") ||
         !strcmp(path, "/.well-known/fido2-configuration.json") ||
         !strcmp(path, "/fido2-configuration") ||
         !strcmp(path, "/fido2-configuration.json") ||
         !strcmp(path, "/.well-known/webauthn") ||
+        !strcmp(path, "/.well-known/webauthn.json") ||
         !strcmp(path, "/webauthn") ||
+        !strcmp(path, "/webauthn.json") ||
         !strcmp(path, "/.well-known/did.json") ||
         !strcmp(path, "/did.json") ||
         !strcmp(path, "/.well-known/did-configuration") ||
+        !strcmp(path, "/.well-known/did-configuration.json") ||
         !strcmp(path, "/did-configuration") ||
+        !strcmp(path, "/did-configuration.json") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/.well-known/oauth-authorization-server.json") ||
         !strcmp(path, "/oauth-authorization-server") ||
@@ -2385,8 +2393,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/passkey-endpoints") == 0 ||
        strcmp(path, "/.well-known/passkey-endpoints/") == 0 ||
+       strcmp(path, "/.well-known/passkey-endpoints.json") == 0 ||
        strcmp(path, "/passkey-endpoints") == 0 ||
        strcmp(path, "/passkey-endpoints/") == 0 ||
+       strcmp(path, "/passkey-endpoints.json") == 0 ||
        strcmp(path, "/api/passkey-endpoints") == 0 ||
        strcmp(path, "/peer/v1/passkey-endpoints") == 0)) {
     static const char passkeys[] =
@@ -2693,8 +2703,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/openid-credential-issuer") == 0 ||
        strcmp(path, "/.well-known/openid-credential-issuer/") == 0 ||
+       strcmp(path, "/.well-known/openid-credential-issuer.json") == 0 ||
        strcmp(path, "/openid-credential-issuer") == 0 ||
        strcmp(path, "/openid-credential-issuer/") == 0 ||
+       strcmp(path, "/openid-credential-issuer.json") == 0 ||
        strcmp(path, "/api/openid-credential-issuer") == 0 ||
        strcmp(path, "/peer/v1/openid-credential-issuer") == 0)) {
     static const char oci[] =
@@ -2772,8 +2784,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/webauthn") == 0 ||
        strcmp(path, "/.well-known/webauthn/") == 0 ||
+       strcmp(path, "/.well-known/webauthn.json") == 0 ||
        strcmp(path, "/webauthn") == 0 ||
        strcmp(path, "/webauthn/") == 0 ||
+       strcmp(path, "/webauthn.json") == 0 ||
        strcmp(path, "/api/webauthn") == 0 ||
        strcmp(path, "/peer/v1/webauthn") == 0)) {
     static const char wa[] =
@@ -2844,8 +2858,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/did-configuration") == 0 ||
        strcmp(path, "/.well-known/did-configuration/") == 0 ||
+       strcmp(path, "/.well-known/did-configuration.json") == 0 ||
        strcmp(path, "/did-configuration") == 0 ||
        strcmp(path, "/did-configuration/") == 0 ||
+       strcmp(path, "/did-configuration.json") == 0 ||
        strcmp(path, "/api/did-configuration") == 0 ||
        strcmp(path, "/peer/v1/did-configuration") == 0)) {
     static const char didc[] =

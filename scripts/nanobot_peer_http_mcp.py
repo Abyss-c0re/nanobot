@@ -490,7 +490,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET passkey-endpoints after peer gained empty passkey plate.
         passkey_paths = (
             "/.well-known/passkey-endpoints",
+            "/.well-known/passkey-endpoints.json",
             "/passkey-endpoints",
+            "/passkey-endpoints.json",
             "/api/passkey-endpoints",
             "/peer/v1/passkey-endpoints",
         )
@@ -561,7 +563,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET openid-credential-issuer after peer gained non-OID4VCI plate.
         oid4vci_paths = (
             "/.well-known/openid-credential-issuer",
+            "/.well-known/openid-credential-issuer.json",
             "/openid-credential-issuer",
+            "/openid-credential-issuer.json",
             "/api/openid-credential-issuer",
             "/peer/v1/openid-credential-issuer",
         )
@@ -577,7 +581,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET webauthn after peer gained empty related-origins plate.
         webauthn_paths = (
             "/.well-known/webauthn",
+            "/.well-known/webauthn.json",
             "/webauthn",
+            "/webauthn.json",
             "/api/webauthn",
             "/peer/v1/webauthn",
         )
@@ -591,7 +597,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET did-configuration after peer gained empty linkage plate.
         did_cfg_paths = (
             "/.well-known/did-configuration",
+            "/.well-known/did-configuration.json",
             "/did-configuration",
+            "/did-configuration.json",
             "/api/did-configuration",
             "/peer/v1/did-configuration",
         )
