@@ -229,6 +229,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known est dual-wire + MCP | `3862bcf`  |
 | GET well-known pki-validation dual-wire + MCP | `4fee239`  |
 | GET well-known looking-glass dual-wire + MCP | `0214266`  |
+| GET well-known genid dual-wire + MCP | `43acc00`  |
 ## Anti-chaos
 
 - One product bite per cycle  
