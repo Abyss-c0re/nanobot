@@ -701,6 +701,13 @@ class H(BaseHTTPRequestHandler):
             "/api/microsoft-identity-association.json",
             "/peer/v1/microsoft-identity-association.json",
         )
+        # Residual: GET apple merchantid domain association after empty plate.
+        apple_merchantid_domain_association_paths = (
+            "/.well-known/apple-developer-merchantid-domain-association",
+            "/apple-developer-merchantid-domain-association",
+            "/api/apple-developer-merchantid-domain-association",
+            "/peer/v1/apple-developer-merchantid-domain-association",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1498,6 +1505,19 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "microsoft_identity_association": doc},
+            )
+            return
+        if path in apple_merchantid_domain_association_paths:
+            doc = peer_json(
+                "GET",
+                "/.well-known/apple-developer-merchantid-domain-association",
+                timeout=5,
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "apple_merchantid_domain_association": doc},
             )
             return
         if path in humans_paths:
