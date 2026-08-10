@@ -167,6 +167,7 @@ cd ~/Dev/AI/nanobot
 | GET browserconfig.xml dual-wire + MCP | `475349f`  |
 | GET well-known change-password dual-wire + MCP | `3871489`  |
 | GET sellers.json empty dual-wire + MCP | `7ea4893`  |
+| GET apple-touch-icon dual-wire + MCP | `dedf9cd`  |
 
 ## Anti-chaos
 
