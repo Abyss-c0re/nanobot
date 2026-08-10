@@ -225,6 +225,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known thread dual-wire + MCP | `ea79a01`  |
 | GET well-known coap dual-wire + MCP | `77eb866`  |
 | GET well-known time dual-wire + MCP | `6c436ff`  |
+| GET well-known timezone dual-wire + MCP | `d530205`  |
 ## Anti-chaos
 
 - One product bite per cycle  
