@@ -586,6 +586,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/apple-developer-merchantid-domain-association") ||
         !strcmp(path, "/.well-known/nostr.json") || !strcmp(path, "/.well-known/nostr") ||
         !strcmp(path, "/nostr.json") || !strcmp(path, "/nostr") ||
+        !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/atproto-did") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1646,7 +1647,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3079,6 +3080,36 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", nostr, sizeof nostr - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: AT Protocol/mesh probes hit /.well-known/atproto-did and got not_found.
+   * Lab ops publishes no Bluesky/ATProto handle DID. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/atproto-did") == 0 ||
+       strcmp(path, "/.well-known/atproto-did/") == 0 ||
+       strcmp(path, "/atproto-did") == 0 ||
+       strcmp(path, "/atproto-did/") == 0 ||
+       strcmp(path, "/api/atproto-did") == 0 ||
+       strcmp(path, "/peer/v1/atproto-did") == 0)) {
+    static const char atp[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"atproto_did\","
+      "\"atproto_did\":false,"
+      "\"did\":\"\","
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", atp, sizeof atp - 1);
     free(req); close(cfd); return;
   }
 

@@ -719,6 +719,13 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/nostr.json",
             "/peer/v1/nostr",
         )
+        # Residual: GET atproto-did after empty ATProto plate.
+        atproto_did_paths = (
+            "/.well-known/atproto-did",
+            "/atproto-did",
+            "/api/atproto-did",
+            "/peer/v1/atproto-did",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1536,6 +1543,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "nostr": doc},
+            )
+            return
+        if path in atproto_did_paths:
+            doc = peer_json("GET", "/.well-known/atproto-did", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "atproto_did": doc},
             )
             return
         if path in humans_paths:
