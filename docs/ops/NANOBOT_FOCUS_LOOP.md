@@ -139,6 +139,7 @@ cd ~/Dev/AI/nanobot
 | MCP /activate dual-wire + peer slash | `9d30a9e`  |
 | GET settings plate + MCP proxy | `875fff5`  |
 | GET version dual-wire + MCP proxy | `a60d122`  |
+| GET mcp/servers slash + MCP proxy | `7f3dbbc`  |
 
 ## Anti-chaos
 
