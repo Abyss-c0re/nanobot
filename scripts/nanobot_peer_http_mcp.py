@@ -562,6 +562,13 @@ class H(BaseHTTPRequestHandler):
             "/api/fido2-configuration",
             "/peer/v1/fido2-configuration",
         )
+        # Residual: GET webauthn after peer gained empty related-origins plate.
+        webauthn_paths = (
+            "/.well-known/webauthn",
+            "/webauthn",
+            "/api/webauthn",
+            "/peer/v1/webauthn",
+        )
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
@@ -1101,6 +1108,14 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "fido2": doc},
+            )
+            return
+        if path in webauthn_paths:
+            # Peer serves empty WebAuthn related-origins; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/webauthn", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "webauthn": doc},
             )
             return
         if path in oauth_as_paths:

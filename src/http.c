@@ -630,6 +630,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openid-credential-issuer") ||
         !strcmp(path, "/.well-known/fido2-configuration") ||
         !strcmp(path, "/fido2-configuration") ||
+        !strcmp(path, "/.well-known/webauthn") ||
+        !strcmp(path, "/webauthn") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
@@ -1589,7 +1591,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/schema") == 0 || strcmp(path, "/api/schema/") == 0 ||
                  strcmp(path, "/peer/v1/schema") == 0 ||
                  strcmp(path, "/peer/v1/schema/") == 0)) {
-    char body[1200];
+    /* Grow with well-known action catalog; 1200 truncated mid dual-wire (2026-08-10). */
+    char body[2048];
     char *ver = ng_json_escape(NG_VERSION);
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"schema\","
@@ -1620,11 +1623,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\","
         "\"oauth_client_registration\",\"openid_federation\","
         "\"uma2_configuration\",\"openid_credential_issuer\","
-        "\"fido2_configuration\""
+        "\"fido2_configuration\",\"webauthn\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
     free(ver);
+    if (n < 0 || (size_t)n >= sizeof body) {
+      http_response(cfd, 500, "application/json",
+                    "{\"ok\":false,\"error\":\"schema_overflow\"}", 39);
+      free(req); close(cfd); return;
+    }
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
   }
@@ -2417,6 +2425,41 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", fido2, sizeof fido2 - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: WebAuthn/mesh probes hit /.well-known/webauthn (related origins)
+   * and got not_found. Lab ops is not a WebAuthn RP — empty origins plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/webauthn") == 0 ||
+       strcmp(path, "/.well-known/webauthn/") == 0 ||
+       strcmp(path, "/webauthn") == 0 ||
+       strcmp(path, "/webauthn/") == 0 ||
+       strcmp(path, "/api/webauthn") == 0 ||
+       strcmp(path, "/peer/v1/webauthn") == 0)) {
+    static const char wa[] =
+      "{"
+      "\"origins\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"webauthn\","
+        "\"webauthn\":false,"
+        "\"webauthn_rp\":false,"
+        "\"related_origins\":false,"
+        "\"fido2_configuration\":\"/.well-known/fido2-configuration\","
+        "\"passkey_endpoints\":\"/.well-known/passkey-endpoints\","
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", wa, sizeof wa - 1);
     free(req); close(cfd); return;
   }
 
