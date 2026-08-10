@@ -190,6 +190,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known agent-card.json dual-wire + MCP | `1d52f3f`  |
 | GET well-known oauth-client-registration dual-wire + MCP | `d08e716`  |
 | GET well-known openid-federation dual-wire + MCP | `4286247`  |
+| GET well-known uma2-configuration dual-wire + MCP | `2db6635`  |
 ## Anti-chaos
 
 - One product bite per cycle  
