@@ -1011,6 +1011,15 @@ class H(BaseHTTPRequestHandler):
             "/api/funding-manifest-urls",
             "/peer/v1/funding-manifest-urls",
         )
+        # Residual: GET xrpc-server-did after empty ATProto XRPC plate.
+        xrpc_server_did_paths = (
+            "/.well-known/xrpc-server-did",
+            "/.well-known/xrpc-server-did.json",
+            "/xrpc-server-did",
+            "/xrpc-server-did.json",
+            "/api/xrpc-server-did",
+            "/peer/v1/xrpc-server-did",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2094,6 +2103,13 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "funding_manifest_urls": doc},
+            )
+            return
+        if path in xrpc_server_did_paths:
+            doc = peer_json("GET", "/.well-known/xrpc-server-did", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "xrpc_server_did": doc},
             )
             return
         if path in humans_paths:
