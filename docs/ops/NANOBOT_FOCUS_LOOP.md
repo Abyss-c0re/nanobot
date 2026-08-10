@@ -180,6 +180,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known dnt-policy.txt dual-wire + MCP | `f706d8d`  |
 | GET well-known passkey-endpoints dual-wire + MCP | `2a18d8b`  |
 | GET well-known webfinger dual-wire + MCP | `2b2ba80`  |
+| GET well-known nodeinfo dual-wire + MCP | `78422ec`  |
 ## Anti-chaos
 
 - One product bite per cycle  
