@@ -961,7 +961,34 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
 
-  if (is_post && strcmp(path, "/api/backend") == 0) {
+  /* Residual: POST-only /api/backend → GET not_found; no slash or /peer/v1 aliases. */
+  if (is_get && (strcmp(path, "/api/backend") == 0 || strcmp(path, "/api/backend/") == 0 ||
+                 strcmp(path, "/peer/v1/backend") == 0 ||
+                 strcmp(path, "/peer/v1/backend/") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    if (!agent) {
+      http_peer_err(cfd, 500, "no_agent");
+      free(req); close(cfd); return;
+    }
+    const char *kind = ng_agent_backend_kind(agent);
+    char *be = ng_json_escape(agent->base_url ? agent->base_url : "");
+    char *me = ng_json_escape(agent->model ? agent->model : "");
+    char *ke = ng_json_escape(kind);
+    char body[900];
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"backend\","
+      "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\",\"needs_browser\":%s,"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ke ? ke : "", be ? be : "", me ? me : "",
+      ng_agent_needs_browser_session(agent) ? "true" : "false");
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(be); free(me); free(ke);
+    free(req); close(cfd); return;
+  }
+
+  if (is_post && (strcmp(path, "/api/backend") == 0 || strcmp(path, "/api/backend/") == 0 ||
+                  strcmp(path, "/peer/v1/backend") == 0 ||
+                  strcmp(path, "/peer/v1/backend/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     /* alias: switch backend; same as /api/settings */
     if (!agent) {

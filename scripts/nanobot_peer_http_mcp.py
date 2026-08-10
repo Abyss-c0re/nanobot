@@ -316,6 +316,8 @@ class H(BaseHTTPRequestHandler):
         version_paths = ("/version", "/api/version", "/peer/v1/version")
         mcp_servers_paths = ("/api/mcp/servers", "/peer/v1/mcp/servers")
         log_paths = ("/api/log", "/peer/v1/log")
+        # Residual: GET /api|/peer/v1/backend after peer gained GET backend plate.
+        backend_paths = ("/api/backend", "/peer/v1/backend")
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -410,6 +412,12 @@ class H(BaseHTTPRequestHandler):
             logb = peer_json("GET", "/api/log", timeout=5)
             self._send(
                 200, logb if isinstance(logb, dict) else {"ok": False, "log": logb}
+            )
+            return
+        if path in backend_paths:
+            be = peer_json("GET", "/api/backend", timeout=5)
+            self._send(
+                200, be if isinstance(be, dict) else {"ok": False, "backend": be}
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
