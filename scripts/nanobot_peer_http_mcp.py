@@ -446,6 +446,13 @@ class H(BaseHTTPRequestHandler):
             "/api/oauth-authorization-server",
             "/peer/v1/oauth-authorization-server",
         )
+        # Residual: GET oauth-protected-resource after peer gained RFC 9728 plate.
+        oauth_pr_paths = (
+            "/.well-known/oauth-protected-resource",
+            "/oauth-protected-resource",
+            "/api/oauth-protected-resource",
+            "/peer/v1/oauth-protected-resource",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -796,6 +803,15 @@ class H(BaseHTTPRequestHandler):
             )
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "oauth_as": doc}
+            )
+            return
+        if path in oauth_pr_paths:
+            # Peer serves RFC 9728 protected-resource plate; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/oauth-protected-resource", timeout=5
+            )
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "oauth_pr": doc}
             )
             return
         if path in crossdomain_paths:

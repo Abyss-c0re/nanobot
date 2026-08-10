@@ -593,7 +593,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
-        !strcmp(path, "/oauth-authorization-server"))
+        !strcmp(path, "/oauth-authorization-server") ||
+        !strcmp(path, "/.well-known/oauth-protected-resource") ||
+        !strcmp(path, "/oauth-protected-resource"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1571,7 +1573,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"browserconfig\",\"change_password\",\"sellers\","
         "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\","
         "\"apple_app_site_association\",\"gpc\","
-        "\"openid_configuration\",\"oauth_authorization_server\""
+        "\"openid_configuration\",\"oauth_authorization_server\","
+        "\"oauth_protected_resource\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1867,6 +1870,44 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", oauth_as, sizeof oauth_as - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OAuth/mesh probes hit /.well-known/oauth-protected-resource
+   * (RFC 9728) and got not_found. Lab ops uses peer token + /api/auth, not
+   * a public OAuth protected-resource metadata AS chain. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/oauth-protected-resource") == 0 ||
+       strcmp(path, "/.well-known/oauth-protected-resource/") == 0 ||
+       strcmp(path, "/oauth-protected-resource") == 0 ||
+       strcmp(path, "/oauth-protected-resource/") == 0 ||
+       strcmp(path, "/api/oauth-protected-resource") == 0 ||
+       strcmp(path, "/peer/v1/oauth-protected-resource") == 0)) {
+    static const char oauth_pr[] =
+      "{"
+      "\"resource\":\"\","
+      "\"authorization_servers\":[],"
+      "\"scopes_supported\":[],"
+      "\"bearer_methods_supported\":[\"header\"],"
+      "\"resource_documentation\":\"https://github.com/Abyss-c0re/nanobot\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"oauth_protected_resource\","
+        "\"oauth_resource_metadata\":true,"
+        "\"public_oauth\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"peer_token_header\":\"X-Nanobot-Peer-Token\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", oauth_pr, sizeof oauth_pr - 1);
     free(req); close(cfd); return;
   }
 
