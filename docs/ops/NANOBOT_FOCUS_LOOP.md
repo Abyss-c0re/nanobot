@@ -182,6 +182,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known webfinger dual-wire + MCP | `2b2ba80`  |
 | GET well-known nodeinfo dual-wire + MCP | `78422ec`  |
 | GET well-known host-meta dual-wire + MCP | `b51d99d`  |
+| GET well-known matrix/{client,server} dual-wire + MCP | `4fdb149`  |
 ## Anti-chaos
 
 - One product bite per cycle  
