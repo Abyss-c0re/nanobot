@@ -374,6 +374,14 @@ class H(BaseHTTPRequestHandler):
             "/api/security.txt",
             "/peer/v1/security.txt",
         )
+        # Residual: GET manifest after peer gained web app manifest plate.
+        manifest_paths = (
+            "/manifest.json",
+            "/manifest.webmanifest",
+            "/site.webmanifest",
+            "/api/manifest.json",
+            "/peer/v1/manifest.json",
+        )
         # Residual: GET capabilities dual-wire after peer gained capabilities plate.
         capabilities_paths = (
             "/capabilities",
@@ -576,6 +584,12 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in manifest_paths:
+            man = peer_json("GET", "/manifest.json", timeout=5)
+            self._send(
+                200, man if isinstance(man, dict) else {"ok": False, "manifest": man}
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)

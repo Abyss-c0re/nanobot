@@ -564,7 +564,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/favicon") || !strcmp(path, "/swagger.json") ||
         !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
         !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
-        !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt"))
+        !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt") ||
+        !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
+        !strcmp(path, "/site.webmanifest"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1552,6 +1554,47 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "Preferred-Languages: en\n"
       "Canonical: https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", sectxt, sizeof sectxt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: browser/mesh probes hit /manifest.json|/manifest.webmanifest|
+   * /site.webmanifest and got not_found (no www PWA). Minimal lab-ops manifest. */
+  if (is_get && (strcmp(path, "/manifest.json") == 0 ||
+                 strcmp(path, "/manifest.json/") == 0 ||
+                 strcmp(path, "/manifest.webmanifest") == 0 ||
+                 strcmp(path, "/manifest.webmanifest/") == 0 ||
+                 strcmp(path, "/site.webmanifest") == 0 ||
+                 strcmp(path, "/site.webmanifest/") == 0 ||
+                 strcmp(path, "/api/manifest.json") == 0 ||
+                 strcmp(path, "/peer/v1/manifest.json") == 0)) {
+    char body[900];
+    char *ver = ng_json_escape(NG_VERSION);
+    int n = snprintf(body, sizeof body,
+      "{"
+      "\"name\":\"nanobot peer HTTP\","
+      "\"short_name\":\"nanobot\","
+      "\"description\":\"Lab ops peer bus (not product SMX2).\","
+      "\"start_url\":\"/\","
+      "\"display\":\"browser\","
+      "\"background_color\":\"#0a0a0a\","
+      "\"theme_color\":\"#00e5ff\","
+      "\"lang\":\"en\","
+      "\"version\":\"%s\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"manifest\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}",
+      ver ? ver : "");
+    free(ver);
+    http_response(cfd, 200, "application/manifest+json", body, (size_t)n);
     free(req); close(cfd); return;
   }
 
