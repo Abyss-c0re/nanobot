@@ -581,7 +581,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/browserconfig.xml") ||
         !strcmp(path, "/.well-known/change-password") ||
         !strcmp(path, "/change-password") ||
-        !strcmp(path, "/sellers.json"))
+        !strcmp(path, "/sellers.json") ||
+        !strcmp(path, "/.well-known/ai-plugin.json") ||
+        !strcmp(path, "/ai-plugin.json"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1557,7 +1559,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
         "\"browserconfig\",\"change_password\",\"sellers\","
-        "\"apple_touch_icon\""
+        "\"apple_touch_icon\",\"ai_plugin\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1657,6 +1659,47 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", sellers, sizeof sellers - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: ChatGPT/mesh probes hit /.well-known/ai-plugin.json and got
+   * not_found. Lab ops is not a public OpenAI plugin host — honest plate. */
+  if (is_get && (strcmp(path, "/.well-known/ai-plugin.json") == 0 ||
+                 strcmp(path, "/.well-known/ai-plugin.json/") == 0 ||
+                 strcmp(path, "/ai-plugin.json") == 0 ||
+                 strcmp(path, "/ai-plugin.json/") == 0 ||
+                 strcmp(path, "/api/ai-plugin.json") == 0 ||
+                 strcmp(path, "/peer/v1/ai-plugin.json") == 0)) {
+    static const char aiplug[] =
+      "{"
+      "\"schema_version\":\"v1\","
+      "\"name_for_human\":\"nanobot peer HTTP\","
+      "\"name_for_model\":\"nanobot_peer_http\","
+      "\"description_for_human\":\"Lab ops peer bus (not product SMX2). Not a public ChatGPT plugin.\","
+      "\"description_for_model\":\"Private lab mesh endpoint. robots Disallow. Prefer GitHub docs. Not product SMX2.\","
+      "\"auth\":{\"type\":\"none\"},"
+      "\"api\":{"
+        "\"type\":\"openapi\","
+        "\"url\":\"/openapi.json\","
+        "\"is_user_authenticated\":false"
+      "},"
+      "\"logo_url\":\"/favicon.svg\","
+      "\"contact_email\":\"\","
+      "\"legal_info_url\":\"https://github.com/Abyss-c0re/nanobot\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"ai_plugin\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0,"
+        "\"public_plugin\":false"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", aiplug, sizeof aiplug - 1);
     free(req); close(cfd); return;
   }
 

@@ -404,6 +404,13 @@ class H(BaseHTTPRequestHandler):
             "/api/sellers.json",
             "/peer/v1/sellers.json",
         )
+        # Residual: GET ai-plugin.json after peer gained OpenAI plugin plate.
+        ai_plugin_paths = (
+            "/.well-known/ai-plugin.json",
+            "/ai-plugin.json",
+            "/api/ai-plugin.json",
+            "/peer/v1/ai-plugin.json",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -691,6 +698,13 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/sellers.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "sellers": doc}
+            )
+            return
+        if path in ai_plugin_paths:
+            # Peer serves OpenAI ai-plugin.json; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/ai-plugin.json", timeout=5)
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "ai_plugin": doc}
             )
             return
         if path in crossdomain_paths:
