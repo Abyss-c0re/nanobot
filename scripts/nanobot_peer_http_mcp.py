@@ -1089,6 +1089,15 @@ class H(BaseHTTPRequestHandler):
             "/api/dot",
             "/peer/v1/dot",
         )
+        # Residual: GET bluesky after empty Bluesky/AppView plate.
+        bluesky_paths = (
+            "/.well-known/bluesky",
+            "/.well-known/bluesky.json",
+            "/bluesky",
+            "/bluesky.json",
+            "/api/bluesky",
+            "/peer/v1/bluesky",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2228,6 +2237,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "doh": doc},
+            )
+            return
+        if path in bluesky_paths:
+            doc = peer_json("GET", "/.well-known/bluesky", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "bluesky": doc},
             )
             return
         if path in humans_paths:
