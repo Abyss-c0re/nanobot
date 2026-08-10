@@ -516,8 +516,10 @@ class H(BaseHTTPRequestHandler):
         webfinger_paths = (
             "/.well-known/webfinger",
             "/.well-known/webfinger.json",
+            "/.well-known/webfinger.xml",
             "/webfinger",
             "/webfinger.json",
+            "/webfinger.xml",
             "/api/webfinger",
             "/peer/v1/webfinger",
         )
@@ -529,12 +531,16 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/nodeinfo/2.0.json",
             "/.well-known/nodeinfo/2.1",
             "/.well-known/nodeinfo/2.1.json",
+            "/.well-known/nodeinfo/2.2",
+            "/.well-known/nodeinfo/2.2.json",
             "/nodeinfo",
             "/nodeinfo.json",
             "/nodeinfo/2.0",
             "/nodeinfo/2.0.json",
             "/nodeinfo/2.1",
             "/nodeinfo/2.1.json",
+            "/nodeinfo/2.2",
+            "/nodeinfo/2.2.json",
             "/api/nodeinfo",
             "/peer/v1/nodeinfo",
         )
@@ -551,8 +557,12 @@ class H(BaseHTTPRequestHandler):
         )
         # Residual: GET matrix client discovery after peer gained empty plate.
         matrix_client_paths = (
+            "/.well-known/matrix",
+            "/.well-known/matrix.json",
             "/.well-known/matrix/client",
             "/.well-known/matrix/client.json",
+            "/matrix",
+            "/matrix.json",
             "/matrix/client",
             "/matrix/client.json",
             "/api/matrix/client",
@@ -580,6 +590,12 @@ class H(BaseHTTPRequestHandler):
         openid_fed_paths = (
             "/.well-known/openid-federation",
             "/.well-known/openid-federation.json",
+            "/.well-known/openid-federation/entity-statement",
+            "/.well-known/openid-federation/list",
+            "/.well-known/openid-federation/resolve",
+            "/.well-known/openid-federation/fetch",
+            "/.well-known/entity-statement",
+            "/.well-known/trust-chain",
             "/openid-federation",
             "/openid-federation.json",
             "/api/openid-federation",
@@ -616,6 +632,10 @@ class H(BaseHTTPRequestHandler):
         webauthn_paths = (
             "/.well-known/webauthn",
             "/.well-known/webauthn.json",
+            "/.well-known/webauthn/origins",
+            "/.well-known/webauthn/related-origins",
+            "/.well-known/passkey-endpoints/related-origins",
+            "/.well-known/passkey-endpoints/origins",
             "/webauthn",
             "/webauthn.json",
             "/api/webauthn",
@@ -661,6 +681,13 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/openid/registration",
             "/.well-known/oauth-authorization-server/registration_endpoint",
             "/.well-known/openid-configuration/registration_endpoint",
+            "/.well-known/oauth-client-metadata",
+            "/.well-known/oauth-client",
+            "/.well-known/oauth-client.json",
+            "/.well-known/client-metadata",
+            "/.well-known/client-metadata.json",
+            "/.well-known/oauth-client-registration/metadata",
+            "/.well-known/openid-configuration/client_registration",
             "/oauth-client-registration",
             "/oauth-client-registration.json",
             "/api/oauth-client-registration",
@@ -686,6 +713,7 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET browserconfig.xml after peer gained MS tile plate.
         browserconfig_paths = (
             "/browserconfig.xml",
+            "/.well-known/browserconfig.xml",
             "/api/browserconfig.xml",
             "/peer/v1/browserconfig.xml",
         )
@@ -816,6 +844,20 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/oauth-authorization-server/device",
             "/.well-known/oauth-authorization-server/device_authorization",
             "/.well-known/oauth-authorization-server/metadata",
+            "/.well-known/openid-configuration/authorize",
+            "/.well-known/openid-configuration/device",
+            "/.well-known/openid-configuration/device_authorization",
+            "/.well-known/oauth-authorization-server/authorize",
+            "/.well-known/oauth/par",
+            "/.well-known/oauth/pushed_authorization_request",
+            "/.well-known/openid-configuration/par",
+            "/.well-known/oauth-authorization-server/par",
+            "/.well-known/openid-configuration/pushed_authorization_request_endpoint",
+            "/.well-known/oauth-authorization-server/pushed_authorization_request_endpoint",
+            "/.well-known/openid-credential-issuer/credential",
+            "/.well-known/openid-credential-issuer/token",
+            "/.well-known/openid-credential-issuer/nonce",
+            "/.well-known/oauth-protected-resource/resource",
         )
         # Residual: GET related-website-set after empty RWS plate.
         related_website_set_paths = (
@@ -930,7 +972,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET no-federation resource after empty ActivityPub plate.
         no_federation_paths = (
             "/.well-known/resource-that-should-not-be-used-for-federation",
+            "/.well-known/resource-that-should-not-exist-for-your-servers",
             "/resource-that-should-not-be-used-for-federation",
+            "/resource-that-should-not-exist-for-your-servers",
             "/api/resource-that-should-not-be-used-for-federation",
             "/peer/v1/resource-that-should-not-be-used-for-federation",
         )
