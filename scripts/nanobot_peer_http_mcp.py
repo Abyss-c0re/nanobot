@@ -852,6 +852,13 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/shell/approve",
             "/peer/v1/shell/approve/",
         )
+        # Residual: GET shell/approvals 404 on MCP while peer lists pending gate.
+        shell_approvals_paths = (
+            "/api/shell/approvals",
+            "/api/shell/approvals/",
+            "/peer/v1/shell/approvals",
+            "/peer/v1/shell/approvals/",
+        )
 
         robots_paths = (
             "/robots.txt",
@@ -2259,6 +2266,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "shell_approve": doc},
+            )
+            return
+        if path in shell_approvals_paths:
+            doc = peer_json("GET", "/peer/v1/shell/approvals", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "shell_approvals": doc},
             )
             return
         if path in shell_meta_paths:

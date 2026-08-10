@@ -7548,9 +7548,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* Shell security: gate password + pending approvals */
-  if (is_get && (strcmp(path, "/api/shell/approvals") == 0
-                 || strcmp(path, "/peer/v1/shell/approvals") == 0)) {
+  /* Shell security: gate password + pending approvals.
+   * Residual: trailing slash 404 while bare /shell/approvals worked (mesh probes). */
+  if (is_get && (strcmp(path, "/api/shell/approvals") == 0 ||
+                 strcmp(path, "/api/shell/approvals/") == 0 ||
+                 strcmp(path, "/peer/v1/shell/approvals") == 0 ||
+                 strcmp(path, "/peer/v1/shell/approvals/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *list = ng_shell_approval_list_json();
     char *out = NULL;
