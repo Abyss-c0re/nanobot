@@ -217,6 +217,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known http-opportunistic dual-wire + MCP | `13c4cd9`  |
 | GET well-known core (CoRE RFC 6690) dual-wire + MCP | `4caedbe`  |
 | GET well-known mercure dual-wire + MCP | `4fab3ee`  |
+| GET well-known gnap-as-rs dual-wire + MCP | `184cf0b`  |
 ## Anti-chaos
 
 - One product bite per cycle  
