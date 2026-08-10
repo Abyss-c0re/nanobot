@@ -974,6 +974,15 @@ class H(BaseHTTPRequestHandler):
             "/api/smime-aia",
             "/peer/v1/smime-aia",
         )
+        # Residual: GET browserid after empty BrowserID/Persona plate.
+        browserid_paths = (
+            "/.well-known/browserid",
+            "/.well-known/browserid.json",
+            "/browserid",
+            "/browserid.json",
+            "/api/browserid",
+            "/peer/v1/browserid",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2027,6 +2036,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "smime_aia": doc},
+            )
+            return
+        if path in browserid_paths:
+            doc = peer_json("GET", "/.well-known/browserid", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "browserid": doc},
             )
             return
         if path in humans_paths:
