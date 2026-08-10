@@ -249,6 +249,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known doh|dot dual-wire + MCP | `2162c0c`  |
 | GET well-known bluesky dual-wire + MCP | `2418999`  |
 | GET well-known solid dual-wire + MCP | `cc5cbfc`  |
+| GET well-known web-app-origin-association dual-wire + MCP | `6b5704e`  |
 ## Anti-chaos
 
 - One product bite per cycle  
