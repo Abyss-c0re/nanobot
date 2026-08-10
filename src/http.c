@@ -7136,6 +7136,90 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(j); free(req); close(cfd); return;
   }
 
+  /* Residual: mesh/HTTP probes GET /peer/v1/prompt|/api/prompt and got not_found
+   * while OpenAPI lists POST only. Dual-wire plate: method POST + peer token. */
+  if (is_get && (strcmp(path, "/peer/v1/prompt") == 0 || strcmp(path, "/peer/v1/prompt/") == 0 ||
+                 strcmp(path, "/api/prompt") == 0 || strcmp(path, "/api/prompt/") == 0)) {
+    static const char pr[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"prompt\","
+      "\"prompt\":true,"
+      "\"method\":\"POST\","
+      "\"methods\":[\"POST\"],"
+      "\"post_only\":true,"
+      "\"auth\":\"peer_token\","
+      "\"peer_token_header\":\"X-Nanobot-Peer-Token\","
+      "\"body\":{\"prompt\":\"string\"},"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    /* Residual: advertise Allow for probes that only read headers. */
+    {
+      static const char hdr[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Allow: POST, OPTIONS\r\n"
+        "Cache-Control: no-store\r\n"
+        "Connection: close\r\n";
+      char out[768];
+      int n = snprintf(out, sizeof out,
+                       "%sContent-Length: %zu\r\n\r\n%s",
+                       hdr, sizeof pr - 1, pr);
+      if (n > 0 && n < (int)sizeof out) send_all(cfd, out, (size_t)n);
+      else http_response(cfd, 200, "application/json", pr, sizeof pr - 1);
+    }
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/HTTP probes GET /peer/v1/shell|/api/shell and got not_found
+   * while OpenAPI lists POST only. Dual-wire plate: method POST + peer token. */
+  if (is_get && (strcmp(path, "/peer/v1/shell") == 0 || strcmp(path, "/peer/v1/shell/") == 0 ||
+                 strcmp(path, "/api/shell") == 0 || strcmp(path, "/api/shell/") == 0)) {
+    static const char sh[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"shell\","
+      "\"shell\":true,"
+      "\"method\":\"POST\","
+      "\"methods\":[\"POST\"],"
+      "\"post_only\":true,"
+      "\"auth\":\"peer_token\","
+      "\"peer_token_header\":\"X-Nanobot-Peer-Token\","
+      "\"body\":{\"command\":\"string\"},"
+      "\"approvals\":\"/peer/v1/shell/approvals\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    {
+      static const char hdr[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Allow: POST, OPTIONS\r\n"
+        "Cache-Control: no-store\r\n"
+        "Connection: close\r\n";
+      char out[768];
+      int n = snprintf(out, sizeof out,
+                       "%sContent-Length: %zu\r\n\r\n%s",
+                       hdr, sizeof sh - 1, sh);
+      if (n > 0 && n < (int)sizeof out) send_all(cfd, out, (size_t)n);
+      else http_response(cfd, 200, "application/json", sh, sizeof sh - 1);
+    }
+    free(req); close(cfd); return;
+  }
+
   /* Residual: /api/prompt and trailing slash 404 while /api/jobs already works. */
   if (is_post && (strcmp(path, "/peer/v1/prompt") == 0 || strcmp(path, "/peer/v1/prompt/") == 0 ||
                   strcmp(path, "/api/prompt") == 0 || strcmp(path, "/api/prompt/") == 0)) {

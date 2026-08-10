@@ -784,6 +784,21 @@ class H(BaseHTTPRequestHandler):
             "/change-password",
         )
         # Residual: GET robots.txt after peer gained robots plate.
+
+        # Residual: GET shell/prompt dual-wire method plate after peer POST-only.
+        shell_meta_paths = (
+            "/peer/v1/shell",
+            "/peer/v1/shell/",
+            "/api/shell",
+            "/api/shell/",
+        )
+        prompt_meta_paths = (
+            "/peer/v1/prompt",
+            "/peer/v1/prompt/",
+            "/api/prompt",
+            "/api/prompt/",
+        )
+
         robots_paths = (
             "/robots.txt",
             "/.well-known/robots.txt",
@@ -2146,6 +2161,24 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in prompt_meta_paths:
+            doc = peer_json("GET", path.rstrip("/") or path, timeout=5)
+            if not isinstance(doc, dict):
+                doc = peer_json("GET", "/peer/v1/prompt", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "prompt": doc},
+            )
+            return
+        if path in shell_meta_paths:
+            doc = peer_json("GET", path.rstrip("/") or path, timeout=5)
+            if not isinstance(doc, dict):
+                doc = peer_json("GET", "/peer/v1/shell", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "shell": doc},
             )
             return
         if path in robots_paths:
