@@ -574,7 +574,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/service-worker.js") || !strcmp(path, "/sw.js") ||
         !strcmp(path, "/ads.txt") || !strcmp(path, "/app-ads.txt") ||
         !strcmp(path, "/crossdomain.xml") ||
-        !strcmp(path, "/clientaccesspolicy.xml"))
+        !strcmp(path, "/clientaccesspolicy.xml") ||
+        !strcmp(path, "/browserconfig.xml"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1548,7 +1549,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
-        "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\""
+        "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
+        "\"browserconfig\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1630,6 +1632,26 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "  <site-control permitted-cross-domain-policies=\"none\"/>\n"
       "</cross-domain-policy>\n";
     http_response(cfd, 200, "text/x-cross-domain-policy", xdom, sizeof xdom - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: browser/mesh probes hit /browserconfig.xml and got not_found.
+   * MS tile config — lab ops has no pinned tiles; theme only. */
+  if (is_get && (strcmp(path, "/browserconfig.xml") == 0 ||
+                 strcmp(path, "/browserconfig.xml/") == 0 ||
+                 strcmp(path, "/api/browserconfig.xml") == 0 ||
+                 strcmp(path, "/peer/v1/browserconfig.xml") == 0)) {
+    static const char bcfg[] =
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+      "<!-- nanobot peer HTTP — lab ops only (not product SMX2) -->\n"
+      "<browserconfig>\n"
+      "  <msapplication>\n"
+      "    <tile>\n"
+      "      <TileColor>#0a0a0a</TileColor>\n"
+      "    </tile>\n"
+      "  </msapplication>\n"
+      "</browserconfig>\n";
+    http_response(cfd, 200, "application/xml; charset=utf-8", bcfg, sizeof bcfg - 1);
     free(req); close(cfd); return;
   }
 

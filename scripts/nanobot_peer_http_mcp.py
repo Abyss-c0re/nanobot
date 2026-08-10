@@ -399,6 +399,12 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/crossdomain.xml",
             "/clientaccesspolicy.xml",
         )
+        # Residual: GET browserconfig.xml after peer gained MS tile plate.
+        browserconfig_paths = (
+            "/browserconfig.xml",
+            "/api/browserconfig.xml",
+            "/peer/v1/browserconfig.xml",
+        )
         # Residual: GET robots.txt after peer gained robots plate.
         robots_paths = ("/robots.txt",)
         # Residual: GET security.txt after peer gained RFC 9116 plate.
@@ -668,6 +674,28 @@ class H(BaseHTTPRequestHandler):
                     "content_type": "text/x-cross-domain-policy",
                     "peer_path": "/crossdomain.xml",
                     "permitted_cross_domain_policies": "none",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in browserconfig_paths:
+            # Peer serves MS tile XML; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "browserconfig",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "application/xml",
+                    "peer_path": "/browserconfig.xml",
+                    "tile_color": "#0a0a0a",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,
