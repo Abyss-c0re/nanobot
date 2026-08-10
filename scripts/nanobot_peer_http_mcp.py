@@ -1151,6 +1151,18 @@ class H(BaseHTTPRequestHandler):
             "/api/a2a",
             "/peer/v1/a2a",
         )
+        # Residual: GET token-issuer-directory after empty Privacy Pass issuer plate.
+        token_issuer_directory_paths = (
+            "/.well-known/token-issuer-directory",
+            "/.well-known/token-issuer-directory.json",
+            "/.well-known/private-token-issuer-directory",
+            "/token-issuer-directory",
+            "/private-token-issuer-directory",
+            "/api/token-issuer-directory",
+            "/peer/v1/token-issuer-directory",
+            "/api/private-token-issuer-directory",
+            "/peer/v1/private-token-issuer-directory",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2336,6 +2348,17 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "a2a": doc},
+            )
+            return
+        if path in token_issuer_directory_paths:
+            doc = peer_json(
+                "GET", "/.well-known/token-issuer-directory", timeout=5
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "token_issuer_directory": doc},
             )
             return
         if path in humans_paths:
