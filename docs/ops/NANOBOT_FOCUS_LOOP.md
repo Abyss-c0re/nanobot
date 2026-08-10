@@ -157,6 +157,7 @@ cd ~/Dev/AI/nanobot
 | GET robots.txt lab-ops disallow + MCP | `bc36702`  |
 | GET security.txt RFC 9116 + MCP | `a86d705`  |
 | GET web app manifest dual-wire + MCP | `737d6c6`  |
+| GET schema dual-wire + MCP | `27e3256`  |
 
 ## Anti-chaos
 
