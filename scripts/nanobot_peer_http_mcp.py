@@ -795,6 +795,13 @@ class H(BaseHTTPRequestHandler):
             "/api/http-opportunistic",
             "/peer/v1/http-opportunistic",
         )
+        # Residual: GET /.well-known/core after empty CoRE/RFC 6690 plate.
+        core_paths = (
+            "/.well-known/core",
+            "/core",
+            "/api/core",
+            "/peer/v1/core",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1706,6 +1713,13 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "http_opportunistic": doc},
+            )
+            return
+        if path in core_paths:
+            doc = peer_json("GET", "/.well-known/core", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "core": doc},
             )
             return
         if path in humans_paths:
