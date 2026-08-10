@@ -197,6 +197,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known did.json dual-wire + MCP | `b976d6c`  |
 | GET well-known did-configuration dual-wire + MCP | `d2efacd`  |
 | GET well-known trust.txt dual-wire + MCP | `c9cecd8`  |
+| GET well-known keybase.txt dual-wire + MCP | `3d48788`  |
 ## Anti-chaos
 
 - One product bite per cycle  
