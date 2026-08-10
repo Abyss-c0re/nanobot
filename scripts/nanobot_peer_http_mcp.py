@@ -364,7 +364,16 @@ class H(BaseHTTPRequestHandler):
             "/api/docs",
             "/peer/v1/docs",
         )
-        favicon_paths = ("/favicon.ico", "/favicon")
+        # Residual: /favicon.svg dual-wire after peer gained SVG alias plate.
+        favicon_paths = (
+            "/favicon.ico",
+            "/favicon",
+            "/favicon.svg",
+            "/api/favicon.svg",
+            "/peer/v1/favicon.svg",
+            "/api/favicon.ico",
+            "/peer/v1/favicon.ico",
+        )
         # Residual: GET robots.txt after peer gained robots plate.
         robots_paths = ("/robots.txt",)
         # Residual: GET security.txt after peer gained RFC 9116 plate.
@@ -551,6 +560,11 @@ class H(BaseHTTPRequestHandler):
             return
         if path in favicon_paths:
             # Peer serves image/svg+xml; MCP mesh probes want dual-wire JSON.
+            peer_path = (
+                "/favicon.svg"
+                if path.endswith(".svg") or path.endswith("favicon.svg")
+                else "/favicon.ico"
+            )
             self._send(
                 200,
                 {
@@ -559,7 +573,8 @@ class H(BaseHTTPRequestHandler):
                     "action": "favicon",
                     "service": "blackcube-nanobot-http-mcp",
                     "content_type": "image/svg+xml",
-                    "peer_path": "/favicon.ico",
+                    "peer_path": peer_path,
+                    "theme_color": "#00e5ff",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,

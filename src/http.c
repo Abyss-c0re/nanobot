@@ -561,7 +561,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/activate") ||
         !strcmp(path, "/openapi.yaml") || !strcmp(path, "/openapi.json") ||
         !strcmp(path, "/openapi") || !strcmp(path, "/favicon.ico") ||
-        !strcmp(path, "/favicon") || !strcmp(path, "/swagger.json") ||
+        !strcmp(path, "/favicon") || !strcmp(path, "/favicon.svg") ||
+        !strcmp(path, "/swagger.json") ||
         !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
         !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
         !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt") ||
@@ -1542,7 +1543,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"health\",\"ready\",\"ping\",\"livez\",\"readyz\",\"healthz\","
         "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
-        "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\""
+        "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
+        "\"favicon\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1551,10 +1553,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* Residual: mesh/browser probes hit /favicon.ico and got not_found (noisy 404
-   * without www_root). Serve a tiny cyan-cube SVG so probes stay quiet. */
+  /* Residual: mesh/browser probes hit /favicon.ico|/favicon.svg and got
+   * not_found (noisy 404 without www_root). Tiny cyan-cube SVG. */
   if (is_get && (strcmp(path, "/favicon.ico") == 0 || strcmp(path, "/favicon.ico/") == 0 ||
-                 strcmp(path, "/favicon") == 0 || strcmp(path, "/favicon/") == 0)) {
+                 strcmp(path, "/favicon") == 0 || strcmp(path, "/favicon/") == 0 ||
+                 strcmp(path, "/favicon.svg") == 0 || strcmp(path, "/favicon.svg/") == 0 ||
+                 strcmp(path, "/api/favicon.svg") == 0 ||
+                 strcmp(path, "/peer/v1/favicon.svg") == 0 ||
+                 strcmp(path, "/api/favicon.ico") == 0 ||
+                 strcmp(path, "/peer/v1/favicon.ico") == 0)) {
     static const char favicon_svg[] =
       "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\">"
       "<rect width=\"32\" height=\"32\" fill=\"#0a0a0a\"/>"
@@ -1787,7 +1794,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "  /openapi.json:\n"
         "    get: {summary: this document (JSON)}\n"
         "  /favicon.ico:\n"
-        "    get: {summary: favicon SVG}\n",
+        "    get: {summary: favicon SVG}\n"
+        "  /favicon.svg:\n"
+        "    get: {summary: favicon SVG alias}\n",
         ver ? ver : "");
       free(ver);
       http_response(cfd, 200, "application/yaml", body, (size_t)n);
@@ -1828,6 +1837,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
           "\"/openapi.json\":{\"get\":{\"summary\":\"this document\","
             "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
           "\"/favicon.ico\":{\"get\":{\"summary\":\"favicon SVG\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/favicon.svg\":{\"get\":{\"summary\":\"favicon SVG alias\","
             "\"responses\":{\"200\":{\"description\":\"ok\"}}}}"
         "},"
         "\"x-nanobot\":{"
