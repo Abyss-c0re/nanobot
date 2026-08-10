@@ -733,6 +733,13 @@ class H(BaseHTTPRequestHandler):
             "/api/stellar.toml",
             "/peer/v1/stellar.toml",
         )
+        # Residual: GET web-identity after empty FedCM plate.
+        web_identity_paths = (
+            "/.well-known/web-identity",
+            "/web-identity",
+            "/api/web-identity",
+            "/peer/v1/web-identity",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1581,6 +1588,13 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in web_identity_paths:
+            doc = peer_json("GET", "/.well-known/web-identity", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "web_identity": doc},
             )
             return
         if path in humans_paths:

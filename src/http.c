@@ -588,6 +588,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/nostr.json") || !strcmp(path, "/nostr") ||
         !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/atproto-did") ||
         !strcmp(path, "/.well-known/stellar.toml") || !strcmp(path, "/stellar.toml") ||
+        !strcmp(path, "/.well-known/web-identity") || !strcmp(path, "/web-identity") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1648,7 +1649,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3128,6 +3129,39 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "# stellar.toml — no Stellar SEP-0001 metadata published\n"
       "# Companion: /.well-known/security.txt\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", st, sizeof st - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: FedCM/mesh probes hit /.well-known/web-identity and got not_found.
+   * Lab ops is not an identity provider — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/web-identity") == 0 ||
+       strcmp(path, "/.well-known/web-identity/") == 0 ||
+       strcmp(path, "/web-identity") == 0 ||
+       strcmp(path, "/web-identity/") == 0 ||
+       strcmp(path, "/api/web-identity") == 0 ||
+       strcmp(path, "/peer/v1/web-identity") == 0)) {
+    static const char wi[] =
+      "{"
+      "\"provider_urls\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"web_identity\","
+      "\"web_identity\":false,"
+      "\"fedcm\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", wi, sizeof wi - 1);
     free(req); close(cfd); return;
   }
 
