@@ -778,6 +778,16 @@ class H(BaseHTTPRequestHandler):
             "/api/resource-that-should-not-be-used-for-federation",
             "/peer/v1/resource-that-should-not-be-used-for-federation",
         )
+        # Residual: GET Chrome DevTools appspecific after empty workspace plate.
+        chrome_devtools_paths = (
+            "/.well-known/appspecific/com.chrome.devtools.json",
+            "/.well-known/appspecific/com.chrome.devtools",
+            "/com.chrome.devtools.json",
+            "/api/com.chrome.devtools.json",
+            "/api/chrome-devtools",
+            "/peer/v1/com.chrome.devtools.json",
+            "/peer/v1/chrome-devtools",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1669,6 +1679,17 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "no_federation": doc},
+            )
+            return
+        if path in chrome_devtools_paths:
+            doc = peer_json(
+                "GET",
+                "/.well-known/appspecific/com.chrome.devtools.json",
+                timeout=5,
+            )
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "chrome_devtools": doc},
             )
             return
         if path in humans_paths:
