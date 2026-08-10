@@ -642,6 +642,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/openid-credential-issuer/token") ||
         !strcmp(path, "/.well-known/openid-credential-issuer/nonce") ||
         !strcmp(path, "/.well-known/oauth-protected-resource/resource") ||
+        !strcmp(path, "/.well-known/openid-configuration/end_session") ||
+        !strcmp(path, "/.well-known/openid-configuration/logout") ||
+        !strcmp(path, "/.well-known/openid-configuration/check_session") ||
+        !strcmp(path, "/.well-known/openid-configuration/rp_logout") ||
+        !strcmp(path, "/.well-known/openid-configuration/device_authorization_endpoint") ||
+        !strcmp(path, "/.well-known/openid-configuration/bc_authorize") ||
+        !strcmp(path, "/.well-known/openid-configuration/backchannel_authentication") ||
+        !strcmp(path, "/.well-known/openid-configuration/mtls_endpoint_aliases") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/end_session") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/device_authorization_endpoint") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/bc_authorize") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/mtls_endpoint_aliases") ||
+        !strcmp(path, "/.well-known/oauth/logout") ||
+        !strcmp(path, "/.well-known/oauth/end_session") ||
+        !strcmp(path, "/.well-known/oauth/device_code") ||
+        !strcmp(path, "/.well-known/oauth/bc_authorize") ||
+        !strcmp(path, "/.well-known/oauth/mtls") ||
+        !strcmp(path, "/.well-known/ciba") ||
         !strcmp(path, "/.well-known/webauthn/origins") ||
         !strcmp(path, "/.well-known/webauthn/related-origins") ||
         !strcmp(path, "/.well-known/webauthn/configuration") ||
@@ -652,8 +670,28 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/openid-federation/list") ||
         !strcmp(path, "/.well-known/openid-federation/resolve") ||
         !strcmp(path, "/.well-known/openid-federation/fetch") ||
+        !strcmp(path, "/.well-known/openid-federation/trust_mark_status") ||
+        !strcmp(path, "/.well-known/openid-federation/trust_marked_entities") ||
+        !strcmp(path, "/.well-known/openid-federation/historical_keys") ||
         !strcmp(path, "/.well-known/entity-statement") ||
         !strcmp(path, "/.well-known/trust-chain") ||
+        !strcmp(path, "/.well-known/autoconfig") ||
+        !strcmp(path, "/.well-known/autoconfig/mail") ||
+        !strcmp(path, "/.well-known/auto-config") ||
+        !strcmp(path, "/.well-known/mail-v1.xml") ||
+        !strcmp(path, "/.well-known/thunderbird/autoconfig") ||
+        !strcmp(path, "/mail/config-v1.1.xml") ||
+        !strcmp(path, "/.well-known/simple-web-discovery") ||
+        !strcmp(path, "/.well-known/identity-hub") ||
+        !strcmp(path, "/.well-known/dwn") ||
+        !strcmp(path, "/.well-known/dwn-server") ||
+        !strcmp(path, "/.well-known/decentralized-web-node") ||
+        !strcmp(path, "/.well-known/ion") ||
+        !strcmp(path, "/.well-known/openorg") ||
+        !strcmp(path, "/.well-known/organization") ||
+        !strcmp(path, "/.well-known/organization.json") ||
+        !strcmp(path, "/.well-known/org.json") ||
+        !strcmp(path, "/.well-known/swid") ||
         !strcmp(path, "/.well-known/related-website-set") ||
         !strcmp(path, "/.well-known/related-website-set.json") ||
         !strcmp(path, "/related-website-set") ||
@@ -944,6 +982,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/llms.txt") || !strcmp(path, "/.well-known/llms.txt") ||
         !strcmp(path, "/.well-known/llm.txt") ||
         !strcmp(path, "/ai.txt") || !strcmp(path, "/.well-known/ai.txt") ||
+        !strcmp(path, "/.well-known/no-ai") || !strcmp(path, "/.well-known/noai") ||
+        !strcmp(path, "/.well-known/ai-policy") ||
         !strcmp(path, "/service-worker.js") || !strcmp(path, "/sw.js") ||
         !strcmp(path, "/ads.txt") || !strcmp(path, "/app-ads.txt") ||
         !strcmp(path, "/crossdomain.xml") ||
@@ -981,9 +1021,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/webfinger") ||
         !strcmp(path, "/.well-known/webfinger.json") ||
         !strcmp(path, "/.well-known/webfinger.xml") ||
+        !strcmp(path, "/.well-known/webfinger.txt") ||
         !strcmp(path, "/webfinger") ||
         !strcmp(path, "/webfinger.json") ||
         !strcmp(path, "/webfinger.xml") ||
+        !strcmp(path, "/webfinger.txt") ||
         !strcmp(path, "/.well-known/nodeinfo") ||
         !strcmp(path, "/.well-known/nodeinfo.json") ||
         !strcmp(path, "/.well-known/nodeinfo/2.0") ||
@@ -1003,9 +1045,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/host-meta") ||
         !strcmp(path, "/.well-known/host-meta.json") ||
         !strcmp(path, "/.well-known/host-meta.xml") ||
+        !strcmp(path, "/.well-known/host-meta.xrd") ||
         !strcmp(path, "/host-meta") ||
         !strcmp(path, "/host-meta.json") ||
         !strcmp(path, "/host-meta.xml") ||
+        !strcmp(path, "/host-meta.xrd") ||
         !strcmp(path, "/.well-known/matrix") ||
         !strcmp(path, "/.well-known/matrix.json") ||
         !strcmp(path, "/.well-known/matrix/client") ||
@@ -1025,7 +1069,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/mta-sts.txt") ||
         !strcmp(path, "/mta-sts.txt") ||
         !strcmp(path, "/.well-known/mta-sts") ||
+        !strcmp(path, "/.well-known/mta-sts.json") ||
         !strncmp(path, "/.well-known/mta-sts/", 20) ||
+        !strcmp(path, "/.well-known/enterprise-transport-security") ||
         !strcmp(path, "/mta-sts") ||
         !strcmp(path, "/api/mta-sts") ||
         !strcmp(path, "/peer/v1/mta-sts") ||
@@ -1085,11 +1131,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/webauthn.json") ||
         !strcmp(path, "/.well-known/did.json") ||
         !strcmp(path, "/.well-known/did") ||
+        !strcmp(path, "/.well-known/did-web") ||
+        !strcmp(path, "/.well-known/web-did") ||
+        !strcmp(path, "/.well-known/identity") ||
         !strcmp(path, "/did.json") ||
         !strcmp(path, "/did") ||
         !strcmp(path, "/.well-known/did-configuration") ||
         !strcmp(path, "/.well-known/did-configuration.json") ||
         !strcmp(path, "/.well-known/did-configuration/resources") ||
+        !strcmp(path, "/.well-known/did-configuration/resources.json") ||
         !strcmp(path, "/did-configuration") ||
         !strcmp(path, "/did-configuration.json") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1116,6 +1166,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/client-metadata.json") ||
         !strcmp(path, "/.well-known/oauth-client-registration/metadata") ||
         !strcmp(path, "/.well-known/openid-configuration/client_registration") ||
+        !strcmp(path, "/.well-known/oauth-client-id-metadata-document") ||
+        !strcmp(path, "/.well-known/oauth-client-id") ||
+        !strcmp(path, "/.well-known/client-id-metadata") ||
         !strcmp(path, "/oauth-client-registration") ||
         !strcmp(path, "/oauth-client-registration.json") ||
         !strcmp(path, "/api/oauth-client-registration.json") ||
@@ -2444,7 +2497,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/peer/v1/mta-sts.txt") == 0 ||
                  strcmp(path, "/.well-known/mta-sts") == 0 ||
                  strcmp(path, "/.well-known/mta-sts/") == 0 ||
+                 strcmp(path, "/.well-known/mta-sts.json") == 0 ||
                  strncmp(path, "/.well-known/mta-sts/", 20) == 0 ||
+                 strcmp(path, "/.well-known/enterprise-transport-security") == 0 ||
                  strcmp(path, "/mta-sts") == 0 ||
                  strcmp(path, "/mta-sts/") == 0 ||
                  strcmp(path, "/api/mta-sts") == 0 ||
@@ -2650,10 +2705,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/webfinger/") == 0 ||
                  strcmp(path, "/.well-known/webfinger.json") == 0 ||
                  strcmp(path, "/.well-known/webfinger.xml") == 0 ||
+                 strcmp(path, "/.well-known/webfinger.txt") == 0 ||
                  strcmp(path, "/webfinger") == 0 ||
                  strcmp(path, "/webfinger/") == 0 ||
                  strcmp(path, "/webfinger.json") == 0 ||
                  strcmp(path, "/webfinger.xml") == 0 ||
+                 strcmp(path, "/webfinger.txt") == 0 ||
                  strcmp(path, "/api/webfinger") == 0 ||
                  strcmp(path, "/peer/v1/webfinger") == 0)) {
     static const char wf[] =
@@ -2731,12 +2788,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/host-meta.json/") == 0 ||
                  strcmp(path, "/.well-known/host-meta.xml") == 0 ||
                  strcmp(path, "/.well-known/host-meta.xml/") == 0 ||
+                 strcmp(path, "/.well-known/host-meta.xrd") == 0 ||
                  strcmp(path, "/host-meta") == 0 ||
                  strcmp(path, "/host-meta/") == 0 ||
                  strcmp(path, "/host-meta.json") == 0 ||
                  strcmp(path, "/host-meta.json/") == 0 ||
                  strcmp(path, "/host-meta.xml") == 0 ||
                  strcmp(path, "/host-meta.xml/") == 0 ||
+                 strcmp(path, "/host-meta.xrd") == 0 ||
                  strcmp(path, "/api/host-meta") == 0 ||
                  strcmp(path, "/peer/v1/host-meta") == 0)) {
     static const char hm[] =
@@ -2882,6 +2941,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/openid-federation/list") == 0 ||
        strcmp(path, "/.well-known/openid-federation/resolve") == 0 ||
        strcmp(path, "/.well-known/openid-federation/fetch") == 0 ||
+       strcmp(path, "/.well-known/openid-federation/trust_mark_status") == 0 ||
+       strcmp(path, "/.well-known/openid-federation/trust_marked_entities") == 0 ||
+       strcmp(path, "/.well-known/openid-federation/historical_keys") == 0 ||
        strcmp(path, "/.well-known/entity-statement") == 0 ||
        strcmp(path, "/.well-known/trust-chain") == 0 ||
        strcmp(path, "/openid-federation") == 0 ||
@@ -3109,6 +3171,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/did.json/") == 0 ||
        strcmp(path, "/.well-known/did") == 0 ||
        strcmp(path, "/.well-known/did/") == 0 ||
+       strcmp(path, "/.well-known/did-web") == 0 ||
+       strcmp(path, "/.well-known/web-did") == 0 ||
+       strcmp(path, "/.well-known/identity") == 0 ||
        strcmp(path, "/did.json") == 0 ||
        strcmp(path, "/did.json/") == 0 ||
        strcmp(path, "/did") == 0 ||
@@ -3150,6 +3215,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/did-configuration/") == 0 ||
        strcmp(path, "/.well-known/did-configuration.json") == 0 ||
        strcmp(path, "/.well-known/did-configuration/resources") == 0 ||
+       strcmp(path, "/.well-known/did-configuration/resources.json") == 0 ||
        strcmp(path, "/did-configuration") == 0 ||
        strcmp(path, "/did-configuration/") == 0 ||
        strcmp(path, "/did-configuration.json") == 0 ||
@@ -3246,6 +3312,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/client-metadata.json") == 0 ||
        strcmp(path, "/.well-known/oauth-client-registration/metadata") == 0 ||
        strcmp(path, "/.well-known/openid-configuration/client_registration") == 0 ||
+       strcmp(path, "/.well-known/oauth-client-id-metadata-document") == 0 ||
+       strcmp(path, "/.well-known/oauth-client-id") == 0 ||
+       strcmp(path, "/.well-known/client-id-metadata") == 0 ||
        strcmp(path, "/oauth-client-registration") == 0 ||
        strcmp(path, "/oauth-client-registration/") == 0 ||
        strcmp(path, "/oauth-client-registration.json") == 0 ||
@@ -3669,7 +3738,25 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/openid-credential-issuer/credential") == 0 ||
        strcmp(path, "/.well-known/openid-credential-issuer/token") == 0 ||
        strcmp(path, "/.well-known/openid-credential-issuer/nonce") == 0 ||
-       strcmp(path, "/.well-known/oauth-protected-resource/resource") == 0)) {
+       strcmp(path, "/.well-known/oauth-protected-resource/resource") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/end_session") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/logout") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/check_session") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/rp_logout") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/device_authorization_endpoint") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/bc_authorize") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/backchannel_authentication") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/mtls_endpoint_aliases") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/end_session") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/device_authorization_endpoint") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/bc_authorize") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/mtls_endpoint_aliases") == 0 ||
+       strcmp(path, "/.well-known/oauth/logout") == 0 ||
+       strcmp(path, "/.well-known/oauth/end_session") == 0 ||
+       strcmp(path, "/.well-known/oauth/device_code") == 0 ||
+       strcmp(path, "/.well-known/oauth/bc_authorize") == 0 ||
+       strcmp(path, "/.well-known/oauth/mtls") == 0 ||
+       strcmp(path, "/.well-known/ciba") == 0)) {
     static const char oep[] =
       "{"
       "\"schema\":\"nanobot.peer_http.v1\","
@@ -3691,6 +3778,54 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"python\":0"
       "}";
     http_response(cfd, 200, "application/json", oep, sizeof oep - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes hit mail autoconfig, simple-web-discovery, identity
+   * hub/DWN/ION, organization, and SWID and got not_found. Lab ops is not a
+   * mail/autoconfig/DWN/org registry — empty discovery plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/autoconfig") == 0 ||
+       strcmp(path, "/.well-known/autoconfig/") == 0 ||
+       strcmp(path, "/.well-known/autoconfig/mail") == 0 ||
+       strcmp(path, "/.well-known/auto-config") == 0 ||
+       strcmp(path, "/.well-known/mail-v1.xml") == 0 ||
+       strcmp(path, "/.well-known/thunderbird/autoconfig") == 0 ||
+       strcmp(path, "/mail/config-v1.1.xml") == 0 ||
+       strcmp(path, "/.well-known/simple-web-discovery") == 0 ||
+       strcmp(path, "/.well-known/identity-hub") == 0 ||
+       strcmp(path, "/.well-known/dwn") == 0 ||
+       strcmp(path, "/.well-known/dwn-server") == 0 ||
+       strcmp(path, "/.well-known/decentralized-web-node") == 0 ||
+       strcmp(path, "/.well-known/ion") == 0 ||
+       strcmp(path, "/.well-known/openorg") == 0 ||
+       strcmp(path, "/.well-known/organization") == 0 ||
+       strcmp(path, "/.well-known/organization.json") == 0 ||
+       strcmp(path, "/.well-known/org.json") == 0 ||
+       strcmp(path, "/.well-known/swid") == 0)) {
+    static const char disc[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"discovery\","
+      "\"discovery\":false,"
+      "\"autoconfig\":false,"
+      "\"simple_web_discovery\":false,"
+      "\"identity_hub\":false,"
+      "\"dwn\":false,"
+      "\"organization\":false,"
+      "\"swid\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", disc, sizeof disc - 1);
     free(req); close(cfd); return;
   }
 
@@ -5845,6 +5980,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/ai.txt") == 0 || strcmp(path, "/ai.txt/") == 0 ||
                  strcmp(path, "/.well-known/ai.txt") == 0 ||
                  strcmp(path, "/.well-known/ai.txt/") == 0 ||
+                 strcmp(path, "/.well-known/no-ai") == 0 ||
+                 strcmp(path, "/.well-known/noai") == 0 ||
+                 strcmp(path, "/.well-known/ai-policy") == 0 ||
                  strcmp(path, "/api/llms.txt") == 0 ||
                  strcmp(path, "/peer/v1/llms.txt") == 0)) {
     static const char llms[] =

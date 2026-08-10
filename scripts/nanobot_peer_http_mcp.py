@@ -468,6 +468,8 @@ class H(BaseHTTPRequestHandler):
             "/api/mta-sts",
             "/peer/v1/mta-sts.txt",
             "/peer/v1/mta-sts",
+            "/.well-known/mta-sts.json",
+            "/.well-known/enterprise-transport-security",
         )
         # Residual: GET caldav after peer gained empty CalDAV discovery plate.
         caldav_paths = (
@@ -519,9 +521,11 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/webfinger",
             "/.well-known/webfinger.json",
             "/.well-known/webfinger.xml",
+            "/.well-known/webfinger.txt",
             "/webfinger",
             "/webfinger.json",
             "/webfinger.xml",
+            "/webfinger.txt",
             "/api/webfinger",
             "/peer/v1/webfinger",
         )
@@ -551,9 +555,11 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/host-meta",
             "/.well-known/host-meta.json",
             "/.well-known/host-meta.xml",
+            "/.well-known/host-meta.xrd",
             "/host-meta",
             "/host-meta.json",
             "/host-meta.xml",
+            "/host-meta.xrd",
             "/api/host-meta",
             "/peer/v1/host-meta",
         )
@@ -598,6 +604,9 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/openid-federation/list",
             "/.well-known/openid-federation/resolve",
             "/.well-known/openid-federation/fetch",
+            "/.well-known/openid-federation/trust_mark_status",
+            "/.well-known/openid-federation/trust_marked_entities",
+            "/.well-known/openid-federation/historical_keys",
             "/.well-known/entity-statement",
             "/.well-known/trust-chain",
             "/openid-federation",
@@ -665,6 +674,9 @@ class H(BaseHTTPRequestHandler):
         did_json_paths = (
             "/.well-known/did.json",
             "/.well-known/did",
+            "/.well-known/did-web",
+            "/.well-known/web-did",
+            "/.well-known/identity",
             "/did.json",
             "/did",
             "/api/did.json",
@@ -675,6 +687,7 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/did-configuration",
             "/.well-known/did-configuration.json",
             "/.well-known/did-configuration/resources",
+            "/.well-known/did-configuration/resources.json",
             "/did-configuration",
             "/did-configuration.json",
             "/api/did-configuration",
@@ -711,6 +724,9 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/client-metadata.json",
             "/.well-known/oauth-client-registration/metadata",
             "/.well-known/openid-configuration/client_registration",
+            "/.well-known/oauth-client-id-metadata-document",
+            "/.well-known/oauth-client-id",
+            "/.well-known/client-id-metadata",
             "/oauth-client-registration",
             "/oauth-client-registration.json",
             "/api/oauth-client-registration",
@@ -883,6 +899,44 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/openid-credential-issuer/token",
             "/.well-known/openid-credential-issuer/nonce",
             "/.well-known/oauth-protected-resource/resource",
+            "/.well-known/openid-configuration/end_session",
+            "/.well-known/openid-configuration/logout",
+            "/.well-known/openid-configuration/check_session",
+            "/.well-known/openid-configuration/rp_logout",
+            "/.well-known/openid-configuration/device_authorization_endpoint",
+            "/.well-known/openid-configuration/bc_authorize",
+            "/.well-known/openid-configuration/backchannel_authentication",
+            "/.well-known/openid-configuration/mtls_endpoint_aliases",
+            "/.well-known/oauth-authorization-server/end_session",
+            "/.well-known/oauth-authorization-server/device_authorization_endpoint",
+            "/.well-known/oauth-authorization-server/bc_authorize",
+            "/.well-known/oauth-authorization-server/mtls_endpoint_aliases",
+            "/.well-known/oauth/logout",
+            "/.well-known/oauth/end_session",
+            "/.well-known/oauth/device_code",
+            "/.well-known/oauth/bc_authorize",
+            "/.well-known/oauth/mtls",
+            "/.well-known/ciba",
+        )
+        # Residual: GET mail/identity/org discovery empties after peer plate.
+        discovery_paths = (
+            "/.well-known/autoconfig",
+            "/.well-known/autoconfig/mail",
+            "/.well-known/auto-config",
+            "/.well-known/mail-v1.xml",
+            "/.well-known/thunderbird/autoconfig",
+            "/mail/config-v1.1.xml",
+            "/.well-known/simple-web-discovery",
+            "/.well-known/identity-hub",
+            "/.well-known/dwn",
+            "/.well-known/dwn-server",
+            "/.well-known/decentralized-web-node",
+            "/.well-known/ion",
+            "/.well-known/openorg",
+            "/.well-known/organization",
+            "/.well-known/organization.json",
+            "/.well-known/org.json",
+            "/.well-known/swid",
         )
         # Residual: GET related-website-set after empty RWS plate.
         related_website_set_paths = (
@@ -1451,6 +1505,9 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/llm.txt",
             "/ai.txt",
             "/.well-known/ai.txt",
+            "/.well-known/no-ai",
+            "/.well-known/noai",
+            "/.well-known/ai-policy",
             "/api/llms.txt",
             "/peer/v1/llms.txt",
         )
@@ -2220,6 +2277,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "oauth_endpoint": doc},
+            )
+            return
+        if path in discovery_paths:
+            doc = peer_json("GET", path, timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "discovery": doc},
             )
             return
         if path in related_website_set_paths:
