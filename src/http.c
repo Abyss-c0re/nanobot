@@ -849,15 +849,21 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/change-password") ||
         !strcmp(path, "/sellers.json") ||
         !strcmp(path, "/.well-known/ai-plugin.json") ||
+        !strcmp(path, "/.well-known/ai-plugin") ||
         !strcmp(path, "/ai-plugin.json") ||
+        !strcmp(path, "/ai-plugin") ||
         !strcmp(path, "/.well-known/assetlinks.json") ||
+        !strcmp(path, "/.well-known/assetlinks") ||
         !strcmp(path, "/assetlinks.json") ||
+        !strcmp(path, "/assetlinks") ||
         !strcmp(path, "/.well-known/apple-app-site-association") ||
         !strcmp(path, "/.well-known/apple-app-site-association.json") ||
         !strcmp(path, "/apple-app-site-association") ||
         !strcmp(path, "/apple-app-site-association.json") ||
         !strcmp(path, "/.well-known/gpc.json") ||
+        !strcmp(path, "/.well-known/gpc") ||
         !strcmp(path, "/gpc.json") ||
+        !strcmp(path, "/gpc") ||
         !strcmp(path, "/.well-known/dnt-policy.txt") ||
         !strcmp(path, "/dnt-policy.txt") ||
         !strcmp(path, "/.well-known/passkey-endpoints") ||
@@ -885,7 +891,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/matrix/server") ||
         !strcmp(path, "/matrix/server.json") ||
         !strcmp(path, "/.well-known/tdmrep.json") ||
+        !strcmp(path, "/.well-known/tdmrep") ||
         !strcmp(path, "/tdmrep.json") ||
+        !strcmp(path, "/tdmrep") ||
         !strcmp(path, "/.well-known/mta-sts.txt") ||
         !strcmp(path, "/mta-sts.txt") ||
         !strcmp(path, "/.well-known/mta-sts") ||
@@ -2046,8 +2054,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * not_found. Lab ops is not a public OpenAI plugin host — honest plate. */
   if (is_get && (strcmp(path, "/.well-known/ai-plugin.json") == 0 ||
                  strcmp(path, "/.well-known/ai-plugin.json/") == 0 ||
+                 strcmp(path, "/.well-known/ai-plugin") == 0 ||
+                 strcmp(path, "/.well-known/ai-plugin/") == 0 ||
                  strcmp(path, "/ai-plugin.json") == 0 ||
                  strcmp(path, "/ai-plugin.json/") == 0 ||
+                 strcmp(path, "/ai-plugin") == 0 ||
+                 strcmp(path, "/ai-plugin/") == 0 ||
                  strcmp(path, "/api/ai-plugin.json") == 0 ||
                  strcmp(path, "/peer/v1/ai-plugin.json") == 0)) {
     static const char aiplug[] =
@@ -2134,8 +2146,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * not_found. Lab ops has no app link statements — empty DAL array. */
   if (is_get && (strcmp(path, "/.well-known/assetlinks.json") == 0 ||
                  strcmp(path, "/.well-known/assetlinks.json/") == 0 ||
+                 strcmp(path, "/.well-known/assetlinks") == 0 ||
+                 strcmp(path, "/.well-known/assetlinks/") == 0 ||
                  strcmp(path, "/assetlinks.json") == 0 ||
                  strcmp(path, "/assetlinks.json/") == 0 ||
+                 strcmp(path, "/assetlinks") == 0 ||
+                 strcmp(path, "/assetlinks/") == 0 ||
                  strcmp(path, "/api/assetlinks.json") == 0 ||
                  strcmp(path, "/peer/v1/assetlinks.json") == 0)) {
     static const char assetlinks[] = "[]";
@@ -2184,8 +2200,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * Lab ops honors Global Privacy Control (no sale/share of personal data). */
   if (is_get && (strcmp(path, "/.well-known/gpc.json") == 0 ||
                  strcmp(path, "/.well-known/gpc.json/") == 0 ||
+                 strcmp(path, "/.well-known/gpc") == 0 ||
+                 strcmp(path, "/.well-known/gpc/") == 0 ||
                  strcmp(path, "/gpc.json") == 0 ||
                  strcmp(path, "/gpc.json/") == 0 ||
+                 strcmp(path, "/gpc") == 0 ||
+                 strcmp(path, "/gpc/") == 0 ||
                  strcmp(path, "/api/gpc.json") == 0 ||
                  strcmp(path, "/peer/v1/gpc.json") == 0)) {
     static const char gpc[] =
@@ -2211,8 +2231,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * and got not_found. Lab ops reserves all content against TDM (opt-out). */
   if (is_get && (strcmp(path, "/.well-known/tdmrep.json") == 0 ||
                  strcmp(path, "/.well-known/tdmrep.json/") == 0 ||
+                 strcmp(path, "/.well-known/tdmrep") == 0 ||
+                 strcmp(path, "/.well-known/tdmrep/") == 0 ||
                  strcmp(path, "/tdmrep.json") == 0 ||
                  strcmp(path, "/tdmrep.json/") == 0 ||
+                 strcmp(path, "/tdmrep") == 0 ||
+                 strcmp(path, "/tdmrep/") == 0 ||
                  strcmp(path, "/api/tdmrep.json") == 0 ||
                  strcmp(path, "/peer/v1/tdmrep.json") == 0)) {
     static const char tdm[] =

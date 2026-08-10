@@ -407,7 +407,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET ai-plugin.json after peer gained OpenAI plugin plate.
         ai_plugin_paths = (
             "/.well-known/ai-plugin.json",
+            "/.well-known/ai-plugin",
             "/ai-plugin.json",
+            "/ai-plugin",
             "/api/ai-plugin.json",
             "/peer/v1/ai-plugin.json",
         )
@@ -423,7 +425,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET assetlinks.json after peer gained empty DAL plate.
         assetlinks_paths = (
             "/.well-known/assetlinks.json",
+            "/.well-known/assetlinks",
             "/assetlinks.json",
+            "/assetlinks",
             "/api/assetlinks.json",
             "/peer/v1/assetlinks.json",
         )
@@ -439,14 +443,18 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET gpc.json after peer gained GPC well-known plate.
         gpc_paths = (
             "/.well-known/gpc.json",
+            "/.well-known/gpc",
             "/gpc.json",
+            "/gpc",
             "/api/gpc.json",
             "/peer/v1/gpc.json",
         )
         # Residual: GET tdmrep.json after peer gained TDM reservation plate.
         tdmrep_paths = (
             "/.well-known/tdmrep.json",
+            "/.well-known/tdmrep",
             "/tdmrep.json",
+            "/tdmrep",
             "/api/tdmrep.json",
             "/peer/v1/tdmrep.json",
         )
