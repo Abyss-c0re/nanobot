@@ -572,6 +572,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/trust.txt") || !strcmp(path, "/.well-known/trust.txt") ||
         !strcmp(path, "/keybase.txt") || !strcmp(path, "/.well-known/keybase.txt") ||
         !strcmp(path, "/pgp-key.txt") || !strcmp(path, "/.well-known/pgp-key.txt") ||
+        !strncmp(path, "/.well-known/openpgpkey", 24) ||
+        !strncmp(path, "/openpgpkey", 11) ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1632,7 +1634,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\""
+        "\"pgp_key_txt\",\"openpgpkey\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2791,6 +2793,65 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "# Contact/policy: /.well-known/security.txt\n"
       "# See: https://github.com/Abyss-c0re/nanobot/security/advisories/new\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", pgpk, sizeof pgpk - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OpenPGP WKD probes hit /.well-known/openpgpkey(/policy|/hu/…)
+   * and got not_found. Lab ops does not offer WKD — policy empty, hu → 404. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/openpgpkey/policy") == 0 ||
+       strcmp(path, "/.well-known/openpgpkey/policy/") == 0 ||
+       strcmp(path, "/openpgpkey/policy") == 0 ||
+       strcmp(path, "/openpgpkey/policy/") == 0)) {
+    static const char wkdp[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "# openpgpkey policy — Web Key Directory not offered\n"
+      "# Companion: /.well-known/pgp-key.txt /.well-known/security.txt\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", wkdp, sizeof wkdp - 1);
+    free(req); close(cfd); return;
+  }
+  if (is_get &&
+      (strcmp(path, "/.well-known/openpgpkey") == 0 ||
+       strcmp(path, "/.well-known/openpgpkey/") == 0 ||
+       strcmp(path, "/openpgpkey") == 0 ||
+       strcmp(path, "/openpgpkey/") == 0 ||
+       strcmp(path, "/api/openpgpkey") == 0 ||
+       strcmp(path, "/peer/v1/openpgpkey") == 0)) {
+    static const char wkd[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"openpgpkey\","
+      "\"openpgpkey\":false,"
+      "\"wkd\":false,"
+      "\"policy\":\"/.well-known/openpgpkey/policy\","
+      "\"pgp_key_txt\":\"/.well-known/pgp-key.txt\","
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", wkd, sizeof wkd - 1);
+    free(req); close(cfd); return;
+  }
+  if (is_get &&
+      (strncmp(path, "/.well-known/openpgpkey/", 24) == 0 ||
+       strncmp(path, "/openpgpkey/", 12) == 0)) {
+    /* WKD hu/<hash> lookups — no keys published. */
+    static const char nf[] =
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+      "\"action\":\"openpgpkey\",\"error\":\"not_found\","
+      "\"wkd\":false,\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\",\"hold_flash\":1,"
+      "\"llm_is_commander\":false,\"python\":0}";
+    http_response(cfd, 404, "application/json", nf, sizeof nf - 1);
     free(req); close(cfd); return;
   }
 

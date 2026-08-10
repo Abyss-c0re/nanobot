@@ -654,6 +654,15 @@ class H(BaseHTTPRequestHandler):
             "/api/pgp-key.txt",
             "/peer/v1/pgp-key.txt",
         )
+        # Residual: GET openpgpkey after peer gained non-WKD plate.
+        openpgpkey_paths = (
+            "/.well-known/openpgpkey",
+            "/openpgpkey",
+            "/api/openpgpkey",
+            "/peer/v1/openpgpkey",
+            "/.well-known/openpgpkey/policy",
+            "/openpgpkey/policy",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1388,6 +1397,37 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in openpgpkey_paths:
+            # Peer WKD plate / policy; dual-wire JSON for mesh probes.
+            if path.endswith("/policy"):
+                self._send(
+                    200,
+                    {
+                        "schema": "nanobot.peer_http.v1",
+                        "ok": True,
+                        "action": "openpgpkey",
+                        "service": "blackcube-nanobot-http-mcp",
+                        "content_type": "text/plain",
+                        "peer_path": "/.well-known/openpgpkey/policy",
+                        "wkd": False,
+                        "openpgpkey": False,
+                        "policy": True,
+                        "product_wire": "smx2",
+                        "peer_http": "lab_ops_only",
+                        "peer_http_is_product_bus": False,
+                        "share": "state_matrix_only",
+                        "hold_flash": 1,
+                        "llm_is_commander": False,
+                        "python": 0,
+                    },
+                )
+                return
+            doc = peer_json("GET", "/.well-known/openpgpkey", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "openpgpkey": doc},
             )
             return
         if path in humans_paths:
