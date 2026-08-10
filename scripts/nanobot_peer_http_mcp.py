@@ -816,6 +816,18 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/mcp/probe",
             "/peer/v1/mcp/probe/",
         )
+        shell_gate_meta_paths = (
+            "/api/shell/gate",
+            "/api/shell/gate/",
+            "/peer/v1/shell/gate",
+            "/peer/v1/shell/gate/",
+        )
+        shell_approve_meta_paths = (
+            "/api/shell/approve",
+            "/api/shell/approve/",
+            "/peer/v1/shell/approve",
+            "/peer/v1/shell/approve/",
+        )
 
         robots_paths = (
             "/robots.txt",
@@ -2209,6 +2221,20 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "mcp_probe": doc},
+            )
+            return
+        if path in shell_gate_meta_paths:
+            doc = peer_json("GET", "/peer/v1/shell/gate", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "shell_gate": doc},
+            )
+            return
+        if path in shell_approve_meta_paths:
+            doc = peer_json("GET", "/peer/v1/shell/approve", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "shell_approve": doc},
             )
             return
         if path in shell_meta_paths:
