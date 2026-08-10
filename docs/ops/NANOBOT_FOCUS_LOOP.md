@@ -173,6 +173,7 @@ cd ~/Dev/AI/nanobot
 
 | GET well-known apple-app-site-association dual-wire + MCP | `0a9d338`  |
 
+| GET well-known gpc.json dual-wire + MCP | `c4e945f`  |
 ## Anti-chaos
 
 - One product bite per cycle  
