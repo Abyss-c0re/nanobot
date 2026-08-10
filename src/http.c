@@ -863,9 +863,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/passkey-endpoints") ||
         !strcmp(path, "/passkey-endpoints.json") ||
         !strcmp(path, "/.well-known/webfinger") ||
+        !strcmp(path, "/.well-known/webfinger.json") ||
         !strcmp(path, "/webfinger") ||
+        !strcmp(path, "/webfinger.json") ||
         !strcmp(path, "/.well-known/nodeinfo") ||
+        !strcmp(path, "/.well-known/nodeinfo.json") ||
         !strcmp(path, "/nodeinfo") ||
+        !strcmp(path, "/nodeinfo.json") ||
         !strcmp(path, "/.well-known/host-meta") ||
         !strcmp(path, "/.well-known/host-meta.json") ||
         !strcmp(path, "/host-meta") ||
@@ -888,7 +892,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/caldav") ||
         !strcmp(path, "/carddav") ||
         !strcmp(path, "/.well-known/api-catalog") ||
+        !strcmp(path, "/.well-known/api-catalog.json") ||
         !strcmp(path, "/api-catalog") ||
+        !strcmp(path, "/api-catalog.json") ||
         !strcmp(path, "/.well-known/agent-card.json") ||
         !strcmp(path, "/.well-known/agent.json") ||
         !strcmp(path, "/agent-card.json") ||
@@ -928,7 +934,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server.json") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
+        !strcmp(path, "/.well-known/oauth-client-registration.json") ||
         !strcmp(path, "/oauth-client-registration") ||
+        !strcmp(path, "/oauth-client-registration.json") ||
         !strcmp(path, "/.well-known/oauth-protected-resource") ||
         !strcmp(path, "/.well-known/oauth-protected-resource.json") ||
         !strcmp(path, "/oauth-protected-resource") ||
@@ -2282,8 +2290,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * got not_found. Point catalog at live peer OpenAPI (lab ops only). */
   if (is_get && (strcmp(path, "/.well-known/api-catalog") == 0 ||
                  strcmp(path, "/.well-known/api-catalog/") == 0 ||
+                 strcmp(path, "/.well-known/api-catalog.json") == 0 ||
                  strcmp(path, "/api-catalog") == 0 ||
                  strcmp(path, "/api-catalog/") == 0 ||
+                 strcmp(path, "/api-catalog.json") == 0 ||
                  strcmp(path, "/api/api-catalog") == 0 ||
                  strcmp(path, "/peer/v1/api-catalog") == 0)) {
     static const char cat[] =
@@ -2426,8 +2436,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * and got not_found. Lab ops is not a WebFinger host — empty JRD plate. */
   if (is_get && (strcmp(path, "/.well-known/webfinger") == 0 ||
                  strcmp(path, "/.well-known/webfinger/") == 0 ||
+                 strcmp(path, "/.well-known/webfinger.json") == 0 ||
                  strcmp(path, "/webfinger") == 0 ||
                  strcmp(path, "/webfinger/") == 0 ||
+                 strcmp(path, "/webfinger.json") == 0 ||
                  strcmp(path, "/api/webfinger") == 0 ||
                  strcmp(path, "/peer/v1/webfinger") == 0)) {
     static const char wf[] =
@@ -2456,8 +2468,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * and got not_found. Lab ops is not a NodeInfo host — empty links plate. */
   if (is_get && (strcmp(path, "/.well-known/nodeinfo") == 0 ||
                  strcmp(path, "/.well-known/nodeinfo/") == 0 ||
+                 strcmp(path, "/.well-known/nodeinfo.json") == 0 ||
                  strcmp(path, "/nodeinfo") == 0 ||
                  strcmp(path, "/nodeinfo/") == 0 ||
+                 strcmp(path, "/nodeinfo.json") == 0 ||
                  strcmp(path, "/api/nodeinfo") == 0 ||
                  strcmp(path, "/peer/v1/nodeinfo") == 0)) {
     static const char ni[] =
@@ -2936,8 +2950,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/oauth-client-registration") == 0 ||
        strcmp(path, "/.well-known/oauth-client-registration/") == 0 ||
+       strcmp(path, "/.well-known/oauth-client-registration.json") == 0 ||
        strcmp(path, "/oauth-client-registration") == 0 ||
        strcmp(path, "/oauth-client-registration/") == 0 ||
+       strcmp(path, "/oauth-client-registration.json") == 0 ||
        strcmp(path, "/api/oauth-client-registration") == 0 ||
        strcmp(path, "/peer/v1/oauth-client-registration") == 0)) {
     static const char oauth_reg[] =

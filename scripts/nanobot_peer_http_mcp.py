@@ -476,7 +476,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET api-catalog after peer gained RFC 9727 linkset plate.
         api_catalog_paths = (
             "/.well-known/api-catalog",
+            "/.well-known/api-catalog.json",
             "/api-catalog",
+            "/api-catalog.json",
             "/api/api-catalog",
             "/peer/v1/api-catalog",
         )
@@ -499,14 +501,18 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET webfinger after peer gained empty JRD plate.
         webfinger_paths = (
             "/.well-known/webfinger",
+            "/.well-known/webfinger.json",
             "/webfinger",
+            "/webfinger.json",
             "/api/webfinger",
             "/peer/v1/webfinger",
         )
         # Residual: GET nodeinfo after peer gained empty NodeInfo plate.
         nodeinfo_paths = (
             "/.well-known/nodeinfo",
+            "/.well-known/nodeinfo.json",
             "/nodeinfo",
+            "/nodeinfo.json",
             "/api/nodeinfo",
             "/peer/v1/nodeinfo",
         )
@@ -615,7 +621,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET oauth-client-registration after peer gained non-DCR plate.
         oauth_reg_paths = (
             "/.well-known/oauth-client-registration",
+            "/.well-known/oauth-client-registration.json",
             "/oauth-client-registration",
+            "/oauth-client-registration.json",
             "/api/oauth-client-registration",
             "/peer/v1/oauth-client-registration",
         )
