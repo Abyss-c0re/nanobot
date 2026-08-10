@@ -453,6 +453,13 @@ class H(BaseHTTPRequestHandler):
             "/api/webfinger",
             "/peer/v1/webfinger",
         )
+        # Residual: GET nodeinfo after peer gained empty NodeInfo plate.
+        nodeinfo_paths = (
+            "/.well-known/nodeinfo",
+            "/nodeinfo",
+            "/api/nodeinfo",
+            "/peer/v1/nodeinfo",
+        )
         # Residual: GET openid-configuration after peer gained non-OP plate.
         openid_paths = (
             "/.well-known/openid-configuration",
@@ -847,6 +854,14 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "webfinger": doc},
+            )
+            return
+        if path in nodeinfo_paths:
+            # Peer serves empty NodeInfo discovery; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/nodeinfo", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "nodeinfo": doc},
             )
             return
         if path in openid_paths:
