@@ -587,7 +587,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/assetlinks.json") ||
         !strcmp(path, "/assetlinks.json") ||
         !strcmp(path, "/.well-known/apple-app-site-association") ||
-        !strcmp(path, "/apple-app-site-association"))
+        !strcmp(path, "/apple-app-site-association") ||
+        !strcmp(path, "/.well-known/gpc.json") ||
+        !strcmp(path, "/gpc.json"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1564,7 +1566,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
         "\"browserconfig\",\"change_password\",\"sellers\","
         "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\","
-        "\"apple_app_site_association\""
+        "\"apple_app_site_association\",\"gpc\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1753,6 +1755,33 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", aasa, sizeof aasa - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: privacy/mesh probes hit /.well-known/gpc.json and got not_found.
+   * Lab ops honors Global Privacy Control (no sale/share of personal data). */
+  if (is_get && (strcmp(path, "/.well-known/gpc.json") == 0 ||
+                 strcmp(path, "/.well-known/gpc.json/") == 0 ||
+                 strcmp(path, "/gpc.json") == 0 ||
+                 strcmp(path, "/gpc.json/") == 0 ||
+                 strcmp(path, "/api/gpc.json") == 0 ||
+                 strcmp(path, "/peer/v1/gpc.json") == 0)) {
+    static const char gpc[] =
+      "{"
+      "\"gpc\":true,"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"gpc\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", gpc, sizeof gpc - 1);
     free(req); close(cfd); return;
   }
 

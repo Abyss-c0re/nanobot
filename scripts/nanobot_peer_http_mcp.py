@@ -425,6 +425,13 @@ class H(BaseHTTPRequestHandler):
             "/api/apple-app-site-association",
             "/peer/v1/apple-app-site-association",
         )
+        # Residual: GET gpc.json after peer gained GPC well-known plate.
+        gpc_paths = (
+            "/.well-known/gpc.json",
+            "/gpc.json",
+            "/api/gpc.json",
+            "/peer/v1/gpc.json",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -750,6 +757,13 @@ class H(BaseHTTPRequestHandler):
             )
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "aasa": doc}
+            )
+            return
+        if path in gpc_paths:
+            # Peer serves GPC honor plate; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/gpc.json", timeout=5)
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "gpc": doc}
             )
             return
         if path in crossdomain_paths:
