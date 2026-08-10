@@ -282,6 +282,7 @@ cd ~/Dev/AI/nanobot
 | GET shell gate/approve dual-wire post_only plates + MCP | `b7bc476`  |
 | OPTIONS dual-wire Allow + CORS methods (path-aware post_only) + MCP | `58f4f04`  |
 | GET shell/approvals trailing-slash dual-wire + MCP | `201dfb5`  |
+| 405 method_not_allowed dual-wire on post_only + MCP | `7a771a8`  |
 ## Anti-chaos
 
 - One product bite per cycle  
