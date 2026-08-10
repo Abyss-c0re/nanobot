@@ -374,6 +374,15 @@ class H(BaseHTTPRequestHandler):
             "/api/favicon.ico",
             "/peer/v1/favicon.ico",
         )
+        # Residual: GET service-worker.js after peer gained no-PWA plate.
+        service_worker_paths = (
+            "/service-worker.js",
+            "/sw.js",
+            "/api/service-worker.js",
+            "/peer/v1/service-worker.js",
+            "/api/sw.js",
+            "/peer/v1/sw.js",
+        )
         # Residual: GET robots.txt after peer gained robots plate.
         robots_paths = ("/robots.txt",)
         # Residual: GET security.txt after peer gained RFC 9116 plate.
@@ -575,6 +584,29 @@ class H(BaseHTTPRequestHandler):
                     "content_type": "image/svg+xml",
                     "peer_path": peer_path,
                     "theme_color": "#00e5ff",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in service_worker_paths:
+            # Peer serves application/javascript unregister SW; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "service_worker",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "application/javascript",
+                    "peer_path": "/service-worker.js",
+                    "pwa": False,
+                    "behavior": "unregister_on_activate",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,

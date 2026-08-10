@@ -570,7 +570,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
         !strcmp(path, "/sitemap_index.xml") ||
-        !strcmp(path, "/llms.txt") || !strcmp(path, "/ai.txt"))
+        !strcmp(path, "/llms.txt") || !strcmp(path, "/ai.txt") ||
+        !strcmp(path, "/service-worker.js") || !strcmp(path, "/sw.js"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1544,7 +1545,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
-        "\"favicon\""
+        "\"favicon\",\"service_worker\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1569,6 +1570,26 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "stroke=\"#00e5ff\" stroke-width=\"2\"/>"
       "</svg>";
     http_response(cfd, 200, "image/svg+xml", favicon_svg, sizeof favicon_svg - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: browser/mesh probes hit /service-worker.js|/sw.js and got
+   * not_found. Lab ops has no PWA — serve unregister-on-activate script. */
+  if (is_get && (strcmp(path, "/service-worker.js") == 0 ||
+                 strcmp(path, "/service-worker.js/") == 0 ||
+                 strcmp(path, "/sw.js") == 0 || strcmp(path, "/sw.js/") == 0 ||
+                 strcmp(path, "/api/service-worker.js") == 0 ||
+                 strcmp(path, "/peer/v1/service-worker.js") == 0 ||
+                 strcmp(path, "/api/sw.js") == 0 ||
+                 strcmp(path, "/peer/v1/sw.js") == 0)) {
+    static const char swjs[] =
+      "/* nanobot peer HTTP — lab ops only (not product SMX2). No PWA. */\n"
+      "self.addEventListener('install', function (e) { self.skipWaiting(); });\n"
+      "self.addEventListener('activate', function (e) {\n"
+      "  e.waitUntil(self.registration.unregister());\n"
+      "});\n";
+    http_response(cfd, 200, "application/javascript; charset=utf-8", swjs,
+                  sizeof swjs - 1);
     free(req); close(cfd); return;
   }
 
