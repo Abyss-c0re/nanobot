@@ -619,6 +619,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strncmp(path, "/.well-known/est", 16) || !strncmp(path, "/est", 4) ||
         !strncmp(path, "/.well-known/pki-validation", 27) ||
         !strncmp(path, "/pki-validation", 15) ||
+        !strcmp(path, "/.well-known/looking-glass") ||
+        !strcmp(path, "/looking-glass") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1679,7 +1681,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3900,6 +3902,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", pki, sizeof pki - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: network/mesh probes hit /.well-known/looking-glass and got not_found.
+   * Lab ops is not an ISP looking glass — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/looking-glass") == 0 ||
+       strcmp(path, "/.well-known/looking-glass/") == 0 ||
+       strcmp(path, "/looking-glass") == 0 ||
+       strcmp(path, "/looking-glass/") == 0 ||
+       strcmp(path, "/api/looking-glass") == 0 ||
+       strcmp(path, "/peer/v1/looking-glass") == 0 ||
+       strcmp(path, "/.well-known/looking-glass.json") == 0 ||
+       strcmp(path, "/looking-glass.json") == 0)) {
+    static const char lg[] =
+      "{"
+      "\"url\":\"\","
+      "\"commands\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"looking_glass\","
+      "\"looking_glass\":false,"
+      "\"lg\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", lg, sizeof lg - 1);
     free(req); close(cfd); return;
   }
 

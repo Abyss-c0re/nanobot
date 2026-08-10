@@ -911,6 +911,15 @@ class H(BaseHTTPRequestHandler):
             "/api/pki-validation",
             "/peer/v1/pki-validation",
         )
+        # Residual: GET looking-glass after empty ISP LG plate.
+        looking_glass_paths = (
+            "/.well-known/looking-glass",
+            "/.well-known/looking-glass.json",
+            "/looking-glass",
+            "/looking-glass.json",
+            "/api/looking-glass",
+            "/peer/v1/looking-glass",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1915,6 +1924,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "pki_validation": doc},
+            )
+            return
+        if path in looking_glass_paths:
+            doc = peer_json("GET", "/.well-known/looking-glass", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "looking_glass": doc},
             )
             return
         if path in humans_paths:
