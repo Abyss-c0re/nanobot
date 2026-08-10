@@ -740,6 +740,19 @@ class H(BaseHTTPRequestHandler):
             "/api/web-identity",
             "/peer/v1/web-identity",
         )
+        # Residual: GET posh after empty Microsoft POSH plate.
+        posh_paths = (
+            "/.well-known/posh",
+            "/.well-known/posh/v1",
+            "/.well-known/posh.json",
+            "/posh",
+            "/posh/v1",
+            "/posh.json",
+            "/api/posh",
+            "/api/posh/v1",
+            "/peer/v1/posh",
+            "/peer/v1/posh/v1",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1595,6 +1608,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "web_identity": doc},
+            )
+            return
+        if path in posh_paths:
+            doc = peer_json("GET", "/.well-known/posh", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "posh": doc},
             )
             return
         if path in humans_paths:

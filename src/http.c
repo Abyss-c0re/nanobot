@@ -589,6 +589,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/atproto-did") ||
         !strcmp(path, "/.well-known/stellar.toml") || !strcmp(path, "/stellar.toml") ||
         !strcmp(path, "/.well-known/web-identity") || !strcmp(path, "/web-identity") ||
+        !strncmp(path, "/.well-known/posh", 16) || !strncmp(path, "/posh", 5) ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1649,7 +1650,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3162,6 +3163,47 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", wi, sizeof wi - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: Microsoft POSH/Autodiscover mesh probes hit /.well-known/posh
+   * and got not_found. Lab ops publishes no POSH fingerprints. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/posh") == 0 ||
+       strcmp(path, "/.well-known/posh/") == 0 ||
+       strcmp(path, "/.well-known/posh/v1") == 0 ||
+       strcmp(path, "/.well-known/posh/v1/") == 0 ||
+       strcmp(path, "/.well-known/posh.json") == 0 ||
+       strcmp(path, "/posh") == 0 ||
+       strcmp(path, "/posh/") == 0 ||
+       strcmp(path, "/posh/v1") == 0 ||
+       strcmp(path, "/posh.json") == 0 ||
+       strcmp(path, "/api/posh") == 0 ||
+       strcmp(path, "/api/posh/v1") == 0 ||
+       strcmp(path, "/peer/v1/posh") == 0 ||
+       strcmp(path, "/peer/v1/posh/v1") == 0)) {
+    static const char posh[] =
+      "{"
+      "\"fingerprints\":[],"
+      "\"expires\":0,"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"posh\","
+      "\"posh\":false,"
+      "\"autodiscover\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", posh, sizeof posh - 1);
     free(req); close(cfd); return;
   }
 
