@@ -185,6 +185,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known matrix/{client,server} dual-wire + MCP | `4fdb149`  |
 | GET well-known tdmrep.json dual-wire + MCP | `bf41126`  |
 | GET well-known mta-sts.txt dual-wire + MCP | `d3a0587`  |
+| GET well-known caldav|carddav dual-wire + MCP | `8712af6`  |
 ## Anti-chaos
 
 - One product bite per cycle  
