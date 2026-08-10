@@ -525,8 +525,12 @@ class H(BaseHTTPRequestHandler):
         nodeinfo_paths = (
             "/.well-known/nodeinfo",
             "/.well-known/nodeinfo.json",
+            "/.well-known/nodeinfo/2.0",
+            "/.well-known/nodeinfo/2.1",
             "/nodeinfo",
             "/nodeinfo.json",
+            "/nodeinfo/2.0",
+            "/nodeinfo/2.1",
             "/api/nodeinfo",
             "/peer/v1/nodeinfo",
         )
@@ -738,6 +742,10 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/oauth-authorization-server/jwks.json",
             "/.well-known/openid-configuration/jwks",
             "/.well-known/openid-configuration/jwks.json",
+            "/.well-known/openid-credential-issuer/jwks",
+            "/.well-known/openid-credential-issuer/jwks.json",
+            "/.well-known/oauth-protected-resource/jwks",
+            "/.well-known/oauth-protected-resource/jwks.json",
         )
         # Residual: GET related-website-set after empty RWS plate.
         related_website_set_paths = (
