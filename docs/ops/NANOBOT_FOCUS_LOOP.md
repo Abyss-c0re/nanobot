@@ -241,6 +241,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known funding-manifest-urls dual-wire + MCP | `6da0b78`  |
 | GET well-known xrpc-server-did dual-wire + MCP | `d3f15cd`  |
 | GET well-known mcp.json dual-wire + MCP | `b1765bb`  |
+| GET well-known web-bot-auth dual-wire + MCP | `58866a4`  |
 ## Anti-chaos
 
 - One product bite per cycle  
