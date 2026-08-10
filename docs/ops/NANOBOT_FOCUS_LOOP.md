@@ -169,6 +169,7 @@ cd ~/Dev/AI/nanobot
 | GET sellers.json empty dual-wire + MCP | `7ea4893`  |
 | GET apple-touch-icon dual-wire + MCP | `dedf9cd`  |
 | GET well-known ai-plugin.json dual-wire + MCP | `2476103`  |
+| GET well-known assetlinks.json dual-wire + MCP | `20d9ea3`  |
 
 ## Anti-chaos
 
