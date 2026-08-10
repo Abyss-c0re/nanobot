@@ -660,6 +660,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/dnt") || !strncmp(path, "/dnt/", 5) ||
         !strcmp(path, "/dnt.json") || !strcmp(path, "/api/dnt") ||
         !strcmp(path, "/peer/v1/dnt") ||
+        !strcmp(path, "/.well-known/funding-manifest-urls") ||
+        !strncmp(path, "/.well-known/funding-manifest-urls/", 33) ||
+        !strcmp(path, "/.well-known/funding-manifest-urls.json") ||
+        !strcmp(path, "/funding-manifest-urls") ||
+        !strncmp(path, "/funding-manifest-urls/", 23) ||
+        !strcmp(path, "/funding-manifest-urls.json") ||
+        !strcmp(path, "/api/funding-manifest-urls") ||
+        !strcmp(path, "/peer/v1/funding-manifest-urls") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1720,7 +1728,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -4304,6 +4312,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", dnt, sizeof dnt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/OSS probes hit /.well-known/funding-manifest-urls and got
+   * not_found. Lab ops peer is not a public funding surface — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/funding-manifest-urls") == 0 ||
+       strcmp(path, "/.well-known/funding-manifest-urls/") == 0 ||
+       strncmp(path, "/.well-known/funding-manifest-urls/", 33) == 0 ||
+       strcmp(path, "/funding-manifest-urls") == 0 ||
+       strcmp(path, "/funding-manifest-urls/") == 0 ||
+       strcmp(path, "/api/funding-manifest-urls") == 0 ||
+       strcmp(path, "/peer/v1/funding-manifest-urls") == 0 ||
+       strcmp(path, "/.well-known/funding-manifest-urls.json") == 0 ||
+       strcmp(path, "/funding-manifest-urls.json") == 0)) {
+    static const char fund[] =
+      "{"
+      "\"urls\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"funding_manifest_urls\","
+      "\"funding_manifest_urls\":false,"
+      "\"funding\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", fund, sizeof fund - 1);
     free(req); close(cfd); return;
   }
 

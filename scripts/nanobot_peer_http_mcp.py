@@ -1002,6 +1002,15 @@ class H(BaseHTTPRequestHandler):
             "/api/dnt",
             "/peer/v1/dnt",
         )
+        # Residual: GET funding-manifest-urls after empty OSS funding plate.
+        funding_manifest_urls_paths = (
+            "/.well-known/funding-manifest-urls",
+            "/.well-known/funding-manifest-urls.json",
+            "/funding-manifest-urls",
+            "/funding-manifest-urls.json",
+            "/api/funding-manifest-urls",
+            "/peer/v1/funding-manifest-urls",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2076,6 +2085,15 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "dnt": doc},
+            )
+            return
+        if path in funding_manifest_urls_paths:
+            doc = peer_json("GET", "/.well-known/funding-manifest-urls", timeout=5)
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "funding_manifest_urls": doc},
             )
             return
         if path in humans_paths:
