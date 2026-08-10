@@ -684,6 +684,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strncmp(path, "/mcp.json/", 10) ||
         !strcmp(path, "/api/mcp.json") ||
         !strcmp(path, "/peer/v1/mcp.json") ||
+        !strcmp(path, "/.well-known/web-bot-auth") ||
+        !strncmp(path, "/.well-known/web-bot-auth/", 25) ||
+        !strcmp(path, "/.well-known/web-bot-auth.json") ||
+        !strcmp(path, "/web-bot-auth") ||
+        !strncmp(path, "/web-bot-auth/", 14) ||
+        !strcmp(path, "/web-bot-auth.json") ||
+        !strcmp(path, "/api/web-bot-auth") ||
+        !strcmp(path, "/peer/v1/web-bot-auth") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1744,7 +1752,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\",\"web_bot_auth\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -4441,6 +4449,45 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", mcpj, sizeof mcpj - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/crawler probes hit /.well-known/web-bot-auth and got
+   * not_found. Lab ops is not a Web Bot Auth publisher — empty plate
+   * (peer auth remains browser_device_code / peer_token). */
+  if (is_get &&
+      (strcmp(path, "/.well-known/web-bot-auth") == 0 ||
+       strcmp(path, "/.well-known/web-bot-auth/") == 0 ||
+       strncmp(path, "/.well-known/web-bot-auth/", 25) == 0 ||
+       strcmp(path, "/web-bot-auth") == 0 ||
+       strcmp(path, "/web-bot-auth/") == 0 ||
+       strcmp(path, "/api/web-bot-auth") == 0 ||
+       strcmp(path, "/peer/v1/web-bot-auth") == 0 ||
+       strcmp(path, "/.well-known/web-bot-auth.json") == 0 ||
+       strcmp(path, "/web-bot-auth.json") == 0)) {
+    static const char wba[] =
+      "{"
+      "\"keys\":[],"
+      "\"jwks_uri\":\"\","
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"web_bot_auth\","
+      "\"web_bot_auth\":false,"
+      "\"bot_auth\":false,"
+      "\"crawler_identity\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", wba, sizeof wba - 1);
     free(req); close(cfd); return;
   }
 

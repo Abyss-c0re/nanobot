@@ -1028,6 +1028,15 @@ class H(BaseHTTPRequestHandler):
             "/api/mcp.json",
             "/peer/v1/mcp.json",
         )
+        # Residual: GET web-bot-auth after empty Web Bot Auth plate.
+        web_bot_auth_paths = (
+            "/.well-known/web-bot-auth",
+            "/.well-known/web-bot-auth.json",
+            "/web-bot-auth",
+            "/web-bot-auth.json",
+            "/api/web-bot-auth",
+            "/peer/v1/web-bot-auth",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2125,6 +2134,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "mcp_json": doc},
+            )
+            return
+        if path in web_bot_auth_paths:
+            doc = peer_json("GET", "/.well-known/web-bot-auth", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "web_bot_auth": doc},
             )
             return
         if path in humans_paths:
