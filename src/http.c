@@ -623,6 +623,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/looking-glass") ||
         !strncmp(path, "/.well-known/genid", 18) ||
         !strncmp(path, "/genid", 6) ||
+        !strncmp(path, "/.well-known/acme-challenge", 27) ||
+        !strncmp(path, "/acme-challenge", 15) ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1683,7 +1685,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3976,6 +3978,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", gen, sizeof gen - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/TLS probes hit /.well-known/acme-challenge and got not_found.
+   * Lab ops does not run ACME HTTP-01 (RFC 8555) — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/acme-challenge") == 0 ||
+       strcmp(path, "/.well-known/acme-challenge/") == 0 ||
+       strncmp(path, "/.well-known/acme-challenge/", 28) == 0 ||
+       strcmp(path, "/acme-challenge") == 0 ||
+       strcmp(path, "/acme-challenge/") == 0 ||
+       strcmp(path, "/api/acme-challenge") == 0 ||
+       strcmp(path, "/peer/v1/acme-challenge") == 0 ||
+       strcmp(path, "/.well-known/acme-challenge.json") == 0 ||
+       strcmp(path, "/acme-challenge.json") == 0)) {
+    static const char acme[] =
+      "{"
+      "\"challenges\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"acme_challenge\","
+      "\"acme_challenge\":false,"
+      "\"acme_http01\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", acme, sizeof acme - 1);
     free(req); close(cfd); return;
   }
 

@@ -929,6 +929,15 @@ class H(BaseHTTPRequestHandler):
             "/api/genid",
             "/peer/v1/genid",
         )
+        # Residual: GET acme-challenge after empty ACME HTTP-01 plate.
+        acme_challenge_paths = (
+            "/.well-known/acme-challenge",
+            "/.well-known/acme-challenge.json",
+            "/acme-challenge",
+            "/acme-challenge.json",
+            "/api/acme-challenge",
+            "/peer/v1/acme-challenge",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1947,6 +1956,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "genid": doc},
+            )
+            return
+        if path in acme_challenge_paths:
+            doc = peer_json("GET", "/.well-known/acme-challenge", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "acme_challenge": doc},
             )
             return
         if path in humans_paths:
