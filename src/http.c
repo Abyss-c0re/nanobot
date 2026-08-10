@@ -577,7 +577,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/clientaccesspolicy.xml") ||
         !strcmp(path, "/browserconfig.xml") ||
         !strcmp(path, "/.well-known/change-password") ||
-        !strcmp(path, "/change-password"))
+        !strcmp(path, "/change-password") ||
+        !strcmp(path, "/sellers.json"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1552,7 +1553,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
-        "\"browserconfig\",\"change_password\""
+        "\"browserconfig\",\"change_password\",\"sellers\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1614,6 +1615,35 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "# No authorized digital sellers. This is not a public ad inventory site.\n"
       "# CONTACT=https://github.com/Abyss-c0re/nanobot/security/advisories/new\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", adstxt, sizeof adstxt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: crawler/mesh probes hit /sellers.json and got not_found while
+   * ads.txt already declares no sellers. IAB sellers.json empty plate. */
+  if (is_get && (strcmp(path, "/sellers.json") == 0 ||
+                 strcmp(path, "/sellers.json/") == 0 ||
+                 strcmp(path, "/api/sellers.json") == 0 ||
+                 strcmp(path, "/peer/v1/sellers.json") == 0)) {
+    static const char sellers[] =
+      "{"
+      "\"version\":\"1.0\","
+      "\"contact_email\":\"\","
+      "\"contact_address\":\"\","
+      "\"identifiers\":[],"
+      "\"sellers\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"sellers\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", sellers, sizeof sellers - 1);
     free(req); close(cfd); return;
   }
 

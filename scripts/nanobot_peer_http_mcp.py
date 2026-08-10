@@ -392,6 +392,12 @@ class H(BaseHTTPRequestHandler):
             "/api/app-ads.txt",
             "/peer/v1/app-ads.txt",
         )
+        # Residual: GET sellers.json after peer gained empty IAB sellers plate.
+        sellers_paths = (
+            "/sellers.json",
+            "/api/sellers.json",
+            "/peer/v1/sellers.json",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -667,6 +673,13 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in sellers_paths:
+            # Peer serves IAB sellers.json; proxy dual-wire JSON.
+            doc = peer_json("GET", "/sellers.json", timeout=5)
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "sellers": doc}
             )
             return
         if path in crossdomain_paths:
