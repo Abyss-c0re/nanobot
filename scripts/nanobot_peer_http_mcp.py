@@ -439,6 +439,13 @@ class H(BaseHTTPRequestHandler):
             "/api/dnt-policy.txt",
             "/peer/v1/dnt-policy.txt",
         )
+        # Residual: GET passkey-endpoints after peer gained empty passkey plate.
+        passkey_paths = (
+            "/.well-known/passkey-endpoints",
+            "/passkey-endpoints",
+            "/api/passkey-endpoints",
+            "/peer/v1/passkey-endpoints",
+        )
         # Residual: GET openid-configuration after peer gained non-OP plate.
         openid_paths = (
             "/.well-known/openid-configuration",
@@ -815,6 +822,16 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in passkey_paths:
+            # Peer serves empty passkey-endpoints; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/passkey-endpoints", timeout=5
+            )
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "passkeys": doc},
             )
             return
         if path in openid_paths:

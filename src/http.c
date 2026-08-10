@@ -592,6 +592,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/gpc.json") ||
         !strcmp(path, "/.well-known/dnt-policy.txt") ||
         !strcmp(path, "/dnt-policy.txt") ||
+        !strcmp(path, "/.well-known/passkey-endpoints") ||
+        !strcmp(path, "/passkey-endpoints") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1576,7 +1578,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\","
         "\"apple_app_site_association\",\"gpc\","
         "\"openid_configuration\",\"oauth_authorization_server\","
-        "\"oauth_protected_resource\",\"dnt_policy\""
+        "\"oauth_protected_resource\",\"dnt_policy\","
+        "\"passkey_endpoints\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1810,6 +1813,38 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "# Companion: /.well-known/gpc.json\n"
       "# Contact: https://github.com/Abyss-c0re/nanobot/security/advisories/new\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", dnt, sizeof dnt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: browser/mesh probes hit /.well-known/passkey-endpoints and got
+   * not_found. Lab ops has no WebAuthn passkey host — empty plate; auth /api/auth. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/passkey-endpoints") == 0 ||
+       strcmp(path, "/.well-known/passkey-endpoints/") == 0 ||
+       strcmp(path, "/passkey-endpoints") == 0 ||
+       strcmp(path, "/passkey-endpoints/") == 0 ||
+       strcmp(path, "/api/passkey-endpoints") == 0 ||
+       strcmp(path, "/peer/v1/passkey-endpoints") == 0)) {
+    static const char passkeys[] =
+      "{"
+      "\"enroll\":\"\","
+      "\"manage\":\"\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"passkey_endpoints\","
+        "\"passkeys\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", passkeys, sizeof passkeys - 1);
     free(req); close(cfd); return;
   }
 
