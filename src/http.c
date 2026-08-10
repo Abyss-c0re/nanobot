@@ -568,7 +568,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
-        !strcmp(path, "/sitemap_index.xml"))
+        !strcmp(path, "/sitemap_index.xml") ||
+        !strcmp(path, "/llms.txt") || !strcmp(path, "/ai.txt"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1541,7 +1542,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"health\",\"ready\",\"ping\",\"livez\",\"readyz\",\"healthz\","
         "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
-        "\"robots\",\"security_txt\",\"humans\",\"sitemap\""
+        "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1633,6 +1634,39 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
       "</urlset>\n";
     http_response(cfd, 200, "application/xml; charset=utf-8", sitemap, sizeof sitemap - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/AI probes hit /llms.txt|/ai.txt and got not_found.
+   * llmstxt.org-style plate: lab ops peer is not a public product site. */
+  if (is_get && (strcmp(path, "/llms.txt") == 0 || strcmp(path, "/llms.txt/") == 0 ||
+                 strcmp(path, "/ai.txt") == 0 || strcmp(path, "/ai.txt/") == 0 ||
+                 strcmp(path, "/api/llms.txt") == 0 ||
+                 strcmp(path, "/peer/v1/llms.txt") == 0)) {
+    static const char llms[] =
+      "# nanobot peer HTTP\n"
+      "\n"
+      "> Lab/ops peer bus (schema nanobot.peer_http.v1). Not product SMX2.\n"
+      "\n"
+      "This listener is a private lab mesh endpoint. robots.txt Disallow: /.\n"
+      "Do not index as a public product site. Prefer open source docs on GitHub.\n"
+      "\n"
+      "## Discovery\n"
+      "- /schema — wire plates + actions\n"
+      "- /openapi.json — OpenAPI document\n"
+      "- /peer/v1/health — liveness\n"
+      "- /peer/v1/info — session/info plate\n"
+      "- /humans.txt — maintainer pointers\n"
+      "- /security.txt — vulnerability contact\n"
+      "\n"
+      "## Source\n"
+      "- https://github.com/Abyss-c0re/nanobot\n"
+      "- README.md, INSTALL.md, SECURITY.md, docs/\n"
+      "\n"
+      "## Policy\n"
+      "- peer_http is lab_ops_only; product_wire remains smx2 elsewhere\n"
+      "- Mutating routes require peer token on LAN\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", llms, sizeof llms - 1);
     free(req); close(cfd); return;
   }
 

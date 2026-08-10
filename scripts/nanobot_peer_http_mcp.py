@@ -387,6 +387,13 @@ class H(BaseHTTPRequestHandler):
             "/api/sitemap.xml",
             "/peer/v1/sitemap.xml",
         )
+        # Residual: GET llms.txt after peer gained llmstxt plate.
+        llms_paths = (
+            "/llms.txt",
+            "/ai.txt",
+            "/api/llms.txt",
+            "/peer/v1/llms.txt",
+        )
         # Residual: GET manifest after peer gained web app manifest plate.
         manifest_paths = (
             "/manifest.json",
@@ -645,6 +652,29 @@ class H(BaseHTTPRequestHandler):
                     "robots_disallow": "/",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in llms_paths:
+            # Peer serves text/plain; MCP mesh probes want dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "llms",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/llms.txt",
+                    "site": "https://github.com/Abyss-c0re/nanobot",
+                    "robots_disallow": "/",
+                    "peer_http": "lab_ops_only",
+                    "product_wire": "smx2",
                     "peer_http_is_product_bus": False,
                     "share": "state_matrix_only",
                     "hold_flash": 1,
