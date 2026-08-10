@@ -223,6 +223,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known jmap dual-wire + MCP | `9c1f5b3`  |
 | GET well-known stun-key dual-wire + MCP | `92b119d`  |
 | GET well-known thread dual-wire + MCP | `ea79a01`  |
+| GET well-known coap dual-wire + MCP | `77eb866`  |
 ## Anti-chaos
 
 - One product bite per cycle  
