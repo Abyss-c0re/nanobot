@@ -587,6 +587,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/nostr.json") || !strcmp(path, "/.well-known/nostr") ||
         !strcmp(path, "/nostr.json") || !strcmp(path, "/nostr") ||
         !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/atproto-did") ||
+        !strcmp(path, "/.well-known/stellar.toml") || !strcmp(path, "/stellar.toml") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1647,7 +1648,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3110,6 +3111,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"python\":0"
       "}";
     http_response(cfd, 200, "application/json", atp, sizeof atp - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: Stellar SEP-0001/mesh probes hit /.well-known/stellar.toml
+   * and got not_found. Lab ops publishes no Stellar TOML. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/stellar.toml") == 0 ||
+       strcmp(path, "/.well-known/stellar.toml/") == 0 ||
+       strcmp(path, "/stellar.toml") == 0 ||
+       strcmp(path, "/stellar.toml/") == 0 ||
+       strcmp(path, "/api/stellar.toml") == 0 ||
+       strcmp(path, "/peer/v1/stellar.toml") == 0)) {
+    static const char st[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "# stellar.toml — no Stellar SEP-0001 metadata published\n"
+      "# Companion: /.well-known/security.txt\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", st, sizeof st - 1);
     free(req); close(cfd); return;
   }
 

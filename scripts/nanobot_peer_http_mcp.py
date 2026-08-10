@@ -726,6 +726,13 @@ class H(BaseHTTPRequestHandler):
             "/api/atproto-did",
             "/peer/v1/atproto-did",
         )
+        # Residual: GET stellar.toml after empty SEP-0001 plate.
+        stellar_toml_paths = (
+            "/.well-known/stellar.toml",
+            "/stellar.toml",
+            "/api/stellar.toml",
+            "/peer/v1/stellar.toml",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1550,6 +1557,30 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "atproto_did": doc},
+            )
+            return
+        if path in stellar_toml_paths:
+            # Peer serves text/plain empty SEP-0001; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "stellar_toml",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/.well-known/stellar.toml",
+                    "stellar_toml": True,
+                    "sep0001": False,
+                    "security_txt": "/.well-known/security.txt",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
             )
             return
         if path in humans_paths:
