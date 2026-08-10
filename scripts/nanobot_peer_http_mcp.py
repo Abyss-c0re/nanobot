@@ -830,6 +830,15 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/csaf/provider-metadata.json",
             "/peer/v1/csaf",
         )
+        # Residual: GET discord after empty Discord domain verification plate.
+        discord_paths = (
+            "/.well-known/discord",
+            "/.well-known/discord.json",
+            "/discord",
+            "/discord.json",
+            "/api/discord",
+            "/peer/v1/discord",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1771,6 +1780,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "csaf": doc},
+            )
+            return
+        if path in discord_paths:
+            doc = peer_json("GET", "/.well-known/discord", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "discord": doc},
             )
             return
         if path in humans_paths:

@@ -609,6 +609,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/gnap-as-rs") ||
         !strncmp(path, "/.well-known/csaf", 17) ||
         !strcmp(path, "/csaf/provider-metadata.json") ||
+        !strcmp(path, "/.well-known/discord") || !strcmp(path, "/discord") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1669,7 +1670,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3558,6 +3559,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", csaf, sizeof csaf - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: Discord/mesh probes hit /.well-known/discord and got not_found.
+   * Lab ops does not claim Discord domain verification. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/discord") == 0 ||
+       strcmp(path, "/.well-known/discord/") == 0 ||
+       strcmp(path, "/discord") == 0 ||
+       strcmp(path, "/discord/") == 0 ||
+       strcmp(path, "/api/discord") == 0 ||
+       strcmp(path, "/peer/v1/discord") == 0 ||
+       strcmp(path, "/.well-known/discord.json") == 0 ||
+       strcmp(path, "/discord.json") == 0)) {
+    static const char disc[] =
+      "{"
+      "\"verified\":false,"
+      "\"token\":\"\","
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"discord\","
+      "\"discord\":false,"
+      "\"domain_verification\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", disc, sizeof disc - 1);
     free(req); close(cfd); return;
   }
 
