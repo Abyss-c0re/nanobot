@@ -802,6 +802,15 @@ class H(BaseHTTPRequestHandler):
             "/api/core",
             "/peer/v1/core",
         )
+        # Residual: GET mercure after empty Mercure hub discovery plate.
+        mercure_paths = (
+            "/.well-known/mercure",
+            "/.well-known/mercure/subscriptions",
+            "/mercure",
+            "/mercure/subscriptions",
+            "/api/mercure",
+            "/peer/v1/mercure",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1720,6 +1729,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "core": doc},
+            )
+            return
+        if path in mercure_paths:
+            doc = peer_json("GET", "/.well-known/mercure", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "mercure": doc},
             )
             return
         if path in humans_paths:
