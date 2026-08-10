@@ -258,7 +258,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known bimi dual-wire + MCP | `a449bb2`  |
 | GET well-known statements.json dual-wire + MCP | `b804f04`  |
 | GET well-known mta-sts extensionless dual-wire + MCP | `53c63f8`  |
-| GET well-known openid/oauth .json alias dual-wire + MCP | PENDING |
+| GET well-known openid/oauth .json alias dual-wire + MCP | `c0e8416`  |
 ## Anti-chaos
 
 - One product bite per cycle  
