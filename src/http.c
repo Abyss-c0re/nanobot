@@ -675,12 +675,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Residual: trailing slash 404 on /api/auth while bare path worked (mesh probes).
-   * Residual: /whoami|/api/whoami|/peer/v1/whoami not_found — identity probes. */
+   * Residual: /whoami|/api/whoami|/peer/v1/whoami not_found — identity probes.
+   * Residual: bare /status 404 while /api/status and /peer/v1/status already auth. */
   if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/auth/") == 0 ||
                  strcmp(path, "/api/status") == 0 || strcmp(path, "/api/status/") == 0 ||
                  strcmp(path, "/peer/v1/auth") == 0 || strcmp(path, "/peer/v1/auth/") == 0 ||
                  strcmp(path, "/peer/v1/status") == 0 ||
                  strcmp(path, "/peer/v1/status/") == 0 ||
+                 strcmp(path, "/status") == 0 || strcmp(path, "/status/") == 0 ||
                  strcmp(path, "/whoami") == 0 || strcmp(path, "/whoami/") == 0 ||
                  strcmp(path, "/api/whoami") == 0 || strcmp(path, "/api/whoami/") == 0 ||
                  strcmp(path, "/peer/v1/whoami") == 0 ||

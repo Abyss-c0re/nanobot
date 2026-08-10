@@ -322,11 +322,13 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET /metrics dual-wire after peer gained metrics plate.
         metrics_paths = ("/metrics", "/api/metrics", "/peer/v1/metrics")
         # Residual: GET /whoami dual-wire after peer gained whoami plate.
+        # Residual: bare /status after peer gained bare status → auth plate.
         auth_paths = (
             "/api/auth",
             "/api/status",
             "/peer/v1/auth",
             "/peer/v1/status",
+            "/status",
         )
         whoami_paths = ("/whoami", "/api/whoami", "/peer/v1/whoami")
         activate_paths = ("/activate",)
