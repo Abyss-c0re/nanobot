@@ -213,6 +213,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known traffic-advice dual-wire + MCP | `1ed0cc9`  |
 | GET well-known privacy-sandbox-attestations dual-wire + MCP | `083e7bc`  |
 | GET well-known no-federation resource dual-wire + MCP | `d20e371`  |
+| GET well-known Chrome DevTools appspecific dual-wire + MCP | `d2f763b`  |
 ## Anti-chaos
 
 - One product bite per cycle  
