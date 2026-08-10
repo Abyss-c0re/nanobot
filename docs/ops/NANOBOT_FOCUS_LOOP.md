@@ -194,6 +194,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known openid-credential-issuer dual-wire + MCP | `0d41e20`  |
 | GET well-known fido2-configuration dual-wire + MCP | `48c0bdd`  |
 | GET well-known webauthn dual-wire + MCP | `7a72967`  |
+| GET well-known did.json dual-wire + MCP | `b976d6c`  |
 ## Anti-chaos
 
 - One product bite per cycle  
