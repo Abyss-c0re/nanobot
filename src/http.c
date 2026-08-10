@@ -634,6 +634,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/webauthn") ||
         !strcmp(path, "/.well-known/did.json") ||
         !strcmp(path, "/did.json") ||
+        !strcmp(path, "/.well-known/did-configuration") ||
+        !strcmp(path, "/did-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
@@ -1625,7 +1627,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\","
         "\"oauth_client_registration\",\"openid_federation\","
         "\"uma2_configuration\",\"openid_credential_issuer\","
-        "\"fido2_configuration\",\"webauthn\",\"did_json\""
+        "\"fido2_configuration\",\"webauthn\",\"did_json\","
+        "\"did_configuration\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2499,6 +2502,40 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", did, sizeof did - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: DID/mesh probes hit /.well-known/did-configuration (domain
+   * linkage) and got not_found. Lab ops has no domain linkage VCs — empty. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/did-configuration") == 0 ||
+       strcmp(path, "/.well-known/did-configuration/") == 0 ||
+       strcmp(path, "/did-configuration") == 0 ||
+       strcmp(path, "/did-configuration/") == 0 ||
+       strcmp(path, "/api/did-configuration") == 0 ||
+       strcmp(path, "/peer/v1/did-configuration") == 0)) {
+    static const char didc[] =
+      "{"
+      "\"@context\":\"https://identity.foundation/.well-known/did-configuration/v1\","
+      "\"linked_dids\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"did_configuration\","
+        "\"did_configuration\":false,"
+        "\"domain_linkage\":false,"
+        "\"did_json\":\"/.well-known/did.json\","
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", didc, sizeof didc - 1);
     free(req); close(cfd); return;
   }
 

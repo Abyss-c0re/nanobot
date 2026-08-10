@@ -576,6 +576,13 @@ class H(BaseHTTPRequestHandler):
             "/api/did.json",
             "/peer/v1/did.json",
         )
+        # Residual: GET did-configuration after peer gained empty linkage plate.
+        did_cfg_paths = (
+            "/.well-known/did-configuration",
+            "/did-configuration",
+            "/api/did-configuration",
+            "/peer/v1/did-configuration",
+        )
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
@@ -1131,6 +1138,18 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "did_json": doc},
+            )
+            return
+        if path in did_cfg_paths:
+            # Peer serves empty DID domain linkage; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/did-configuration", timeout=5
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "did_configuration": doc},
             )
             return
         if path in oauth_as_paths:
