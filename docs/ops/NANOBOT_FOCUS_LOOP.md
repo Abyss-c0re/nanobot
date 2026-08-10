@@ -260,7 +260,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known mta-sts extensionless dual-wire + MCP | `53c63f8`  |
 | GET well-known openid/oauth .json alias dual-wire + MCP | `c0e8416`  |
 | GET well-known federation/uma/fido .json alias dual-wire + MCP | `ef86441`  |
-| GET well-known passkey/oid4vci/webauthn/did-cfg .json alias dual-wire + MCP | `b7a3120`  |
+| GET well-known passkey/oid4vci/webauthn/did-cfg .json alias dual-wire + MCP | `b986db7`  |
 ## Anti-chaos
 
 - One product bite per cycle  
