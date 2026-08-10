@@ -227,6 +227,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known time dual-wire + MCP | `6c436ff`  |
 | GET well-known timezone dual-wire + MCP | `d530205`  |
 | GET well-known est dual-wire + MCP | `3862bcf`  |
+| GET well-known pki-validation dual-wire + MCP | `4fee239`  |
 ## Anti-chaos
 
 - One product bite per cycle  
