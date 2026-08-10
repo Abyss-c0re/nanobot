@@ -178,6 +178,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known oauth-authorization-server dual-wire + MCP | `8b46d0e`  |
 | GET well-known oauth-protected-resource dual-wire + MCP | `ca2d05d`  |
 | GET well-known dnt-policy.txt dual-wire + MCP | `f706d8d`  |
+| GET well-known passkey-endpoints dual-wire + MCP | `2a18d8b`  |
 ## Anti-chaos
 
 - One product bite per cycle  
