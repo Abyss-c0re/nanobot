@@ -542,8 +542,10 @@ class H(BaseHTTPRequestHandler):
         host_meta_paths = (
             "/.well-known/host-meta",
             "/.well-known/host-meta.json",
+            "/.well-known/host-meta.xml",
             "/host-meta",
             "/host-meta.json",
+            "/host-meta.xml",
             "/api/host-meta",
             "/peer/v1/host-meta",
         )
@@ -653,6 +655,8 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/oauth-authorization-server/registration",
             "/.well-known/openid-configuration/registration",
             "/.well-known/openid-configuration/register",
+            "/.well-known/oauth/register",
+            "/.well-known/openid/register",
             "/oauth-client-registration",
             "/oauth-client-registration.json",
             "/api/oauth-client-registration",
@@ -768,29 +772,49 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/passkey-endpoints/jwks.json",
             "/.well-known/did-configuration/jwks",
             "/.well-known/did-configuration/jwks.json",
+            "/.well-known/oauth/jwks",
+            "/.well-known/oauth/jwks.json",
+            "/.well-known/openid/jwks",
+            "/.well-known/openid/jwks.json",
         )
         # Residual: GET related-website-set after empty RWS plate.
         related_website_set_paths = (
+            "/.well-known/related-website-set",
             "/.well-known/related-website-set.json",
+            "/related-website-set",
             "/related-website-set.json",
+            "/api/related-website-set",
             "/api/related-website-set.json",
+            "/peer/v1/related-website-set",
             "/peer/v1/related-website-set.json",
         )
         # Residual: GET microsoft-identity-association after empty plate.
         microsoft_identity_association_paths = (
+            "/.well-known/microsoft-identity-association",
             "/.well-known/microsoft-identity-association.json",
+            "/.well-known/ms-identity-association",
+            "/.well-known/ms-identity-association.json",
+            "/microsoft-identity-association",
             "/microsoft-identity-association.json",
+            "/api/microsoft-identity-association",
             "/api/microsoft-identity-association.json",
+            "/peer/v1/microsoft-identity-association",
             "/peer/v1/microsoft-identity-association.json",
         )
         # Residual: GET apple merchantid domain association after empty plate.
         apple_merchantid_domain_association_paths = (
             "/.well-known/apple-developer-merchantid-domain-association",
             "/.well-known/apple-developer-merchantid-domain-association.json",
+            "/.well-known/apple-merchantid-domain-association",
+            "/.well-known/apple-merchantid-domain-association.json",
             "/apple-developer-merchantid-domain-association",
             "/apple-developer-merchantid-domain-association.json",
+            "/apple-merchantid-domain-association",
+            "/apple-merchantid-domain-association.json",
             "/api/apple-developer-merchantid-domain-association",
+            "/api/apple-merchantid-domain-association",
             "/peer/v1/apple-developer-merchantid-domain-association",
+            "/peer/v1/apple-merchantid-domain-association",
         )
         # Residual: GET nostr.json after empty NIP-05 plate.
         nostr_paths = (

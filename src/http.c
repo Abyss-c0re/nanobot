@@ -596,14 +596,28 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/passkey-endpoints/jwks.json") ||
         !strcmp(path, "/.well-known/did-configuration/jwks") ||
         !strcmp(path, "/.well-known/did-configuration/jwks.json") ||
+        !strcmp(path, "/.well-known/oauth/jwks") ||
+        !strcmp(path, "/.well-known/oauth/jwks.json") ||
+        !strcmp(path, "/.well-known/openid/jwks") ||
+        !strcmp(path, "/.well-known/openid/jwks.json") ||
+        !strcmp(path, "/.well-known/related-website-set") ||
         !strcmp(path, "/.well-known/related-website-set.json") ||
+        !strcmp(path, "/related-website-set") ||
         !strcmp(path, "/related-website-set.json") ||
+        !strcmp(path, "/.well-known/microsoft-identity-association") ||
         !strcmp(path, "/.well-known/microsoft-identity-association.json") ||
+        !strcmp(path, "/.well-known/ms-identity-association") ||
+        !strcmp(path, "/.well-known/ms-identity-association.json") ||
+        !strcmp(path, "/microsoft-identity-association") ||
         !strcmp(path, "/microsoft-identity-association.json") ||
         !strcmp(path, "/.well-known/apple-developer-merchantid-domain-association") ||
         !strcmp(path, "/.well-known/apple-developer-merchantid-domain-association.json") ||
+        !strcmp(path, "/.well-known/apple-merchantid-domain-association") ||
+        !strcmp(path, "/.well-known/apple-merchantid-domain-association.json") ||
         !strcmp(path, "/apple-developer-merchantid-domain-association") ||
         !strcmp(path, "/apple-developer-merchantid-domain-association.json") ||
+        !strcmp(path, "/apple-merchantid-domain-association") ||
+        !strcmp(path, "/apple-merchantid-domain-association.json") ||
         !strcmp(path, "/.well-known/nostr.json") || !strcmp(path, "/.well-known/nostr") ||
         !strcmp(path, "/nostr.json") || !strcmp(path, "/nostr") ||
         !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/.well-known/atproto-did.json") ||
@@ -918,8 +932,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/nodeinfo/2.1.json") ||
         !strcmp(path, "/.well-known/host-meta") ||
         !strcmp(path, "/.well-known/host-meta.json") ||
+        !strcmp(path, "/.well-known/host-meta.xml") ||
         !strcmp(path, "/host-meta") ||
         !strcmp(path, "/host-meta.json") ||
+        !strcmp(path, "/host-meta.xml") ||
         !strcmp(path, "/.well-known/matrix/client") ||
         !strcmp(path, "/.well-known/matrix/client.json") ||
         !strcmp(path, "/.well-known/matrix/server") ||
@@ -996,6 +1012,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/oauth-authorization-server/registration") ||
         !strcmp(path, "/.well-known/openid-configuration/registration") ||
         !strcmp(path, "/.well-known/openid-configuration/register") ||
+        !strcmp(path, "/.well-known/oauth/register") ||
+        !strcmp(path, "/.well-known/openid/register") ||
         !strcmp(path, "/oauth-client-registration") ||
         !strcmp(path, "/oauth-client-registration.json") ||
         !strcmp(path, "/api/oauth-client-registration.json") ||
@@ -2594,10 +2612,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/host-meta/") == 0 ||
                  strcmp(path, "/.well-known/host-meta.json") == 0 ||
                  strcmp(path, "/.well-known/host-meta.json/") == 0 ||
+                 strcmp(path, "/.well-known/host-meta.xml") == 0 ||
+                 strcmp(path, "/.well-known/host-meta.xml/") == 0 ||
                  strcmp(path, "/host-meta") == 0 ||
                  strcmp(path, "/host-meta/") == 0 ||
                  strcmp(path, "/host-meta.json") == 0 ||
                  strcmp(path, "/host-meta.json/") == 0 ||
+                 strcmp(path, "/host-meta.xml") == 0 ||
+                 strcmp(path, "/host-meta.xml/") == 0 ||
                  strcmp(path, "/api/host-meta") == 0 ||
                  strcmp(path, "/peer/v1/host-meta") == 0)) {
     static const char hm[] =
@@ -3054,6 +3076,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/oauth-authorization-server/registration") == 0 ||
        strcmp(path, "/.well-known/openid-configuration/registration") == 0 ||
        strcmp(path, "/.well-known/openid-configuration/register") == 0 ||
+       strcmp(path, "/.well-known/oauth/register") == 0 ||
+       strcmp(path, "/.well-known/openid/register") == 0 ||
        strcmp(path, "/oauth-client-registration") == 0 ||
        strcmp(path, "/oauth-client-registration/") == 0 ||
        strcmp(path, "/oauth-client-registration.json") == 0 ||
@@ -3393,7 +3417,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/passkey-endpoints/jwks") == 0 ||
                  strcmp(path, "/.well-known/passkey-endpoints/jwks.json") == 0 ||
                  strcmp(path, "/.well-known/did-configuration/jwks") == 0 ||
-                 strcmp(path, "/.well-known/did-configuration/jwks.json") == 0)) {
+                 strcmp(path, "/.well-known/did-configuration/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/oauth/jwks") == 0 ||
+                 strcmp(path, "/.well-known/oauth/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/openid/jwks") == 0 ||
+                 strcmp(path, "/.well-known/openid/jwks.json") == 0)) {
     static const char jwks[] =
       "{"
       "\"keys\":[],"
@@ -3422,11 +3450,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   /* Residual: mesh/browser probes hit /.well-known/related-website-set.json
    * and got not_found. Lab ops publishes no Related Website Sets. */
-  if (is_get && (strcmp(path, "/.well-known/related-website-set.json") == 0 ||
+  if (is_get && (strcmp(path, "/.well-known/related-website-set") == 0 ||
+                 strcmp(path, "/.well-known/related-website-set/") == 0 ||
+                 strcmp(path, "/.well-known/related-website-set.json") == 0 ||
                  strcmp(path, "/.well-known/related-website-set.json/") == 0 ||
+                 strcmp(path, "/related-website-set") == 0 ||
+                 strcmp(path, "/related-website-set/") == 0 ||
                  strcmp(path, "/related-website-set.json") == 0 ||
                  strcmp(path, "/related-website-set.json/") == 0 ||
+                 strcmp(path, "/api/related-website-set") == 0 ||
                  strcmp(path, "/api/related-website-set.json") == 0 ||
+                 strcmp(path, "/peer/v1/related-website-set") == 0 ||
                  strcmp(path, "/peer/v1/related-website-set.json") == 0)) {
     static const char rws[] =
       "{"
@@ -3456,11 +3490,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Residual: Azure/mesh probes hit microsoft-identity-association.json
    * and got not_found. Lab ops publishes no Microsoft identity domain assoc. */
   if (is_get &&
-      (strcmp(path, "/.well-known/microsoft-identity-association.json") == 0 ||
+      (strcmp(path, "/.well-known/microsoft-identity-association") == 0 ||
+       strcmp(path, "/.well-known/microsoft-identity-association/") == 0 ||
+       strcmp(path, "/.well-known/microsoft-identity-association.json") == 0 ||
        strcmp(path, "/.well-known/microsoft-identity-association.json/") == 0 ||
+       strcmp(path, "/.well-known/ms-identity-association") == 0 ||
+       strcmp(path, "/.well-known/ms-identity-association/") == 0 ||
+       strcmp(path, "/.well-known/ms-identity-association.json") == 0 ||
+       strcmp(path, "/microsoft-identity-association") == 0 ||
+       strcmp(path, "/microsoft-identity-association/") == 0 ||
        strcmp(path, "/microsoft-identity-association.json") == 0 ||
        strcmp(path, "/microsoft-identity-association.json/") == 0 ||
+       strcmp(path, "/api/microsoft-identity-association") == 0 ||
        strcmp(path, "/api/microsoft-identity-association.json") == 0 ||
+       strcmp(path, "/peer/v1/microsoft-identity-association") == 0 ||
        strcmp(path, "/peer/v1/microsoft-identity-association.json") == 0)) {
     static const char mia[] =
       "{"
@@ -3491,11 +3534,19 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/apple-developer-merchantid-domain-association") == 0 ||
        strcmp(path, "/.well-known/apple-developer-merchantid-domain-association/") == 0 ||
        strcmp(path, "/.well-known/apple-developer-merchantid-domain-association.json") == 0 ||
+       strcmp(path, "/.well-known/apple-merchantid-domain-association") == 0 ||
+       strcmp(path, "/.well-known/apple-merchantid-domain-association/") == 0 ||
+       strcmp(path, "/.well-known/apple-merchantid-domain-association.json") == 0 ||
        strcmp(path, "/apple-developer-merchantid-domain-association") == 0 ||
        strcmp(path, "/apple-developer-merchantid-domain-association/") == 0 ||
        strcmp(path, "/apple-developer-merchantid-domain-association.json") == 0 ||
+       strcmp(path, "/apple-merchantid-domain-association") == 0 ||
+       strcmp(path, "/apple-merchantid-domain-association/") == 0 ||
+       strcmp(path, "/apple-merchantid-domain-association.json") == 0 ||
        strcmp(path, "/api/apple-developer-merchantid-domain-association") == 0 ||
-       strcmp(path, "/peer/v1/apple-developer-merchantid-domain-association") == 0)) {
+       strcmp(path, "/api/apple-merchantid-domain-association") == 0 ||
+       strcmp(path, "/peer/v1/apple-developer-merchantid-domain-association") == 0 ||
+       strcmp(path, "/peer/v1/apple-merchantid-domain-association") == 0)) {
     static const char amd[] =
       "{"
       "\"schema\":\"nanobot.peer_http.v1\","
