@@ -593,7 +593,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/web-identity") || !strcmp(path, "/web-identity.json") ||
         !strncmp(path, "/.well-known/posh", 16) || !strncmp(path, "/posh", 5) ||
         !strcmp(path, "/.well-known/traffic-advice") ||
+        !strcmp(path, "/.well-known/traffic-advice.json") ||
         !strcmp(path, "/traffic-advice") ||
+        !strcmp(path, "/traffic-advice.json") ||
         !strcmp(path, "/.well-known/privacy-sandbox-attestations.json") ||
         !strcmp(path, "/.well-known/privacy-sandbox-attestations") ||
         !strcmp(path, "/privacy-sandbox-attestations.json") ||
@@ -603,12 +605,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strncmp(path, "/.well-known/appspecific/", 25) ||
         !strcmp(path, "/com.chrome.devtools.json") ||
         !strcmp(path, "/.well-known/http-opportunistic") ||
+        !strcmp(path, "/.well-known/http-opportunistic.json") ||
         !strcmp(path, "/http-opportunistic") ||
-        !strcmp(path, "/.well-known/core") || !strcmp(path, "/core") ||
+        !strcmp(path, "/http-opportunistic.json") ||
+        !strcmp(path, "/.well-known/core") || !strcmp(path, "/.well-known/core.json") ||
+        !strcmp(path, "/core") || !strcmp(path, "/core.json") ||
         !strncmp(path, "/.well-known/mercure", 20) ||
         !strncmp(path, "/mercure", 8) ||
         !strcmp(path, "/.well-known/gnap-as-rs") ||
+        !strcmp(path, "/.well-known/gnap-as-rs.json") ||
         !strcmp(path, "/gnap-as-rs") ||
+        !strcmp(path, "/gnap-as-rs.json") ||
         !strncmp(path, "/.well-known/csaf", 17) ||
         !strcmp(path, "/csaf/provider-metadata.json") ||
         !strcmp(path, "/.well-known/discord") || !strcmp(path, "/discord") ||
@@ -3610,8 +3617,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/traffic-advice") == 0 ||
        strcmp(path, "/.well-known/traffic-advice/") == 0 ||
+       strcmp(path, "/.well-known/traffic-advice.json") == 0 ||
        strcmp(path, "/traffic-advice") == 0 ||
        strcmp(path, "/traffic-advice/") == 0 ||
+       strcmp(path, "/traffic-advice.json") == 0 ||
        strcmp(path, "/api/traffic-advice") == 0 ||
        strcmp(path, "/peer/v1/traffic-advice") == 0)) {
     static const char ta[] =
@@ -3763,8 +3772,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/http-opportunistic") == 0 ||
        strcmp(path, "/.well-known/http-opportunistic/") == 0 ||
+       strcmp(path, "/.well-known/http-opportunistic.json") == 0 ||
        strcmp(path, "/http-opportunistic") == 0 ||
        strcmp(path, "/http-opportunistic/") == 0 ||
+       strcmp(path, "/http-opportunistic.json") == 0 ||
        strcmp(path, "/api/http-opportunistic") == 0 ||
        strcmp(path, "/peer/v1/http-opportunistic") == 0)) {
     static const char hop[] =
@@ -3796,8 +3807,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/core") == 0 ||
        strcmp(path, "/.well-known/core/") == 0 ||
+       strcmp(path, "/.well-known/core.json") == 0 ||
        strcmp(path, "/core") == 0 ||
        strcmp(path, "/core/") == 0 ||
+       strcmp(path, "/core.json") == 0 ||
        strcmp(path, "/api/core") == 0 ||
        strcmp(path, "/peer/v1/core") == 0)) {
     static const char core[] =
@@ -3830,8 +3843,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/mercure") == 0 ||
        strcmp(path, "/.well-known/mercure/") == 0 ||
+       strcmp(path, "/.well-known/mercure.json") == 0 ||
        strcmp(path, "/mercure") == 0 ||
        strcmp(path, "/mercure/") == 0 ||
+       strcmp(path, "/mercure.json") == 0 ||
        strcmp(path, "/api/mercure") == 0 ||
        strcmp(path, "/peer/v1/mercure") == 0 ||
        strcmp(path, "/.well-known/mercure/subscriptions") == 0 ||
@@ -3866,12 +3881,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/gnap-as-rs") == 0 ||
        strcmp(path, "/.well-known/gnap-as-rs/") == 0 ||
+       strcmp(path, "/.well-known/gnap-as-rs.json") == 0 ||
        strcmp(path, "/gnap-as-rs") == 0 ||
        strcmp(path, "/gnap-as-rs/") == 0 ||
+       strcmp(path, "/gnap-as-rs.json") == 0 ||
        strcmp(path, "/api/gnap-as-rs") == 0 ||
        strcmp(path, "/peer/v1/gnap-as-rs") == 0 ||
        strcmp(path, "/.well-known/gnap") == 0 ||
-       strcmp(path, "/gnap") == 0)) {
+       strcmp(path, "/.well-known/gnap.json") == 0 ||
+       strcmp(path, "/gnap") == 0 ||
+       strcmp(path, "/gnap.json") == 0)) {
     static const char gnap[] =
       "{"
       "\"grant_request_endpoint\":\"\","

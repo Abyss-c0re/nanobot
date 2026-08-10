@@ -810,7 +810,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET traffic-advice after empty Chrome prefetch plate.
         traffic_advice_paths = (
             "/.well-known/traffic-advice",
+            "/.well-known/traffic-advice.json",
             "/traffic-advice",
+            "/traffic-advice.json",
             "/api/traffic-advice",
             "/peer/v1/traffic-advice",
         )
@@ -845,22 +847,28 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET http-opportunistic after empty RFC 8164 plate.
         http_opportunistic_paths = (
             "/.well-known/http-opportunistic",
+            "/.well-known/http-opportunistic.json",
             "/http-opportunistic",
+            "/http-opportunistic.json",
             "/api/http-opportunistic",
             "/peer/v1/http-opportunistic",
         )
         # Residual: GET /.well-known/core after empty CoRE/RFC 6690 plate.
         core_paths = (
             "/.well-known/core",
+            "/.well-known/core.json",
             "/core",
+            "/core.json",
             "/api/core",
             "/peer/v1/core",
         )
         # Residual: GET mercure after empty Mercure hub discovery plate.
         mercure_paths = (
             "/.well-known/mercure",
+            "/.well-known/mercure.json",
             "/.well-known/mercure/subscriptions",
             "/mercure",
+            "/mercure.json",
             "/mercure/subscriptions",
             "/api/mercure",
             "/peer/v1/mercure",
@@ -868,9 +876,13 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET gnap-as-rs after empty GNAP discovery plate.
         gnap_as_rs_paths = (
             "/.well-known/gnap-as-rs",
+            "/.well-known/gnap-as-rs.json",
             "/.well-known/gnap",
+            "/.well-known/gnap.json",
             "/gnap-as-rs",
+            "/gnap-as-rs.json",
             "/gnap",
+            "/gnap.json",
             "/api/gnap-as-rs",
             "/peer/v1/gnap-as-rs",
         )
