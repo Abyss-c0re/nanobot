@@ -439,6 +439,13 @@ class H(BaseHTTPRequestHandler):
             "/api/openid-configuration",
             "/peer/v1/openid-configuration",
         )
+        # Residual: GET oauth-authorization-server after peer gained non-AS plate.
+        oauth_as_paths = (
+            "/.well-known/oauth-authorization-server",
+            "/oauth-authorization-server",
+            "/api/oauth-authorization-server",
+            "/peer/v1/oauth-authorization-server",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -780,6 +787,15 @@ class H(BaseHTTPRequestHandler):
             )
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "openid": doc}
+            )
+            return
+        if path in oauth_as_paths:
+            # Peer serves non-AS RFC 8414 plate; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/oauth-authorization-server", timeout=5
+            )
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "oauth_as": doc}
             )
             return
         if path in crossdomain_paths:

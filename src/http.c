@@ -591,7 +591,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/gpc.json") ||
         !strcmp(path, "/gpc.json") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
-        !strcmp(path, "/openid-configuration"))
+        !strcmp(path, "/openid-configuration") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server") ||
+        !strcmp(path, "/oauth-authorization-server"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1569,7 +1571,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"browserconfig\",\"change_password\",\"sellers\","
         "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\","
         "\"apple_app_site_association\",\"gpc\","
-        "\"openid_configuration\""
+        "\"openid_configuration\",\"oauth_authorization_server\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1825,6 +1827,46 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", oidc, sizeof oidc - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OAuth/mesh probes hit /.well-known/oauth-authorization-server
+   * (RFC 8414) and got not_found. Lab ops is not an OAuth AS — honest plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/oauth-authorization-server") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/") == 0 ||
+       strcmp(path, "/oauth-authorization-server") == 0 ||
+       strcmp(path, "/oauth-authorization-server/") == 0 ||
+       strcmp(path, "/api/oauth-authorization-server") == 0 ||
+       strcmp(path, "/peer/v1/oauth-authorization-server") == 0)) {
+    static const char oauth_as[] =
+      "{"
+      "\"issuer\":\"\","
+      "\"authorization_endpoint\":\"/api/auth\","
+      "\"token_endpoint\":\"\","
+      "\"registration_endpoint\":\"\","
+      "\"jwks_uri\":\"\","
+      "\"response_types_supported\":[],"
+      "\"grant_types_supported\":[],"
+      "\"token_endpoint_auth_methods_supported\":[],"
+      "\"scopes_supported\":[],"
+      "\"code_challenge_methods_supported\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"oauth_authorization_server\","
+        "\"oauth_as\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", oauth_as, sizeof oauth_as - 1);
     free(req); close(cfd); return;
   }
 
