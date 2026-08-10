@@ -663,6 +663,17 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/openpgpkey/policy",
             "/openpgpkey/policy",
         )
+        # Residual: GET sshfp after peer gained empty SSHFP plate.
+        sshfp_paths = (
+            "/.well-known/sshfp",
+            "/.well-known/sshfp.json",
+            "/sshfp",
+            "/sshfp.json",
+            "/api/sshfp",
+            "/api/sshfp.json",
+            "/peer/v1/sshfp",
+            "/peer/v1/sshfp.json",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1428,6 +1439,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "openpgpkey": doc},
+            )
+            return
+        if path in sshfp_paths:
+            doc = peer_json("GET", "/.well-known/sshfp", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "sshfp": doc},
             )
             return
         if path in humans_paths:

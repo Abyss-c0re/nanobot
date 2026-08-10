@@ -574,6 +574,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/pgp-key.txt") || !strcmp(path, "/.well-known/pgp-key.txt") ||
         !strncmp(path, "/.well-known/openpgpkey", 24) ||
         !strncmp(path, "/openpgpkey", 11) ||
+        !strcmp(path, "/sshfp") || !strcmp(path, "/.well-known/sshfp") ||
+        !strcmp(path, "/sshfp.json") || !strcmp(path, "/.well-known/sshfp.json") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1634,7 +1636,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2852,6 +2854,43 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"share\":\"state_matrix_only\",\"hold_flash\":1,"
       "\"llm_is_commander\":false,\"python\":0}";
     http_response(cfd, 404, "application/json", nf, sizeof nf - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/SSHFP probes hit /.well-known/sshfp and got not_found.
+   * Lab ops does not publish SSH host-key fingerprints (DNS SSHFP is out of band). */
+  if (is_get && (strcmp(path, "/sshfp") == 0 ||
+                 strcmp(path, "/sshfp/") == 0 ||
+                 strcmp(path, "/sshfp.json") == 0 ||
+                 strcmp(path, "/sshfp.json/") == 0 ||
+                 strcmp(path, "/.well-known/sshfp") == 0 ||
+                 strcmp(path, "/.well-known/sshfp/") == 0 ||
+                 strcmp(path, "/.well-known/sshfp.json") == 0 ||
+                 strcmp(path, "/.well-known/sshfp.json/") == 0 ||
+                 strcmp(path, "/api/sshfp") == 0 ||
+                 strcmp(path, "/api/sshfp.json") == 0 ||
+                 strcmp(path, "/peer/v1/sshfp") == 0 ||
+                 strcmp(path, "/peer/v1/sshfp.json") == 0)) {
+    static const char sshfp[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"sshfp\","
+      "\"sshfp\":false,"
+      "\"fingerprints\":[],"
+      "\"dns_sshfp\":false,"
+      "\"security_txt\":\"/.well-known/security.txt\","
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", sshfp, sizeof sshfp - 1);
     free(req); close(cfd); return;
   }
 
