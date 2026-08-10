@@ -216,6 +216,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known Chrome DevTools appspecific dual-wire + MCP | `d2f763b`  |
 | GET well-known http-opportunistic dual-wire + MCP | `13c4cd9`  |
 | GET well-known core (CoRE RFC 6690) dual-wire + MCP | `4caedbe`  |
+| GET well-known mercure dual-wire + MCP | `4fab3ee`  |
 ## Anti-chaos
 
 - One product bite per cycle  
