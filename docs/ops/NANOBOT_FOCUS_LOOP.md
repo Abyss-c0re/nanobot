@@ -209,6 +209,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known atproto-did dual-wire + MCP | `8c9587d`  |
 | GET well-known stellar.toml dual-wire + MCP | `c108cf0`  |
 | GET well-known web-identity dual-wire + MCP | `49a463f`  |
+| GET well-known posh dual-wire + MCP | `c3743c3`  |
 ## Anti-chaos
 
 - One product bite per cycle  
