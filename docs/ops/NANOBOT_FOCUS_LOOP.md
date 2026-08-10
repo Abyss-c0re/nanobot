@@ -284,6 +284,7 @@ cd ~/Dev/AI/nanobot
 | GET shell/approvals trailing-slash dual-wire + MCP | `201dfb5`  |
 | 405 method_not_allowed dual-wire on post_only + MCP | `7a771a8`  |
 | GET control/shell|watcher|ui + /watcher dual-wire + MCP | `5cde865`  |
+| GET me/session/auth_status + serve.lock CLOEXEC reclaim + MCP | `67e0040`  |
 ## Anti-chaos
 
 - One product bite per cycle  
