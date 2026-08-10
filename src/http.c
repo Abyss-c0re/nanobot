@@ -783,6 +783,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/peer/v1/doq") ||
         !strcmp(path, "/api/dns-query") ||
         !strcmp(path, "/peer/v1/dns-query") ||
+        !strcmp(path, "/.well-known/activitypub") ||
+        !strncmp(path, "/.well-known/activitypub/", 24) ||
+        !strcmp(path, "/.well-known/activitypub.json") ||
+        !strcmp(path, "/activitypub") ||
+        !strncmp(path, "/activitypub/", 13) ||
+        !strcmp(path, "/activitypub.json") ||
+        !strcmp(path, "/api/activitypub") ||
+        !strcmp(path, "/peer/v1/activitypub") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1843,7 +1851,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\",\"web_bot_auth\",\"sbom\",\"privacy_pass\",\"ohttp_gateway\",\"masque\",\"doh\",\"bluesky\",\"solid\",\"web_app_origin_association\",\"doq\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\",\"web_bot_auth\",\"sbom\",\"privacy_pass\",\"ohttp_gateway\",\"masque\",\"doh\",\"bluesky\",\"solid\",\"web_app_origin_association\",\"doq\",\"activitypub\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -4947,6 +4955,46 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", doq, sizeof doq - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/fediverse probes hit /.well-known/activitypub and got
+   * not_found. Lab ops is not an ActivityPub actor/server — empty plate
+   * (see solid / bluesky / nodeinfo / webfinger empty plates). */
+  if (is_get &&
+      (strcmp(path, "/.well-known/activitypub") == 0 ||
+       strcmp(path, "/.well-known/activitypub/") == 0 ||
+       strncmp(path, "/.well-known/activitypub/", 24) == 0 ||
+       strcmp(path, "/.well-known/activitypub.json") == 0 ||
+       strcmp(path, "/activitypub") == 0 ||
+       strcmp(path, "/activitypub/") == 0 ||
+       strcmp(path, "/activitypub.json") == 0 ||
+       strcmp(path, "/api/activitypub") == 0 ||
+       strcmp(path, "/peer/v1/activitypub") == 0)) {
+    static const char apub[] =
+      "{"
+      "\"actor\":\"\","
+      "\"inbox\":\"\","
+      "\"outbox\":\"\","
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"activitypub\","
+      "\"activitypub\":false,"
+      "\"fediverse\":false,"
+      "\"actor\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", apub, sizeof apub - 1);
     free(req); close(cfd); return;
   }
 

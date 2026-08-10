@@ -1131,6 +1131,15 @@ class H(BaseHTTPRequestHandler):
             "/api/dns-query",
             "/peer/v1/dns-query",
         )
+        # Residual: GET activitypub after empty ActivityPub/fediverse plate.
+        activitypub_paths = (
+            "/.well-known/activitypub",
+            "/.well-known/activitypub.json",
+            "/activitypub",
+            "/activitypub.json",
+            "/api/activitypub",
+            "/peer/v1/activitypub",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2302,6 +2311,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "doq": doc},
+            )
+            return
+        if path in activitypub_paths:
+            doc = peer_json("GET", "/.well-known/activitypub", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "activitypub": doc},
             )
             return
         if path in humans_paths:
