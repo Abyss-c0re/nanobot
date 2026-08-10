@@ -760,6 +760,17 @@ class H(BaseHTTPRequestHandler):
             "/api/traffic-advice",
             "/peer/v1/traffic-advice",
         )
+        # Residual: GET privacy-sandbox-attestations after empty Chrome plate.
+        privacy_sandbox_paths = (
+            "/.well-known/privacy-sandbox-attestations.json",
+            "/.well-known/privacy-sandbox-attestations",
+            "/privacy-sandbox-attestations.json",
+            "/privacy-sandbox-attestations",
+            "/api/privacy-sandbox-attestations.json",
+            "/api/privacy-sandbox-attestations",
+            "/peer/v1/privacy-sandbox-attestations.json",
+            "/peer/v1/privacy-sandbox-attestations",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1629,6 +1640,17 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "traffic_advice": doc},
+            )
+            return
+        if path in privacy_sandbox_paths:
+            doc = peer_json(
+                "GET", "/.well-known/privacy-sandbox-attestations.json", timeout=5
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "privacy_sandbox_attestations": doc},
             )
             return
         if path in humans_paths:
