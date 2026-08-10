@@ -202,6 +202,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known openpgpkey dual-wire + MCP | `028b6af`  |
 | GET well-known sshfp dual-wire + MCP | `90a2ad4`  |
 | GET well-known jwks.json dual-wire + MCP | `7dd1a70`  |
+| GET well-known related-website-set.json dual-wire + MCP | `9f0fc00`  |
 ## Anti-chaos
 
 - One product bite per cycle  
