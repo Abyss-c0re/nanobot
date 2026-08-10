@@ -262,7 +262,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known federation/uma/fido .json alias dual-wire + MCP | `ef86441`  |
 | GET well-known passkey/oid4vci/webauthn/did-cfg .json alias dual-wire + MCP | `b986db7`  |
 | GET well-known oauth-reg/webfinger/nodeinfo/api-catalog .json alias dual-wire + MCP | `02821a4`  |
-| GET well-known matrix/aasa .json alias dual-wire + MCP | `3105bac`  |
+| GET well-known matrix/aasa .json alias dual-wire + MCP | `f539331`  |
 ## Anti-chaos
 
 - One product bite per cycle  
