@@ -811,6 +811,15 @@ class H(BaseHTTPRequestHandler):
             "/api/mercure",
             "/peer/v1/mercure",
         )
+        # Residual: GET gnap-as-rs after empty GNAP discovery plate.
+        gnap_as_rs_paths = (
+            "/.well-known/gnap-as-rs",
+            "/.well-known/gnap",
+            "/gnap-as-rs",
+            "/gnap",
+            "/api/gnap-as-rs",
+            "/peer/v1/gnap-as-rs",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1736,6 +1745,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "mercure": doc},
+            )
+            return
+        if path in gnap_as_rs_paths:
+            doc = peer_json("GET", "/.well-known/gnap-as-rs", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "gnap_as_rs": doc},
             )
             return
         if path in humans_paths:
