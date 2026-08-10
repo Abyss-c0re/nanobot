@@ -568,9 +568,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/swagger.json") ||
         !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
         !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
+        !strcmp(path, "/.well-known/robots.txt") ||
         !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt") ||
+        !strcmp(path, "/.well-known/security.json") ||
         !strcmp(path, "/trust.txt") || !strcmp(path, "/.well-known/trust.txt") ||
+        !strcmp(path, "/.well-known/trust.json") ||
         !strcmp(path, "/keybase.txt") || !strcmp(path, "/.well-known/keybase.txt") ||
+        !strcmp(path, "/.well-known/keybase.json") ||
         !strcmp(path, "/pgp-key.txt") || !strcmp(path, "/.well-known/pgp-key.txt") ||
         !strncmp(path, "/.well-known/openpgpkey", 24) ||
         !strncmp(path, "/openpgpkey", 11) ||
@@ -600,6 +604,30 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/oauth/jwks.json") ||
         !strcmp(path, "/.well-known/openid/jwks") ||
         !strcmp(path, "/.well-known/openid/jwks.json") ||
+        !strcmp(path, "/.well-known/oauth/token") ||
+        !strcmp(path, "/.well-known/oauth/authorize") ||
+        !strcmp(path, "/.well-known/oauth/userinfo") ||
+        !strcmp(path, "/.well-known/oauth/revoke") ||
+        !strcmp(path, "/.well-known/oauth/introspect") ||
+        !strcmp(path, "/.well-known/oauth/device") ||
+        !strcmp(path, "/.well-known/oauth/device_authorization") ||
+        !strcmp(path, "/.well-known/openid/token") ||
+        !strcmp(path, "/.well-known/openid/authorize") ||
+        !strcmp(path, "/.well-known/openid/userinfo") ||
+        !strcmp(path, "/.well-known/openid/revoke") ||
+        !strcmp(path, "/.well-known/openid/introspect") ||
+        !strcmp(path, "/.well-known/openid-configuration/token") ||
+        !strcmp(path, "/.well-known/openid-configuration/userinfo") ||
+        !strcmp(path, "/.well-known/openid-configuration/revoke") ||
+        !strcmp(path, "/.well-known/openid-configuration/introspect") ||
+        !strcmp(path, "/.well-known/openid-configuration/metadata") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/token") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/userinfo") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/revoke") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/introspect") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/device") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/device_authorization") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/metadata") ||
         !strcmp(path, "/.well-known/related-website-set") ||
         !strcmp(path, "/.well-known/related-website-set.json") ||
         !strcmp(path, "/related-website-set") ||
@@ -881,15 +909,19 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/peer/v1/statements") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
-        !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
+        !strcmp(path, "/humans.txt") || !strcmp(path, "/.well-known/humans.txt") ||
+        !strcmp(path, "/sitemap.xml") || !strcmp(path, "/.well-known/sitemap.xml") ||
         !strcmp(path, "/sitemap_index.xml") ||
-        !strcmp(path, "/llms.txt") || !strcmp(path, "/ai.txt") ||
+        !strcmp(path, "/llms.txt") || !strcmp(path, "/.well-known/llms.txt") ||
+        !strcmp(path, "/.well-known/llm.txt") ||
+        !strcmp(path, "/ai.txt") || !strcmp(path, "/.well-known/ai.txt") ||
         !strcmp(path, "/service-worker.js") || !strcmp(path, "/sw.js") ||
         !strcmp(path, "/ads.txt") || !strcmp(path, "/app-ads.txt") ||
         !strcmp(path, "/crossdomain.xml") ||
         !strcmp(path, "/clientaccesspolicy.xml") ||
         !strcmp(path, "/browserconfig.xml") ||
         !strcmp(path, "/.well-known/change-password") ||
+        !strcmp(path, "/.well-known/change-password.json") ||
         !strcmp(path, "/change-password") ||
         !strcmp(path, "/sellers.json") ||
         !strcmp(path, "/.well-known/ai-plugin.json") ||
@@ -1013,7 +1045,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/openid-configuration/registration") ||
         !strcmp(path, "/.well-known/openid-configuration/register") ||
         !strcmp(path, "/.well-known/oauth/register") ||
+        !strcmp(path, "/.well-known/oauth/registration") ||
         !strcmp(path, "/.well-known/openid/register") ||
+        !strcmp(path, "/.well-known/openid/registration") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/registration_endpoint") ||
+        !strcmp(path, "/.well-known/openid-configuration/registration_endpoint") ||
         !strcmp(path, "/oauth-client-registration") ||
         !strcmp(path, "/oauth-client-registration.json") ||
         !strcmp(path, "/api/oauth-client-registration.json") ||
@@ -3077,7 +3113,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/openid-configuration/registration") == 0 ||
        strcmp(path, "/.well-known/openid-configuration/register") == 0 ||
        strcmp(path, "/.well-known/oauth/register") == 0 ||
+       strcmp(path, "/.well-known/oauth/registration") == 0 ||
        strcmp(path, "/.well-known/openid/register") == 0 ||
+       strcmp(path, "/.well-known/openid/registration") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/registration_endpoint") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/registration_endpoint") == 0 ||
        strcmp(path, "/oauth-client-registration") == 0 ||
        strcmp(path, "/oauth-client-registration/") == 0 ||
        strcmp(path, "/oauth-client-registration.json") == 0 ||
@@ -3194,6 +3234,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * No local password store — 302 to /api/auth (provider session plate). */
   if (is_get && (strcmp(path, "/.well-known/change-password") == 0 ||
                  strcmp(path, "/.well-known/change-password/") == 0 ||
+                 strcmp(path, "/.well-known/change-password.json") == 0 ||
                  strcmp(path, "/api/change-password") == 0 ||
                  strcmp(path, "/peer/v1/change-password") == 0 ||
                  strcmp(path, "/change-password") == 0 ||
@@ -3210,7 +3251,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   /* Residual: crawler/mesh probes hit /robots.txt and got dual-wire not_found.
    * Lab ops peer is not public product — disallow all. */
-  if (is_get && (strcmp(path, "/robots.txt") == 0 || strcmp(path, "/robots.txt/") == 0)) {
+  if (is_get && (strcmp(path, "/robots.txt") == 0 || strcmp(path, "/robots.txt/") == 0 ||
+                 strcmp(path, "/.well-known/robots.txt") == 0 ||
+                 strcmp(path, "/.well-known/robots.txt/") == 0 ||
+                 strcmp(path, "/api/robots.txt") == 0 ||
+                 strcmp(path, "/peer/v1/robots.txt") == 0)) {
     static const char robots[] =
       "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
       "User-agent: *\n"
@@ -3225,6 +3270,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/security.txt/") == 0 ||
                  strcmp(path, "/.well-known/security.txt") == 0 ||
                  strcmp(path, "/.well-known/security.txt/") == 0 ||
+                 strcmp(path, "/.well-known/security.json") == 0 ||
                  strcmp(path, "/api/security.txt") == 0 ||
                  strcmp(path, "/peer/v1/security.txt") == 0)) {
     static const char sectxt[] =
@@ -3243,6 +3289,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/trust.txt/") == 0 ||
                  strcmp(path, "/.well-known/trust.txt") == 0 ||
                  strcmp(path, "/.well-known/trust.txt/") == 0 ||
+                 strcmp(path, "/.well-known/trust.json") == 0 ||
                  strcmp(path, "/api/trust.txt") == 0 ||
                  strcmp(path, "/peer/v1/trust.txt") == 0)) {
     static const char trust[] =
@@ -3260,6 +3307,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/keybase.txt/") == 0 ||
                  strcmp(path, "/.well-known/keybase.txt") == 0 ||
                  strcmp(path, "/.well-known/keybase.txt/") == 0 ||
+                 strcmp(path, "/.well-known/keybase.json") == 0 ||
                  strcmp(path, "/api/keybase.txt") == 0 ||
                  strcmp(path, "/peer/v1/keybase.txt") == 0)) {
     static const char kbase[] =
@@ -3445,6 +3493,58 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", jwks, sizeof jwks - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OIDC/OAuth mesh probes hit nested token/userinfo/revoke/…
+   * under openid/oauth well-known trees and got not_found. Lab ops is not
+   * an AS/OP — empty endpoint plate; auth remains /api/auth. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/oauth/token") == 0 ||
+       strcmp(path, "/.well-known/oauth/authorize") == 0 ||
+       strcmp(path, "/.well-known/oauth/userinfo") == 0 ||
+       strcmp(path, "/.well-known/oauth/revoke") == 0 ||
+       strcmp(path, "/.well-known/oauth/introspect") == 0 ||
+       strcmp(path, "/.well-known/oauth/device") == 0 ||
+       strcmp(path, "/.well-known/oauth/device_authorization") == 0 ||
+       strcmp(path, "/.well-known/openid/token") == 0 ||
+       strcmp(path, "/.well-known/openid/authorize") == 0 ||
+       strcmp(path, "/.well-known/openid/userinfo") == 0 ||
+       strcmp(path, "/.well-known/openid/revoke") == 0 ||
+       strcmp(path, "/.well-known/openid/introspect") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/token") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/userinfo") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/revoke") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/introspect") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration/metadata") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/token") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/userinfo") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/revoke") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/introspect") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/device") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/device_authorization") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/metadata") == 0)) {
+    static const char oep[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"oauth_endpoint\","
+      "\"oauth_endpoint\":false,"
+      "\"oidc_provider\":false,"
+      "\"oauth_authorization_server\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"openid_configuration\":\"/.well-known/openid-configuration\","
+      "\"oauth_authorization_server_meta\":\"/.well-known/oauth-authorization-server\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", oep, sizeof oep - 1);
     free(req); close(cfd); return;
   }
 
@@ -5538,6 +5638,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Residual: crawler/mesh probes hit /humans.txt and got not_found.
    * humanstxt.org plate — lab ops peer credits + public surface pointers only. */
   if (is_get && (strcmp(path, "/humans.txt") == 0 || strcmp(path, "/humans.txt/") == 0 ||
+                 strcmp(path, "/.well-known/humans.txt") == 0 ||
+                 strcmp(path, "/.well-known/humans.txt/") == 0 ||
                  strcmp(path, "/api/humans.txt") == 0 ||
                  strcmp(path, "/peer/v1/humans.txt") == 0)) {
     static const char humans[] =
@@ -5565,6 +5667,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Residual: crawler/mesh probes hit /sitemap.xml and got not_found while
    * robots Disallow:/. Empty urlset — lab ops has no public crawl surface. */
   if (is_get && (strcmp(path, "/sitemap.xml") == 0 || strcmp(path, "/sitemap.xml/") == 0 ||
+                 strcmp(path, "/.well-known/sitemap.xml") == 0 ||
+                 strcmp(path, "/.well-known/sitemap.xml/") == 0 ||
                  strcmp(path, "/sitemap_index.xml") == 0 ||
                  strcmp(path, "/sitemap_index.xml/") == 0 ||
                  strcmp(path, "/api/sitemap.xml") == 0 ||
@@ -5581,7 +5685,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Residual: mesh/AI probes hit /llms.txt|/ai.txt and got not_found.
    * llmstxt.org-style plate: lab ops peer is not a public product site. */
   if (is_get && (strcmp(path, "/llms.txt") == 0 || strcmp(path, "/llms.txt/") == 0 ||
+                 strcmp(path, "/.well-known/llms.txt") == 0 ||
+                 strcmp(path, "/.well-known/llms.txt/") == 0 ||
+                 strcmp(path, "/.well-known/llm.txt") == 0 ||
+                 strcmp(path, "/.well-known/llm.txt/") == 0 ||
                  strcmp(path, "/ai.txt") == 0 || strcmp(path, "/ai.txt/") == 0 ||
+                 strcmp(path, "/.well-known/ai.txt") == 0 ||
+                 strcmp(path, "/.well-known/ai.txt/") == 0 ||
                  strcmp(path, "/api/llms.txt") == 0 ||
                  strcmp(path, "/peer/v1/llms.txt") == 0)) {
     static const char llms[] =

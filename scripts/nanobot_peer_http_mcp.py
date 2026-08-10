@@ -656,7 +656,11 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/openid-configuration/registration",
             "/.well-known/openid-configuration/register",
             "/.well-known/oauth/register",
+            "/.well-known/oauth/registration",
             "/.well-known/openid/register",
+            "/.well-known/openid/registration",
+            "/.well-known/oauth-authorization-server/registration_endpoint",
+            "/.well-known/openid-configuration/registration_endpoint",
             "/oauth-client-registration",
             "/oauth-client-registration.json",
             "/api/oauth-client-registration",
@@ -688,16 +692,23 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET change-password after peer gained W3C well-known plate.
         change_password_paths = (
             "/.well-known/change-password",
+            "/.well-known/change-password.json",
             "/api/change-password",
             "/peer/v1/change-password",
             "/change-password",
         )
         # Residual: GET robots.txt after peer gained robots plate.
-        robots_paths = ("/robots.txt",)
+        robots_paths = (
+            "/robots.txt",
+            "/.well-known/robots.txt",
+            "/api/robots.txt",
+            "/peer/v1/robots.txt",
+        )
         # Residual: GET security.txt after peer gained RFC 9116 plate.
         security_txt_paths = (
             "/security.txt",
             "/.well-known/security.txt",
+            "/.well-known/security.json",
             "/api/security.txt",
             "/peer/v1/security.txt",
         )
@@ -705,6 +716,7 @@ class H(BaseHTTPRequestHandler):
         trust_txt_paths = (
             "/trust.txt",
             "/.well-known/trust.txt",
+            "/.well-known/trust.json",
             "/api/trust.txt",
             "/peer/v1/trust.txt",
         )
@@ -712,6 +724,7 @@ class H(BaseHTTPRequestHandler):
         keybase_txt_paths = (
             "/keybase.txt",
             "/.well-known/keybase.txt",
+            "/.well-known/keybase.json",
             "/api/keybase.txt",
             "/peer/v1/keybase.txt",
         )
@@ -776,6 +789,33 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/oauth/jwks.json",
             "/.well-known/openid/jwks",
             "/.well-known/openid/jwks.json",
+        )
+        # Residual: GET nested oauth/openid endpoint empties after peer plate.
+        oauth_endpoint_paths = (
+            "/.well-known/oauth/token",
+            "/.well-known/oauth/authorize",
+            "/.well-known/oauth/userinfo",
+            "/.well-known/oauth/revoke",
+            "/.well-known/oauth/introspect",
+            "/.well-known/oauth/device",
+            "/.well-known/oauth/device_authorization",
+            "/.well-known/openid/token",
+            "/.well-known/openid/authorize",
+            "/.well-known/openid/userinfo",
+            "/.well-known/openid/revoke",
+            "/.well-known/openid/introspect",
+            "/.well-known/openid-configuration/token",
+            "/.well-known/openid-configuration/userinfo",
+            "/.well-known/openid-configuration/revoke",
+            "/.well-known/openid-configuration/introspect",
+            "/.well-known/openid-configuration/metadata",
+            "/.well-known/oauth-authorization-server/token",
+            "/.well-known/oauth-authorization-server/userinfo",
+            "/.well-known/oauth-authorization-server/revoke",
+            "/.well-known/oauth-authorization-server/introspect",
+            "/.well-known/oauth-authorization-server/device",
+            "/.well-known/oauth-authorization-server/device_authorization",
+            "/.well-known/oauth-authorization-server/metadata",
         )
         # Residual: GET related-website-set after empty RWS plate.
         related_website_set_paths = (
@@ -1322,12 +1362,14 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
+            "/.well-known/humans.txt",
             "/api/humans.txt",
             "/peer/v1/humans.txt",
         )
         # Residual: GET sitemap after peer gained empty lab-ops sitemap plate.
         sitemap_paths = (
             "/sitemap.xml",
+            "/.well-known/sitemap.xml",
             "/sitemap_index.xml",
             "/api/sitemap.xml",
             "/peer/v1/sitemap.xml",
@@ -1335,7 +1377,10 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET llms.txt after peer gained llmstxt plate.
         llms_paths = (
             "/llms.txt",
+            "/.well-known/llms.txt",
+            "/.well-known/llm.txt",
             "/ai.txt",
+            "/.well-known/ai.txt",
             "/api/llms.txt",
             "/peer/v1/llms.txt",
         )
@@ -2098,6 +2143,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "jwks": doc},
+            )
+            return
+        if path in oauth_endpoint_paths:
+            doc = peer_json("GET", path, timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "oauth_endpoint": doc},
             )
             return
         if path in related_website_set_paths:
