@@ -624,6 +624,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server") ||
+        !strcmp(path, "/.well-known/oauth-client-registration") ||
+        !strcmp(path, "/oauth-client-registration") ||
         !strcmp(path, "/.well-known/oauth-protected-resource") ||
         !strcmp(path, "/oauth-protected-resource"))
       is_static = 0;
@@ -1607,7 +1609,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"oauth_protected_resource\",\"dnt_policy\","
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
         "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\","
-        "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\""
+        "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\","
+        "\"oauth_client_registration\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2285,6 +2288,41 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", oauth_as, sizeof oauth_as - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: OAuth/mesh probes hit /.well-known/oauth-client-registration
+   * (RFC 7591 DCR) and got not_found. Lab ops does not offer DCR — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/oauth-client-registration") == 0 ||
+       strcmp(path, "/.well-known/oauth-client-registration/") == 0 ||
+       strcmp(path, "/oauth-client-registration") == 0 ||
+       strcmp(path, "/oauth-client-registration/") == 0 ||
+       strcmp(path, "/api/oauth-client-registration") == 0 ||
+       strcmp(path, "/peer/v1/oauth-client-registration") == 0)) {
+    static const char oauth_reg[] =
+      "{"
+      "\"registration_endpoint\":\"\","
+      "\"client_id_issued_at\":0,"
+      "\"client_secret_expires_at\":0,"
+      "\"registration_client_uri\":\"\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"oauth_client_registration\","
+        "\"oauth_client_registration\":false,"
+        "\"dynamic_client_registration\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", oauth_reg, sizeof oauth_reg - 1);
     free(req); close(cfd); return;
   }
 

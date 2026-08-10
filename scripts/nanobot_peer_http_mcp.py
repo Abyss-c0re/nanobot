@@ -541,6 +541,13 @@ class H(BaseHTTPRequestHandler):
             "/api/oauth-authorization-server",
             "/peer/v1/oauth-authorization-server",
         )
+        # Residual: GET oauth-client-registration after peer gained non-DCR plate.
+        oauth_reg_paths = (
+            "/.well-known/oauth-client-registration",
+            "/oauth-client-registration",
+            "/api/oauth-client-registration",
+            "/peer/v1/oauth-client-registration",
+        )
         # Residual: GET oauth-protected-resource after peer gained RFC 9728 plate.
         oauth_pr_paths = (
             "/.well-known/oauth-protected-resource",
@@ -1033,6 +1040,18 @@ class H(BaseHTTPRequestHandler):
             )
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "oauth_as": doc}
+            )
+            return
+        if path in oauth_reg_paths:
+            # Peer serves non-DCR registration plate; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/oauth-client-registration", timeout=5
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "oauth_client_registration": doc},
             )
             return
         if path in oauth_pr_paths:
