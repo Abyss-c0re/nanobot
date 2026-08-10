@@ -405,6 +405,13 @@ class H(BaseHTTPRequestHandler):
             "/api/browserconfig.xml",
             "/peer/v1/browserconfig.xml",
         )
+        # Residual: GET change-password after peer gained W3C well-known plate.
+        change_password_paths = (
+            "/.well-known/change-password",
+            "/api/change-password",
+            "/peer/v1/change-password",
+            "/change-password",
+        )
         # Residual: GET robots.txt after peer gained robots plate.
         robots_paths = ("/robots.txt",)
         # Residual: GET security.txt after peer gained RFC 9116 plate.
@@ -696,6 +703,29 @@ class H(BaseHTTPRequestHandler):
                     "content_type": "application/xml",
                     "peer_path": "/browserconfig.xml",
                     "tile_color": "#0a0a0a",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in change_password_paths:
+            # Peer 302s to /api/auth; MCP dual-wire JSON (no local password store).
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "change_password",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "peer_path": "/.well-known/change-password",
+                    "redirect": "/api/auth",
+                    "http_status": 302,
+                    "local_password": False,
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,

@@ -575,7 +575,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/ads.txt") || !strcmp(path, "/app-ads.txt") ||
         !strcmp(path, "/crossdomain.xml") ||
         !strcmp(path, "/clientaccesspolicy.xml") ||
-        !strcmp(path, "/browserconfig.xml"))
+        !strcmp(path, "/browserconfig.xml") ||
+        !strcmp(path, "/.well-known/change-password") ||
+        !strcmp(path, "/change-password"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1550,7 +1552,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
-        "\"browserconfig\""
+        "\"browserconfig\",\"change_password\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1652,6 +1654,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "  </msapplication>\n"
       "</browserconfig>\n";
     http_response(cfd, 200, "application/xml; charset=utf-8", bcfg, sizeof bcfg - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: browsers hit /.well-known/change-password (W3C) and got not_found.
+   * No local password store — 302 to /api/auth (provider session plate). */
+  if (is_get && (strcmp(path, "/.well-known/change-password") == 0 ||
+                 strcmp(path, "/.well-known/change-password/") == 0 ||
+                 strcmp(path, "/api/change-password") == 0 ||
+                 strcmp(path, "/peer/v1/change-password") == 0 ||
+                 strcmp(path, "/change-password") == 0 ||
+                 strcmp(path, "/change-password/") == 0)) {
+    static const char hdr[] =
+      "HTTP/1.1 302 Found\r\n"
+      "Location: /api/auth\r\n"
+      "Content-Length: 0\r\n"
+      "Connection: close\r\n"
+      "Cache-Control: no-store\r\n\r\n";
+    send_all(cfd, hdr, sizeof hdr - 1);
     free(req); close(cfd); return;
   }
 
