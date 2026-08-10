@@ -255,7 +255,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known a2a dual-wire + MCP | `3ea7707`  |
 | GET well-known token-issuer-directory dual-wire + MCP | `5e9db19`  |
 | GET well-known tls-rpt dual-wire + MCP | `43872e7`  |
-| GET well-known bimi dual-wire + MCP | PENDING |
+| GET well-known bimi dual-wire + MCP | `a449bb2`  |
 ## Anti-chaos
 
 - One product bite per cycle  
