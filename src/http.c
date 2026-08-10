@@ -584,6 +584,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/openid-credential-issuer/jwks.json") ||
         !strcmp(path, "/.well-known/oauth-protected-resource/jwks") ||
         !strcmp(path, "/.well-known/oauth-protected-resource/jwks.json") ||
+        !strcmp(path, "/.well-known/uma2-configuration/jwks") ||
+        !strcmp(path, "/.well-known/uma2-configuration/jwks.json") ||
+        !strcmp(path, "/.well-known/fido2-configuration/jwks") ||
+        !strcmp(path, "/.well-known/fido2-configuration/jwks.json") ||
+        !strcmp(path, "/.well-known/webauthn/jwks") ||
+        !strcmp(path, "/.well-known/webauthn/jwks.json") ||
+        !strcmp(path, "/.well-known/openid-federation/jwks") ||
+        !strcmp(path, "/.well-known/openid-federation/jwks.json") ||
         !strcmp(path, "/.well-known/related-website-set.json") ||
         !strcmp(path, "/related-website-set.json") ||
         !strcmp(path, "/.well-known/microsoft-identity-association.json") ||
@@ -893,11 +901,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/nodeinfo") ||
         !strcmp(path, "/.well-known/nodeinfo.json") ||
         !strcmp(path, "/.well-known/nodeinfo/2.0") ||
+        !strcmp(path, "/.well-known/nodeinfo/2.0.json") ||
         !strcmp(path, "/.well-known/nodeinfo/2.1") ||
+        !strcmp(path, "/.well-known/nodeinfo/2.1.json") ||
         !strcmp(path, "/nodeinfo") ||
         !strcmp(path, "/nodeinfo.json") ||
         !strcmp(path, "/nodeinfo/2.0") ||
+        !strcmp(path, "/nodeinfo/2.0.json") ||
         !strcmp(path, "/nodeinfo/2.1") ||
+        !strcmp(path, "/nodeinfo/2.1.json") ||
         !strcmp(path, "/.well-known/host-meta") ||
         !strcmp(path, "/.well-known/host-meta.json") ||
         !strcmp(path, "/host-meta") ||
@@ -2531,13 +2543,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/nodeinfo.json") == 0 ||
                  strcmp(path, "/.well-known/nodeinfo/2.0") == 0 ||
                  strcmp(path, "/.well-known/nodeinfo/2.0/") == 0 ||
+                 strcmp(path, "/.well-known/nodeinfo/2.0.json") == 0 ||
                  strcmp(path, "/.well-known/nodeinfo/2.1") == 0 ||
                  strcmp(path, "/.well-known/nodeinfo/2.1/") == 0 ||
+                 strcmp(path, "/.well-known/nodeinfo/2.1.json") == 0 ||
                  strcmp(path, "/nodeinfo") == 0 ||
                  strcmp(path, "/nodeinfo/") == 0 ||
                  strcmp(path, "/nodeinfo.json") == 0 ||
                  strcmp(path, "/nodeinfo/2.0") == 0 ||
+                 strcmp(path, "/nodeinfo/2.0.json") == 0 ||
                  strcmp(path, "/nodeinfo/2.1") == 0 ||
+                 strcmp(path, "/nodeinfo/2.1.json") == 0 ||
                  strcmp(path, "/api/nodeinfo") == 0 ||
                  strcmp(path, "/peer/v1/nodeinfo") == 0)) {
     static const char ni[] =
@@ -3347,7 +3363,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/openid-credential-issuer/jwks") == 0 ||
                  strcmp(path, "/.well-known/openid-credential-issuer/jwks.json") == 0 ||
                  strcmp(path, "/.well-known/oauth-protected-resource/jwks") == 0 ||
-                 strcmp(path, "/.well-known/oauth-protected-resource/jwks.json") == 0)) {
+                 strcmp(path, "/.well-known/oauth-protected-resource/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/uma2-configuration/jwks") == 0 ||
+                 strcmp(path, "/.well-known/uma2-configuration/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/fido2-configuration/jwks") == 0 ||
+                 strcmp(path, "/.well-known/fido2-configuration/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/webauthn/jwks") == 0 ||
+                 strcmp(path, "/.well-known/webauthn/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/openid-federation/jwks") == 0 ||
+                 strcmp(path, "/.well-known/openid-federation/jwks.json") == 0)) {
     static const char jwks[] =
       "{"
       "\"keys\":[],"

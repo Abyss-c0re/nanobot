@@ -268,6 +268,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known mercure/core/gnap/traffic/http-opp .json alias dual-wire + MCP | `58479cd`  |
 | GET well-known nested-jwks/csaf/stellar.toml .json alias dual-wire + MCP | `af428bb`  |
 | GET well-known oid4vci-pr-jwks + nodeinfo/2.x dual-wire + MCP | `45cee9d`  |
+| GET well-known uma/fido/webauthn/fed jwks + nodeinfo/2.x.json dual-wire + MCP | `82aebb0`  |
 ## Anti-chaos
 
 - One product bite per cycle  
