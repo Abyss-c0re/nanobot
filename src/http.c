@@ -669,12 +669,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  /* Residual: trailing slash 404 on /api/auth while bare path worked (mesh probes). */
+  /* Residual: trailing slash 404 on /api/auth while bare path worked (mesh probes).
+   * Residual: /whoami|/api/whoami|/peer/v1/whoami not_found — identity probes. */
   if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/auth/") == 0 ||
                  strcmp(path, "/api/status") == 0 || strcmp(path, "/api/status/") == 0 ||
                  strcmp(path, "/peer/v1/auth") == 0 || strcmp(path, "/peer/v1/auth/") == 0 ||
                  strcmp(path, "/peer/v1/status") == 0 ||
-                 strcmp(path, "/peer/v1/status/") == 0)) {
+                 strcmp(path, "/peer/v1/status/") == 0 ||
+                 strcmp(path, "/whoami") == 0 || strcmp(path, "/whoami/") == 0 ||
+                 strcmp(path, "/api/whoami") == 0 || strcmp(path, "/api/whoami/") == 0 ||
+                 strcmp(path, "/peer/v1/whoami") == 0 ||
+                 strcmp(path, "/peer/v1/whoami/") == 0)) {
     int need_browser = agent && ng_agent_needs_browser_session(agent);
     /* Soft-expired access_token still counts as signed-in after a successful refresh.
      * Skip ensure while device-login is pending — refresh cannot help and spam-logs
@@ -703,14 +708,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
      * use login_required / signed_in — not needs_browser — or they thrash Connect.
      * Dual-wire nanobot.auth.v1 — machine fields only (no free-text essays). */
     int login_required = need_browser && !signed_in;
+    int is_whoami = (strcmp(path, "/whoami") == 0 || strcmp(path, "/whoami/") == 0 ||
+                     strcmp(path, "/api/whoami") == 0 || strcmp(path, "/api/whoami/") == 0 ||
+                     strcmp(path, "/peer/v1/whoami") == 0 ||
+                     strcmp(path, "/peer/v1/whoami/") == 0);
+    const char *act = is_whoami ? "whoami" : "status";
     int n = snprintf(body, sizeof body,
-      "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"action\":\"status\","
+      "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"action\":\"%s\","
       "\"version\":\"%s\",\"model\":\"%s\",\"signed_in\":%s,"
       "\"login_pending\":%s,\"login_required\":%s,\"user_code\":\"%s\","
       "\"verification_uri\":\"%s\",\"verification_uri_complete\":\"%s\","
       "\"workdir\":\"%s\",\"auth\":\"%s\",\"backend\":\"%s\","
       "\"base_url\":\"%s\",\"needs_browser\":%s,\"transport\":\"http\","
       NG_PEER_HTTP_DUAL_WIRE "}",
+      act,
       ver_esc ? ver_esc : "",
       model_esc ? model_esc : "",
       signed_in ? "true" : "false",

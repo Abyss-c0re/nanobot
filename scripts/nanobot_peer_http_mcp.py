@@ -306,12 +306,14 @@ class H(BaseHTTPRequestHandler):
             "/api/v1/resources",
             "/api/resources",
         )
+        # Residual: GET /whoami dual-wire after peer gained whoami plate.
         auth_paths = (
             "/api/auth",
             "/api/status",
             "/peer/v1/auth",
             "/peer/v1/status",
         )
+        whoami_paths = ("/whoami", "/api/whoami", "/peer/v1/whoami")
         activate_paths = ("/activate",)
         # Residual: bare /settings after peer gained bare settings plate.
         settings_paths = ("/api/settings", "/peer/v1/settings", "/settings")
@@ -371,6 +373,12 @@ class H(BaseHTTPRequestHandler):
             auth = peer_json("GET", "/api/auth", timeout=5)
             self._send(
                 200, auth if isinstance(auth, dict) else {"ok": False, "auth": auth}
+            )
+            return
+        if path in whoami_paths:
+            who = peer_json("GET", "/api/whoami", timeout=5)
+            self._send(
+                200, who if isinstance(who, dict) else {"ok": False, "whoami": who}
             )
             return
         if path in activate_paths:
