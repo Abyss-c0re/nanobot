@@ -920,6 +920,15 @@ class H(BaseHTTPRequestHandler):
             "/api/looking-glass",
             "/peer/v1/looking-glass",
         )
+        # Residual: GET genid after empty named-information plate.
+        genid_paths = (
+            "/.well-known/genid",
+            "/.well-known/genid.json",
+            "/genid",
+            "/genid.json",
+            "/api/genid",
+            "/peer/v1/genid",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1931,6 +1940,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "looking_glass": doc},
+            )
+            return
+        if path in genid_paths:
+            doc = peer_json("GET", "/.well-known/genid", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "genid": doc},
             )
             return
         if path in humans_paths:
