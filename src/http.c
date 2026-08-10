@@ -578,6 +578,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/sshfp.json") || !strcmp(path, "/.well-known/sshfp.json") ||
         !strcmp(path, "/jwks.json") || !strcmp(path, "/.well-known/jwks.json") ||
         !strcmp(path, "/jwks") || !strcmp(path, "/.well-known/jwks") ||
+        !strcmp(path, "/.well-known/openid-configuration/jwks.json") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/jwks.json") ||
         !strcmp(path, "/.well-known/related-website-set.json") ||
         !strcmp(path, "/related-website-set.json") ||
         !strcmp(path, "/.well-known/microsoft-identity-association.json") ||
@@ -588,7 +590,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/nostr.json") || !strcmp(path, "/nostr") ||
         !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/.well-known/atproto-did.json") ||
         !strcmp(path, "/atproto-did") || !strcmp(path, "/atproto-did.json") ||
-        !strcmp(path, "/.well-known/stellar.toml") || !strcmp(path, "/stellar.toml") ||
+        !strcmp(path, "/.well-known/stellar.toml") || !strcmp(path, "/.well-known/stellar.toml.json") ||
+        !strcmp(path, "/stellar.toml") || !strcmp(path, "/stellar.toml.json") ||
         !strcmp(path, "/.well-known/web-identity") || !strcmp(path, "/.well-known/web-identity.json") ||
         !strcmp(path, "/web-identity") || !strcmp(path, "/web-identity.json") ||
         !strncmp(path, "/.well-known/posh", 16) || !strncmp(path, "/posh", 5) ||
@@ -3324,7 +3327,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/peer/v1/jwks.json") == 0 ||
                  strcmp(path, "/peer/v1/jwks") == 0 ||
                  strcmp(path, "/.well-known/oauth-authorization-server/jwks") == 0 ||
-                 strcmp(path, "/.well-known/openid-configuration/jwks") == 0)) {
+                 strcmp(path, "/.well-known/oauth-authorization-server/jwks.json") == 0 ||
+                 strcmp(path, "/.well-known/openid-configuration/jwks") == 0 ||
+                 strcmp(path, "/.well-known/openid-configuration/jwks.json") == 0)) {
     static const char jwks[] =
       "{"
       "\"keys\":[],"
@@ -3524,8 +3529,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/stellar.toml") == 0 ||
        strcmp(path, "/.well-known/stellar.toml/") == 0 ||
+       strcmp(path, "/.well-known/stellar.toml.json") == 0 ||
        strcmp(path, "/stellar.toml") == 0 ||
        strcmp(path, "/stellar.toml/") == 0 ||
+       strcmp(path, "/stellar.toml.json") == 0 ||
        strcmp(path, "/api/stellar.toml") == 0 ||
        strcmp(path, "/peer/v1/stellar.toml") == 0)) {
     static const char st[] =
@@ -3925,8 +3932,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/csaf/provider-metadata.json/") == 0 ||
        strcmp(path, "/.well-known/csaf") == 0 ||
        strcmp(path, "/.well-known/csaf/") == 0 ||
+       strcmp(path, "/.well-known/csaf.json") == 0 ||
        strcmp(path, "/csaf/provider-metadata.json") == 0 ||
        strcmp(path, "/csaf/provider-metadata.json/") == 0 ||
+       strcmp(path, "/csaf.json") == 0 ||
        strcmp(path, "/api/csaf/provider-metadata.json") == 0 ||
        strcmp(path, "/api/csaf") == 0 ||
        strcmp(path, "/peer/v1/csaf/provider-metadata.json") == 0 ||

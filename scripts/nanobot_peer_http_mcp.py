@@ -735,7 +735,9 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/jwks.json",
             "/peer/v1/jwks",
             "/.well-known/oauth-authorization-server/jwks",
+            "/.well-known/oauth-authorization-server/jwks.json",
             "/.well-known/openid-configuration/jwks",
+            "/.well-known/openid-configuration/jwks.json",
         )
         # Residual: GET related-website-set after empty RWS plate.
         related_website_set_paths = (
@@ -781,7 +783,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET stellar.toml after empty SEP-0001 plate.
         stellar_toml_paths = (
             "/.well-known/stellar.toml",
+            "/.well-known/stellar.toml.json",
             "/stellar.toml",
+            "/stellar.toml.json",
             "/api/stellar.toml",
             "/peer/v1/stellar.toml",
         )
@@ -890,7 +894,9 @@ class H(BaseHTTPRequestHandler):
         csaf_paths = (
             "/.well-known/csaf/provider-metadata.json",
             "/.well-known/csaf",
+            "/.well-known/csaf.json",
             "/csaf/provider-metadata.json",
+            "/csaf.json",
             "/api/csaf/provider-metadata.json",
             "/api/csaf",
             "/peer/v1/csaf/provider-metadata.json",

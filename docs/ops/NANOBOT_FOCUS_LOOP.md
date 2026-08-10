@@ -266,6 +266,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known tdmrep/gpc/ai-plugin/assetlinks extensionless dual-wire + MCP | `4f8fdb6`  |
 | GET well-known caldav/carddav/web-identity/atproto .json alias dual-wire + MCP | `686974f`  |
 | GET well-known mercure/core/gnap/traffic/http-opp .json alias dual-wire + MCP | `58479cd`  |
+| GET well-known nested-jwks/csaf/stellar.toml .json alias dual-wire + MCP | `27f91c7`  |
 ## Anti-chaos
 
 - One product bite per cycle  
