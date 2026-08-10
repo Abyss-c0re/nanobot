@@ -571,7 +571,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
         !strcmp(path, "/sitemap_index.xml") ||
         !strcmp(path, "/llms.txt") || !strcmp(path, "/ai.txt") ||
-        !strcmp(path, "/service-worker.js") || !strcmp(path, "/sw.js"))
+        !strcmp(path, "/service-worker.js") || !strcmp(path, "/sw.js") ||
+        !strcmp(path, "/ads.txt") || !strcmp(path, "/app-ads.txt"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1545,7 +1546,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
-        "\"favicon\",\"service_worker\""
+        "\"favicon\",\"service_worker\",\"ads\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1590,6 +1591,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "});\n";
     http_response(cfd, 200, "application/javascript; charset=utf-8", swjs,
                   sizeof swjs - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: crawler/mesh probes hit /ads.txt|/app-ads.txt and got not_found.
+   * Lab ops peer has no authorized ad sellers (IAB ads.txt / app-ads.txt). */
+  if (is_get && (strcmp(path, "/ads.txt") == 0 || strcmp(path, "/ads.txt/") == 0 ||
+                 strcmp(path, "/app-ads.txt") == 0 ||
+                 strcmp(path, "/app-ads.txt/") == 0 ||
+                 strcmp(path, "/api/ads.txt") == 0 ||
+                 strcmp(path, "/peer/v1/ads.txt") == 0 ||
+                 strcmp(path, "/api/app-ads.txt") == 0 ||
+                 strcmp(path, "/peer/v1/app-ads.txt") == 0)) {
+    static const char adstxt[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "# No authorized digital sellers. This is not a public ad inventory site.\n"
+      "# CONTACT=https://github.com/Abyss-c0re/nanobot/security/advisories/new\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", adstxt, sizeof adstxt - 1);
     free(req); close(cfd); return;
   }
 

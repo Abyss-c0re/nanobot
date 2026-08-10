@@ -383,6 +383,15 @@ class H(BaseHTTPRequestHandler):
             "/api/sw.js",
             "/peer/v1/sw.js",
         )
+        # Residual: GET ads.txt after peer gained no-sellers plate.
+        ads_paths = (
+            "/ads.txt",
+            "/app-ads.txt",
+            "/api/ads.txt",
+            "/peer/v1/ads.txt",
+            "/api/app-ads.txt",
+            "/peer/v1/app-ads.txt",
+        )
         # Residual: GET robots.txt after peer gained robots plate.
         robots_paths = ("/robots.txt",)
         # Residual: GET security.txt after peer gained RFC 9116 plate.
@@ -607,6 +616,29 @@ class H(BaseHTTPRequestHandler):
                     "peer_path": "/service-worker.js",
                     "pwa": False,
                     "behavior": "unregister_on_activate",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in ads_paths:
+            # Peer serves text/plain no-sellers; MCP dual-wire JSON.
+            peer_path = "/app-ads.txt" if "app-ads" in path else "/ads.txt"
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "ads",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": peer_path,
+                    "authorized_sellers": 0,
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,
