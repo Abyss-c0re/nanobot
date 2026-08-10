@@ -337,6 +337,12 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/openapi.yaml",
         )
         favicon_paths = ("/favicon.ico", "/favicon")
+        # Residual: GET capabilities dual-wire after peer gained capabilities plate.
+        capabilities_paths = (
+            "/capabilities",
+            "/api/capabilities",
+            "/peer/v1/capabilities",
+        )
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -456,6 +462,12 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/openapi.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "openapi": doc}
+            )
+            return
+        if path in capabilities_paths:
+            cap = peer_json("GET", "/api/capabilities", timeout=5)
+            self._send(
+                200, cap if isinstance(cap, dict) else {"ok": False, "capabilities": cap}
             )
             return
         if path in favicon_paths:

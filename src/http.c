@@ -1403,6 +1403,41 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh capability probes hit /capabilities|/api/capabilities|
+   * /peer/v1/capabilities and got not_found while info/tools already exist. */
+  if (is_get && (strcmp(path, "/capabilities") == 0 || strcmp(path, "/capabilities/") == 0 ||
+                 strcmp(path, "/api/capabilities") == 0 ||
+                 strcmp(path, "/api/capabilities/") == 0 ||
+                 strcmp(path, "/peer/v1/capabilities") == 0 ||
+                 strcmp(path, "/peer/v1/capabilities/") == 0)) {
+    char body[1400];
+    char *ver = ng_json_escape(NG_VERSION);
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"capabilities\","
+      "\"service\":\"nanobot-peer\",\"version\":\"%s\","
+      "\"tools\":[\"prompt\",\"shell\"],"
+      "\"methods\":[\"GET\",\"POST\",\"OPTIONS\"],"
+      "\"features\":{"
+        "\"peer_http\":true,"
+        "\"async_jobs\":true,"
+        "\"shell\":true,"
+        "\"prompt\":true,"
+        "\"openapi\":true,"
+        "\"metrics\":true,"
+        "\"whoami\":true,"
+        "\"braincube\":true"
+      "},"
+      "\"discovery\":["
+        "\"/peer/v1/health\",\"/peer/v1/info\",\"/openapi.json\","
+        "\"/version\",\"/metrics\",\"/whoami\",\"/capabilities\""
+      "],"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ver ? ver : "");
+    free(ver);
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: mesh/browser probes hit /favicon.ico and got not_found (noisy 404
    * without www_root). Serve a tiny cyan-cube SVG so probes stay quiet. */
   if (is_get && (strcmp(path, "/favicon.ico") == 0 || strcmp(path, "/favicon.ico/") == 0 ||
