@@ -1239,11 +1239,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* ---- Peer bus for other agents / sessions (lab/ops; product bus = SMX2) ---- */
-  /* /health + /ready: mesh focus loops probe these; same plate, distinct action.
+  /* /health + /ready + /ping: mesh focus loops probe these; same plate, distinct action.
    * Residual: /ready reused action=health → probes could not tell paths apart.
    * Residual: /peer/v1/ready was 404 while bare /ready worked — peer-namespace alias.
    * Residual: /api/health|/api/ready 404 — API-namespace clients (OpenAPI-ish).
-   * Residual: trailing slash on health/ready 404 after resources/models gained slash. */
+   * Residual: trailing slash on health/ready 404 after resources/models gained slash.
+   * Residual: /ping|/api/ping|/peer/v1/ping not_found while health already lives. */
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
                  strcmp(path, "/peer/v1/health/") == 0 ||
                  strcmp(path, "/health") == 0 ||
@@ -1255,7 +1256,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/peer/v1/ready") == 0 ||
                  strcmp(path, "/peer/v1/ready/") == 0 ||
                  strcmp(path, "/api/ready") == 0 ||
-                 strcmp(path, "/api/ready/") == 0)) {
+                 strcmp(path, "/api/ready/") == 0 ||
+                 strcmp(path, "/ping") == 0 ||
+                 strcmp(path, "/ping/") == 0 ||
+                 strcmp(path, "/api/ping") == 0 ||
+                 strcmp(path, "/api/ping/") == 0 ||
+                 strcmp(path, "/peer/v1/ping") == 0 ||
+                 strcmp(path, "/peer/v1/ping/") == 0)) {
     char body[640];
     char *ver = ng_json_escape(NG_VERSION);
     int jn = jobs_meta_count();
@@ -1265,7 +1272,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                     strcmp(path, "/peer/v1/ready/") == 0 ||
                     strcmp(path, "/api/ready") == 0 ||
                     strcmp(path, "/api/ready/") == 0);
-    const char *act = is_ready ? "ready" : "health";
+    int is_ping = (strcmp(path, "/ping") == 0 ||
+                   strcmp(path, "/ping/") == 0 ||
+                   strcmp(path, "/api/ping") == 0 ||
+                   strcmp(path, "/api/ping/") == 0 ||
+                   strcmp(path, "/peer/v1/ping") == 0 ||
+                   strcmp(path, "/peer/v1/ping/") == 0);
+    const char *act = is_ready ? "ready" : (is_ping ? "ping" : "health");
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
       "\"service\":\"nanobot-peer\",\"version\":\"%s\",\"role\":\"session-bus\","
