@@ -196,6 +196,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known webauthn dual-wire + MCP | `7a72967`  |
 | GET well-known did.json dual-wire + MCP | `b976d6c`  |
 | GET well-known did-configuration dual-wire + MCP | `d2efacd`  |
+| GET well-known trust.txt dual-wire + MCP | `c9cecd8`  |
 ## Anti-chaos
 
 - One product bite per cycle  
