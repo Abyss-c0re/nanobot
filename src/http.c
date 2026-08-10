@@ -600,6 +600,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/resource-that-should-not-be-used-for-federation") ||
         !strncmp(path, "/.well-known/appspecific/", 25) ||
         !strcmp(path, "/com.chrome.devtools.json") ||
+        !strcmp(path, "/.well-known/http-opportunistic") ||
+        !strcmp(path, "/http-opportunistic") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1660,7 +1662,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -3367,6 +3369,39 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", cdt, sizeof cdt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes hit /.well-known/http-opportunistic (RFC 8164)
+   * and got not_found. Lab ops does not advertise opportunistic HTTP origins. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/http-opportunistic") == 0 ||
+       strcmp(path, "/.well-known/http-opportunistic/") == 0 ||
+       strcmp(path, "/http-opportunistic") == 0 ||
+       strcmp(path, "/http-opportunistic/") == 0 ||
+       strcmp(path, "/api/http-opportunistic") == 0 ||
+       strcmp(path, "/peer/v1/http-opportunistic") == 0)) {
+    static const char hop[] =
+      "{"
+      "\"origins\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"http_opportunistic\","
+      "\"http_opportunistic\":false,"
+      "\"rfc8164\":true,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", hop, sizeof hop - 1);
     free(req); close(cfd); return;
   }
 

@@ -788,6 +788,13 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/com.chrome.devtools.json",
             "/peer/v1/chrome-devtools",
         )
+        # Residual: GET http-opportunistic after empty RFC 8164 plate.
+        http_opportunistic_paths = (
+            "/.well-known/http-opportunistic",
+            "/http-opportunistic",
+            "/api/http-opportunistic",
+            "/peer/v1/http-opportunistic",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1690,6 +1697,15 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "chrome_devtools": doc},
+            )
+            return
+        if path in http_opportunistic_paths:
+            doc = peer_json("GET", "/.well-known/http-opportunistic", timeout=5)
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "http_opportunistic": doc},
             )
             return
         if path in humans_paths:
