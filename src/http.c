@@ -767,6 +767,22 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/web-app-origin-association.json") ||
         !strcmp(path, "/api/web-app-origin-association") ||
         !strcmp(path, "/peer/v1/web-app-origin-association") ||
+        !strcmp(path, "/.well-known/doq") ||
+        !strncmp(path, "/.well-known/doq/", 16) ||
+        !strcmp(path, "/.well-known/doq.json") ||
+        !strcmp(path, "/.well-known/dns-query") ||
+        !strncmp(path, "/.well-known/dns-query/", 22) ||
+        !strcmp(path, "/.well-known/dns-query.json") ||
+        !strcmp(path, "/doq") ||
+        !strncmp(path, "/doq/", 5) ||
+        !strcmp(path, "/doq.json") ||
+        !strcmp(path, "/dns-query") ||
+        !strncmp(path, "/dns-query/", 11) ||
+        !strcmp(path, "/dns-query.json") ||
+        !strcmp(path, "/api/doq") ||
+        !strcmp(path, "/peer/v1/doq") ||
+        !strcmp(path, "/api/dns-query") ||
+        !strcmp(path, "/peer/v1/dns-query") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1827,7 +1843,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\",\"web_bot_auth\",\"sbom\",\"privacy_pass\",\"ohttp_gateway\",\"masque\",\"doh\",\"bluesky\",\"solid\",\"web_app_origin_association\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\",\"web_bot_auth\",\"sbom\",\"privacy_pass\",\"ohttp_gateway\",\"masque\",\"doh\",\"bluesky\",\"solid\",\"web_app_origin_association\",\"doq\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -4883,6 +4899,54 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", waoa, sizeof waoa - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/DNS probes hit /.well-known/doq|dns-query and got not_found.
+   * Lab ops is not a DoQ / DNS-over-HTTP(S) resolver (RFC 9250) — empty plate
+   * (see doh|dot empty plate). */
+  if (is_get &&
+      (strcmp(path, "/.well-known/doq") == 0 ||
+       strcmp(path, "/.well-known/doq/") == 0 ||
+       strncmp(path, "/.well-known/doq/", 16) == 0 ||
+       strcmp(path, "/.well-known/doq.json") == 0 ||
+       strcmp(path, "/.well-known/dns-query") == 0 ||
+       strcmp(path, "/.well-known/dns-query/") == 0 ||
+       strncmp(path, "/.well-known/dns-query/", 22) == 0 ||
+       strcmp(path, "/.well-known/dns-query.json") == 0 ||
+       strcmp(path, "/doq") == 0 ||
+       strcmp(path, "/doq/") == 0 ||
+       strcmp(path, "/doq.json") == 0 ||
+       strcmp(path, "/dns-query") == 0 ||
+       strcmp(path, "/dns-query/") == 0 ||
+       strcmp(path, "/dns-query.json") == 0 ||
+       strcmp(path, "/api/doq") == 0 ||
+       strcmp(path, "/peer/v1/doq") == 0 ||
+       strcmp(path, "/api/dns-query") == 0 ||
+       strcmp(path, "/peer/v1/dns-query") == 0)) {
+    static const char doq[] =
+      "{"
+      "\"doq\":[],"
+      "\"dns_query\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"doq\","
+      "\"doq\":false,"
+      "\"dns_query\":false,"
+      "\"dns_over_quic\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", doq, sizeof doq - 1);
     free(req); close(cfd); return;
   }
 

@@ -1116,6 +1116,21 @@ class H(BaseHTTPRequestHandler):
             "/api/web-app-origin-association",
             "/peer/v1/web-app-origin-association",
         )
+        # Residual: GET doq|dns-query after empty DoQ plate (RFC 9250).
+        doq_paths = (
+            "/.well-known/doq",
+            "/.well-known/doq.json",
+            "/.well-known/dns-query",
+            "/.well-known/dns-query.json",
+            "/doq",
+            "/doq.json",
+            "/dns-query",
+            "/dns-query.json",
+            "/api/doq",
+            "/peer/v1/doq",
+            "/api/dns-query",
+            "/peer/v1/dns-query",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2280,6 +2295,13 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "web_app_origin_association": doc},
+            )
+            return
+        if path in doq_paths:
+            doc = peer_json("GET", "/.well-known/doq", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "doq": doc},
             )
             return
         if path in humans_paths:
