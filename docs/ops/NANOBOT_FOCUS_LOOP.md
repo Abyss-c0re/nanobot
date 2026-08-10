@@ -269,7 +269,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known nested-jwks/csaf/stellar.toml .json alias dual-wire + MCP | `af428bb`  |
 | GET well-known oid4vci-pr-jwks + nodeinfo/2.x dual-wire + MCP | `45cee9d`  |
 | GET well-known uma/fido/webauthn/fed jwks + nodeinfo/2.x.json dual-wire + MCP | `7f3d2f8`  |
-| GET well-known oauth-register + apple-merchant.json + passkey/did jwks dual-wire + MCP | `9d2c710`  |
+| GET well-known oauth-register + apple-merchant.json + passkey/did jwks dual-wire + MCP | `5d80a7c`  |
 ## Anti-chaos
 
 - One product bite per cycle  
