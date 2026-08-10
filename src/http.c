@@ -892,7 +892,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/agent-card.json") ||
         !strcmp(path, "/agent.json") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
+        !strcmp(path, "/.well-known/openid-configuration.json") ||
         !strcmp(path, "/openid-configuration") ||
+        !strcmp(path, "/openid-configuration.json") ||
         !strcmp(path, "/.well-known/openid-federation") ||
         !strcmp(path, "/openid-federation") ||
         !strcmp(path, "/.well-known/uma2-configuration") ||
@@ -908,11 +910,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/did-configuration") ||
         !strcmp(path, "/did-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server.json") ||
         !strcmp(path, "/oauth-authorization-server") ||
+        !strcmp(path, "/oauth-authorization-server.json") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
         !strcmp(path, "/oauth-client-registration") ||
         !strcmp(path, "/.well-known/oauth-protected-resource") ||
-        !strcmp(path, "/oauth-protected-resource"))
+        !strcmp(path, "/.well-known/oauth-protected-resource.json") ||
+        !strcmp(path, "/oauth-protected-resource") ||
+        !strcmp(path, "/oauth-protected-resource.json"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -2553,8 +2559,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/openid-configuration") == 0 ||
        strcmp(path, "/.well-known/openid-configuration/") == 0 ||
+       strcmp(path, "/.well-known/openid-configuration.json") == 0 ||
        strcmp(path, "/openid-configuration") == 0 ||
        strcmp(path, "/openid-configuration/") == 0 ||
+       strcmp(path, "/openid-configuration.json") == 0 ||
        strcmp(path, "/api/openid-configuration") == 0 ||
        strcmp(path, "/peer/v1/openid-configuration") == 0)) {
     static const char oidc[] =
@@ -2858,8 +2866,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/oauth-authorization-server") == 0 ||
        strcmp(path, "/.well-known/oauth-authorization-server/") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server.json") == 0 ||
        strcmp(path, "/oauth-authorization-server") == 0 ||
        strcmp(path, "/oauth-authorization-server/") == 0 ||
+       strcmp(path, "/oauth-authorization-server.json") == 0 ||
        strcmp(path, "/api/oauth-authorization-server") == 0 ||
        strcmp(path, "/peer/v1/oauth-authorization-server") == 0)) {
     static const char oauth_as[] =
@@ -2934,8 +2944,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/oauth-protected-resource") == 0 ||
        strcmp(path, "/.well-known/oauth-protected-resource/") == 0 ||
+       strcmp(path, "/.well-known/oauth-protected-resource.json") == 0 ||
        strcmp(path, "/oauth-protected-resource") == 0 ||
        strcmp(path, "/oauth-protected-resource/") == 0 ||
+       strcmp(path, "/oauth-protected-resource.json") == 0 ||
        strcmp(path, "/api/oauth-protected-resource") == 0 ||
        strcmp(path, "/peer/v1/oauth-protected-resource") == 0)) {
     static const char oauth_pr[] =

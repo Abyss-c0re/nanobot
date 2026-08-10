@@ -534,7 +534,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET openid-configuration after peer gained non-OP plate.
         openid_paths = (
             "/.well-known/openid-configuration",
+            "/.well-known/openid-configuration.json",
             "/openid-configuration",
+            "/openid-configuration.json",
             "/api/openid-configuration",
             "/peer/v1/openid-configuration",
         )
@@ -590,7 +592,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
+            "/.well-known/oauth-authorization-server.json",
             "/oauth-authorization-server",
+            "/oauth-authorization-server.json",
             "/api/oauth-authorization-server",
             "/peer/v1/oauth-authorization-server",
         )
@@ -604,7 +608,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET oauth-protected-resource after peer gained RFC 9728 plate.
         oauth_pr_paths = (
             "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-protected-resource.json",
             "/oauth-protected-resource",
+            "/oauth-protected-resource.json",
             "/api/oauth-protected-resource",
             "/peer/v1/oauth-protected-resource",
         )
