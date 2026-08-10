@@ -563,7 +563,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openapi") || !strcmp(path, "/favicon.ico") ||
         !strcmp(path, "/favicon") || !strcmp(path, "/swagger.json") ||
         !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
-        !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt"))
+        !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
+        !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1533,6 +1534,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "User-agent: *\n"
       "Disallow: /\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", robots, sizeof robots - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/security scanners hit /security.txt and
+   * /.well-known/security.txt (RFC 9116) and got not_found. */
+  if (is_get && (strcmp(path, "/security.txt") == 0 ||
+                 strcmp(path, "/security.txt/") == 0 ||
+                 strcmp(path, "/.well-known/security.txt") == 0 ||
+                 strcmp(path, "/.well-known/security.txt/") == 0 ||
+                 strcmp(path, "/api/security.txt") == 0 ||
+                 strcmp(path, "/peer/v1/security.txt") == 0)) {
+    static const char sectxt[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "Contact: https://github.com/Abyss-c0re/nanobot/security/advisories/new\n"
+      "Policy: https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md\n"
+      "Preferred-Languages: en\n"
+      "Canonical: https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", sectxt, sizeof sectxt - 1);
     free(req); close(cfd); return;
   }
 

@@ -367,6 +367,13 @@ class H(BaseHTTPRequestHandler):
         favicon_paths = ("/favicon.ico", "/favicon")
         # Residual: GET robots.txt after peer gained robots plate.
         robots_paths = ("/robots.txt",)
+        # Residual: GET security.txt after peer gained RFC 9116 plate.
+        security_txt_paths = (
+            "/security.txt",
+            "/.well-known/security.txt",
+            "/api/security.txt",
+            "/peer/v1/security.txt",
+        )
         # Residual: GET capabilities dual-wire after peer gained capabilities plate.
         capabilities_paths = (
             "/capabilities",
@@ -539,6 +546,28 @@ class H(BaseHTTPRequestHandler):
                     "content_type": "text/plain",
                     "peer_path": "/robots.txt",
                     "disallow": "/",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in security_txt_paths:
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "security_txt",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/.well-known/security.txt",
+                    "contact": "https://github.com/Abyss-c0re/nanobot/security/advisories/new",
+                    "policy": "https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,
