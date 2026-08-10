@@ -1098,6 +1098,15 @@ class H(BaseHTTPRequestHandler):
             "/api/bluesky",
             "/peer/v1/bluesky",
         )
+        # Residual: GET solid after empty Solid Pod plate.
+        solid_paths = (
+            "/.well-known/solid",
+            "/.well-known/solid.json",
+            "/solid",
+            "/solid.json",
+            "/api/solid",
+            "/peer/v1/solid",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2244,6 +2253,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "bluesky": doc},
+            )
+            return
+        if path in solid_paths:
+            doc = peer_json("GET", "/.well-known/solid", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "solid": doc},
             )
             return
         if path in humans_paths:
