@@ -140,6 +140,7 @@ cd ~/Dev/AI/nanobot
 | GET settings plate + MCP proxy | `875fff5`  |
 | GET version dual-wire + MCP proxy | `a60d122`  |
 | GET mcp/servers slash + MCP proxy | `7f3dbbc`  |
+| GET log dual-wire + MCP proxy | `cf08e49`  |
 
 ## Anti-chaos
 
