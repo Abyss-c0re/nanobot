@@ -374,6 +374,19 @@ class H(BaseHTTPRequestHandler):
             "/api/security.txt",
             "/peer/v1/security.txt",
         )
+        # Residual: GET humans.txt after peer gained humans plate.
+        humans_paths = (
+            "/humans.txt",
+            "/api/humans.txt",
+            "/peer/v1/humans.txt",
+        )
+        # Residual: GET sitemap after peer gained empty lab-ops sitemap plate.
+        sitemap_paths = (
+            "/sitemap.xml",
+            "/sitemap_index.xml",
+            "/api/sitemap.xml",
+            "/peer/v1/sitemap.xml",
+        )
         # Residual: GET manifest after peer gained web app manifest plate.
         manifest_paths = (
             "/manifest.json",
@@ -584,6 +597,52 @@ class H(BaseHTTPRequestHandler):
                     "peer_path": "/.well-known/security.txt",
                     "contact": "https://github.com/Abyss-c0re/nanobot/security/advisories/new",
                     "policy": "https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in humans_paths:
+            # Peer serves text/plain; MCP mesh probes want dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "humans",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/humans.txt",
+                    "maintainer": "Abyss-c0re",
+                    "site": "https://github.com/Abyss-c0re/nanobot",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in sitemap_paths:
+            # Peer serves empty urlset XML; MCP mesh probes want dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "sitemap",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "application/xml",
+                    "peer_path": "/sitemap.xml",
+                    "urls": 0,
+                    "robots_disallow": "/",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,

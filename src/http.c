@@ -566,7 +566,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
         !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
-        !strcmp(path, "/site.webmanifest"))
+        !strcmp(path, "/site.webmanifest") ||
+        !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
+        !strcmp(path, "/sitemap_index.xml"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1538,7 +1540,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"actions\":["
         "\"health\",\"ready\",\"ping\",\"livez\",\"readyz\",\"healthz\","
         "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
-        "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\""
+        "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
+        "\"robots\",\"security_txt\",\"humans\",\"sitemap\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1587,6 +1590,49 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "Preferred-Languages: en\n"
       "Canonical: https://github.com/Abyss-c0re/nanobot/blob/main/SECURITY.md\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", sectxt, sizeof sectxt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: crawler/mesh probes hit /humans.txt and got not_found.
+   * humanstxt.org plate — lab ops peer credits + public surface pointers only. */
+  if (is_get && (strcmp(path, "/humans.txt") == 0 || strcmp(path, "/humans.txt/") == 0 ||
+                 strcmp(path, "/api/humans.txt") == 0 ||
+                 strcmp(path, "/peer/v1/humans.txt") == 0)) {
+    static const char humans[] =
+      "/* TEAM */\n"
+      "Maintainer: Abyss-c0re\n"
+      "Site: https://github.com/Abyss-c0re/nanobot\n"
+      "\n"
+      "/* THANKS */\n"
+      "Community: peer mesh operators\n"
+      "\n"
+      "/* SITE */\n"
+      "Last update: 2026-08-10\n"
+      "Standards: peer_http.v1, humans.txt, security.txt, robots.txt\n"
+      "Software: nanobot peer HTTP (lab ops only — not product SMX2)\n"
+      "Language: en\n"
+      "Doctype: JSON peer bus (+ optional www static)\n"
+      "\n"
+      "/* NOTE */\n"
+      "This listener is lab/ops peer HTTP, not a public product site.\n"
+      "See README.md, INSTALL.md, SECURITY.md, docs/ for humans.\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", humans, sizeof humans - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: crawler/mesh probes hit /sitemap.xml and got not_found while
+   * robots Disallow:/. Empty urlset — lab ops has no public crawl surface. */
+  if (is_get && (strcmp(path, "/sitemap.xml") == 0 || strcmp(path, "/sitemap.xml/") == 0 ||
+                 strcmp(path, "/sitemap_index.xml") == 0 ||
+                 strcmp(path, "/sitemap_index.xml/") == 0 ||
+                 strcmp(path, "/api/sitemap.xml") == 0 ||
+                 strcmp(path, "/peer/v1/sitemap.xml") == 0)) {
+    static const char sitemap[] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+      "<!-- nanobot peer HTTP — lab ops only (not product SMX2); robots Disallow:/ -->\n"
+      "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
+      "</urlset>\n";
+    http_response(cfd, 200, "application/xml; charset=utf-8", sitemap, sizeof sitemap - 1);
     free(req); close(cfd); return;
   }
 
