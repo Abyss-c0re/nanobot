@@ -965,6 +965,15 @@ class H(BaseHTTPRequestHandler):
             "/api/hoba",
             "/peer/v1/hoba",
         )
+        # Residual: GET smime-aia after empty S/MIME AIA plate.
+        smime_aia_paths = (
+            "/.well-known/smime-aia",
+            "/.well-known/smime-aia.json",
+            "/smime-aia",
+            "/smime-aia.json",
+            "/api/smime-aia",
+            "/peer/v1/smime-aia",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2011,6 +2020,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "hoba": doc},
+            )
+            return
+        if path in smime_aia_paths:
+            doc = peer_json("GET", "/.well-known/smime-aia", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "smime_aia": doc},
             )
             return
         if path in humans_paths:

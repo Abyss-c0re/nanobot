@@ -640,6 +640,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/hoba") || !strncmp(path, "/hoba/", 6) ||
         !strcmp(path, "/hoba.json") || !strcmp(path, "/api/hoba") ||
         !strcmp(path, "/peer/v1/hoba") ||
+        !strcmp(path, "/.well-known/smime-aia") || !strncmp(path, "/.well-known/smime-aia/", 22) ||
+        !strcmp(path, "/.well-known/smime-aia.json") ||
+        !strcmp(path, "/smime-aia") || !strncmp(path, "/smime-aia/", 11) ||
+        !strcmp(path, "/smime-aia.json") || !strcmp(path, "/api/smime-aia") ||
+        !strcmp(path, "/peer/v1/smime-aia") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1700,7 +1705,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -4137,6 +4142,42 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", hoba, sizeof hoba - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/PKI probes hit /.well-known/smime-aia and got not_found.
+   * Lab ops does not publish S/MIME AIA (RFC 7030 family) — empty plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/smime-aia") == 0 ||
+       strcmp(path, "/.well-known/smime-aia/") == 0 ||
+       strncmp(path, "/.well-known/smime-aia/", 22) == 0 ||
+       strcmp(path, "/smime-aia") == 0 ||
+       strcmp(path, "/smime-aia/") == 0 ||
+       strcmp(path, "/api/smime-aia") == 0 ||
+       strcmp(path, "/peer/v1/smime-aia") == 0 ||
+       strcmp(path, "/.well-known/smime-aia.json") == 0 ||
+       strcmp(path, "/smime-aia.json") == 0)) {
+    static const char aia[] =
+      "{"
+      "\"certificates\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"smime_aia\","
+      "\"smime_aia\":false,"
+      "\"smime\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", aia, sizeof aia - 1);
     free(req); close(cfd); return;
   }
 
