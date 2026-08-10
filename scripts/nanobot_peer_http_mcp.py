@@ -753,6 +753,13 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/posh",
             "/peer/v1/posh/v1",
         )
+        # Residual: GET traffic-advice after empty Chrome prefetch plate.
+        traffic_advice_paths = (
+            "/.well-known/traffic-advice",
+            "/traffic-advice",
+            "/api/traffic-advice",
+            "/peer/v1/traffic-advice",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1615,6 +1622,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "posh": doc},
+            )
+            return
+        if path in traffic_advice_paths:
+            doc = peer_json("GET", "/.well-known/traffic-advice", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "traffic_advice": doc},
             )
             return
         if path in humans_paths:
