@@ -325,6 +325,7 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET /api|/peer/v1/backend after peer gained GET backend plate.
         backend_paths = ("/api/backend", "/peer/v1/backend")
         # Residual: GET openapi/favicon after peer gained those plates.
+        # Residual: swagger/docs aliases after peer gained those openapi aliases.
         openapi_paths = (
             "/openapi.json",
             "/openapi",
@@ -335,6 +336,16 @@ class H(BaseHTTPRequestHandler):
             "/openapi.yaml",
             "/api/openapi.yaml",
             "/peer/v1/openapi.yaml",
+            "/swagger.json",
+            "/swagger",
+            "/api/swagger",
+            "/api/swagger.json",
+            "/api/v1/swagger",
+            "/peer/v1/swagger",
+            "/peer/v1/swagger.json",
+            "/docs",
+            "/api/docs",
+            "/peer/v1/docs",
         )
         favicon_paths = ("/favicon.ico", "/favicon")
         # Residual: GET capabilities dual-wire after peer gained capabilities plate.

@@ -561,7 +561,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/activate") ||
         !strcmp(path, "/openapi.yaml") || !strcmp(path, "/openapi.json") ||
         !strcmp(path, "/openapi") || !strcmp(path, "/favicon.ico") ||
-        !strcmp(path, "/favicon"))
+        !strcmp(path, "/favicon") || !strcmp(path, "/swagger.json") ||
+        !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
+        !strcmp(path, "/api/docs"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1453,7 +1455,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Residual: mesh OpenAPI probes hit /openapi.json|/openapi.yaml (and dual-wire
-   * aliases) while only static www exclusion reserved the path — always 404. */
+   * aliases) while only static www exclusion reserved the path — always 404.
+   * Residual: /swagger.json|/swagger|/docs|/api/docs (and dual-wire) still
+   * not_found after openapi plate — common mesh OpenAPI discovery aliases. */
   if (is_get && (strcmp(path, "/openapi.json") == 0 || strcmp(path, "/openapi.json/") == 0 ||
                  strcmp(path, "/openapi") == 0 || strcmp(path, "/openapi/") == 0 ||
                  strcmp(path, "/api/openapi.json") == 0 ||
@@ -1467,7 +1471,22 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/openapi.yaml") == 0 ||
                  strcmp(path, "/api/openapi.yaml/") == 0 ||
                  strcmp(path, "/peer/v1/openapi.yaml") == 0 ||
-                 strcmp(path, "/peer/v1/openapi.yaml/") == 0)) {
+                 strcmp(path, "/peer/v1/openapi.yaml/") == 0 ||
+                 strcmp(path, "/swagger.json") == 0 || strcmp(path, "/swagger.json/") == 0 ||
+                 strcmp(path, "/swagger") == 0 || strcmp(path, "/swagger/") == 0 ||
+                 strcmp(path, "/api/swagger") == 0 || strcmp(path, "/api/swagger/") == 0 ||
+                 strcmp(path, "/api/swagger.json") == 0 ||
+                 strcmp(path, "/api/swagger.json/") == 0 ||
+                 strcmp(path, "/api/v1/swagger") == 0 ||
+                 strcmp(path, "/api/v1/swagger/") == 0 ||
+                 strcmp(path, "/peer/v1/swagger") == 0 ||
+                 strcmp(path, "/peer/v1/swagger/") == 0 ||
+                 strcmp(path, "/peer/v1/swagger.json") == 0 ||
+                 strcmp(path, "/peer/v1/swagger.json/") == 0 ||
+                 strcmp(path, "/docs") == 0 || strcmp(path, "/docs/") == 0 ||
+                 strcmp(path, "/api/docs") == 0 || strcmp(path, "/api/docs/") == 0 ||
+                 strcmp(path, "/peer/v1/docs") == 0 ||
+                 strcmp(path, "/peer/v1/docs/") == 0)) {
     int want_yaml =
       (strcmp(path, "/openapi.yaml") == 0 || strcmp(path, "/openapi.yaml/") == 0 ||
        strcmp(path, "/api/openapi.yaml") == 0 || strcmp(path, "/api/openapi.yaml/") == 0 ||
