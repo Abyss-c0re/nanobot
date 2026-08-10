@@ -1181,6 +1181,16 @@ class H(BaseHTTPRequestHandler):
             "/api/bimi",
             "/peer/v1/bimi",
         )
+        # Residual: GET statements.json after empty Twitter/X app association plate.
+        statements_paths = (
+            "/.well-known/statements.json",
+            "/.well-known/statements",
+            "/statements.json",
+            "/api/statements.json",
+            "/peer/v1/statements.json",
+            "/api/statements",
+            "/peer/v1/statements",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2391,6 +2401,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "bimi": doc},
+            )
+            return
+        if path in statements_paths:
+            doc = peer_json("GET", "/.well-known/statements.json", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "statements": doc},
             )
             return
         if path in humans_paths:
