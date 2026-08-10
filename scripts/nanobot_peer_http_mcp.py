@@ -451,9 +451,13 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET mta-sts.txt after peer gained RFC 8461 mode=none plate.
         mta_sts_paths = (
             "/.well-known/mta-sts.txt",
+            "/.well-known/mta-sts",
             "/mta-sts.txt",
+            "/mta-sts",
             "/api/mta-sts.txt",
+            "/api/mta-sts",
             "/peer/v1/mta-sts.txt",
+            "/peer/v1/mta-sts",
         )
         # Residual: GET caldav after peer gained empty CalDAV discovery plate.
         caldav_paths = (

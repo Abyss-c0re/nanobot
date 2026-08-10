@@ -876,6 +876,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/tdmrep.json") ||
         !strcmp(path, "/.well-known/mta-sts.txt") ||
         !strcmp(path, "/mta-sts.txt") ||
+        !strcmp(path, "/.well-known/mta-sts") ||
+        !strncmp(path, "/.well-known/mta-sts/", 20) ||
+        !strcmp(path, "/mta-sts") ||
+        !strcmp(path, "/api/mta-sts") ||
+        !strcmp(path, "/peer/v1/mta-sts") ||
         !strcmp(path, "/.well-known/caldav") ||
         !strcmp(path, "/.well-known/carddav") ||
         !strcmp(path, "/caldav") ||
@@ -2202,12 +2207,54 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/mta-sts.txt") == 0 ||
                  strcmp(path, "/mta-sts.txt/") == 0 ||
                  strcmp(path, "/api/mta-sts.txt") == 0 ||
-                 strcmp(path, "/peer/v1/mta-sts.txt") == 0)) {
-    static const char mta[] =
-      "version: STSv1\n"
-      "mode: none\n"
-      "max_age: 86400\n";
-    http_response(cfd, 200, "text/plain; charset=utf-8", mta, sizeof mta - 1);
+                 strcmp(path, "/peer/v1/mta-sts.txt") == 0 ||
+                 strcmp(path, "/.well-known/mta-sts") == 0 ||
+                 strcmp(path, "/.well-known/mta-sts/") == 0 ||
+                 strncmp(path, "/.well-known/mta-sts/", 20) == 0 ||
+                 strcmp(path, "/mta-sts") == 0 ||
+                 strcmp(path, "/mta-sts/") == 0 ||
+                 strcmp(path, "/api/mta-sts") == 0 ||
+                 strcmp(path, "/peer/v1/mta-sts") == 0)) {
+    /* Prefer JSON dual-wire for extensionless probes; keep RFC 8461 text
+     * for classic .txt paths. */
+    int want_txt =
+      (strcmp(path, "/.well-known/mta-sts.txt") == 0 ||
+       strcmp(path, "/.well-known/mta-sts.txt/") == 0 ||
+       strcmp(path, "/mta-sts.txt") == 0 ||
+       strcmp(path, "/mta-sts.txt/") == 0 ||
+       strcmp(path, "/api/mta-sts.txt") == 0 ||
+       strcmp(path, "/peer/v1/mta-sts.txt") == 0);
+    if (want_txt) {
+      static const char mta[] =
+        "version: STSv1\n"
+        "mode: none\n"
+        "max_age: 86400\n";
+      http_response(cfd, 200, "text/plain; charset=utf-8", mta, sizeof mta - 1);
+    } else {
+      static const char mta_json[] =
+        "{"
+        "\"version\":\"STSv1\","
+        "\"mode\":\"none\","
+        "\"max_age\":86400,"
+        "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"ok\":true,"
+        "\"action\":\"mta_sts\","
+        "\"mta_sts\":false,"
+        "\"mode\":\"none\","
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+        "}"
+        "}";
+      http_response(cfd, 200, "application/json", mta_json, sizeof mta_json - 1);
+    }
     free(req); close(cfd); return;
   }
 
