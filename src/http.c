@@ -896,13 +896,19 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/openid-configuration.json") ||
         !strcmp(path, "/.well-known/openid-federation") ||
+        !strcmp(path, "/.well-known/openid-federation.json") ||
         !strcmp(path, "/openid-federation") ||
+        !strcmp(path, "/openid-federation.json") ||
         !strcmp(path, "/.well-known/uma2-configuration") ||
+        !strcmp(path, "/.well-known/uma2-configuration.json") ||
         !strcmp(path, "/uma2-configuration") ||
+        !strcmp(path, "/uma2-configuration.json") ||
         !strcmp(path, "/.well-known/openid-credential-issuer") ||
         !strcmp(path, "/openid-credential-issuer") ||
         !strcmp(path, "/.well-known/fido2-configuration") ||
+        !strcmp(path, "/.well-known/fido2-configuration.json") ||
         !strcmp(path, "/fido2-configuration") ||
+        !strcmp(path, "/fido2-configuration.json") ||
         !strcmp(path, "/.well-known/webauthn") ||
         !strcmp(path, "/webauthn") ||
         !strcmp(path, "/.well-known/did.json") ||
@@ -2600,8 +2606,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * not_found. Lab ops is not an OpenID Federation entity — empty plate. */
   if (is_get &&
       (strcmp(path, "/.well-known/openid-federation") == 0 ||
+       strcmp(path, "/.well-known/openid-federation.json") == 0 ||
        strcmp(path, "/.well-known/openid-federation/") == 0 ||
        strcmp(path, "/openid-federation") == 0 ||
+       strcmp(path, "/openid-federation.json") == 0 ||
        strcmp(path, "/openid-federation/") == 0 ||
        strcmp(path, "/api/openid-federation") == 0 ||
        strcmp(path, "/peer/v1/openid-federation") == 0)) {
@@ -2638,8 +2646,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * not_found. Lab ops is not a UMA 2.0 AS/RS — empty plate; auth is /api/auth. */
   if (is_get &&
       (strcmp(path, "/.well-known/uma2-configuration") == 0 ||
+       strcmp(path, "/.well-known/uma2-configuration.json") == 0 ||
        strcmp(path, "/.well-known/uma2-configuration/") == 0 ||
        strcmp(path, "/uma2-configuration") == 0 ||
+       strcmp(path, "/uma2-configuration.json") == 0 ||
        strcmp(path, "/uma2-configuration/") == 0 ||
        strcmp(path, "/api/uma2-configuration") == 0 ||
        strcmp(path, "/peer/v1/uma2-configuration") == 0)) {
@@ -2722,8 +2732,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * not_found. Lab ops is not a FIDO2 server — empty plate; passkeys empty too. */
   if (is_get &&
       (strcmp(path, "/.well-known/fido2-configuration") == 0 ||
+       strcmp(path, "/.well-known/fido2-configuration.json") == 0 ||
        strcmp(path, "/.well-known/fido2-configuration/") == 0 ||
        strcmp(path, "/fido2-configuration") == 0 ||
+       strcmp(path, "/fido2-configuration.json") == 0 ||
        strcmp(path, "/fido2-configuration/") == 0 ||
        strcmp(path, "/api/fido2-configuration") == 0 ||
        strcmp(path, "/peer/v1/fido2-configuration") == 0)) {

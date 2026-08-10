@@ -543,14 +543,18 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET openid-federation after peer gained non-entity plate.
         openid_fed_paths = (
             "/.well-known/openid-federation",
+            "/.well-known/openid-federation.json",
             "/openid-federation",
+            "/openid-federation.json",
             "/api/openid-federation",
             "/peer/v1/openid-federation",
         )
         # Residual: GET uma2-configuration after peer gained non-UMA plate.
         uma2_paths = (
             "/.well-known/uma2-configuration",
+            "/.well-known/uma2-configuration.json",
             "/uma2-configuration",
+            "/uma2-configuration.json",
             "/api/uma2-configuration",
             "/peer/v1/uma2-configuration",
         )
@@ -564,7 +568,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET fido2-configuration after peer gained non-FIDO2 plate.
         fido2_paths = (
             "/.well-known/fido2-configuration",
+            "/.well-known/fido2-configuration.json",
             "/fido2-configuration",
+            "/fido2-configuration.json",
             "/api/fido2-configuration",
             "/peer/v1/fido2-configuration",
         )
