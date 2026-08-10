@@ -152,6 +152,7 @@ cd ~/Dev/AI/nanobot
 | GET capabilities dual-wire + MCP | `5e6aad6`  |
 | GET swagger/docs openapi aliases + MCP | `07f7dc7`  |
 | GET livez/readyz/healthz probe aliases + MCP | `65ea4f6`  |
+| GET uptime dual-wire + MCP | `f1e5201`  |
 
 ## Anti-chaos
 
