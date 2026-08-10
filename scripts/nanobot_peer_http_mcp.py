@@ -798,6 +798,24 @@ class H(BaseHTTPRequestHandler):
             "/api/prompt",
             "/api/prompt/",
         )
+        chat_meta_paths = (
+            "/api/chat",
+            "/api/chat/",
+            "/peer/v1/chat",
+            "/peer/v1/chat/",
+        )
+        auth_start_meta_paths = (
+            "/api/auth/start",
+            "/api/auth/start/",
+            "/peer/v1/auth/start",
+            "/peer/v1/auth/start/",
+        )
+        mcp_probe_meta_paths = (
+            "/api/mcp/probe",
+            "/api/mcp/probe/",
+            "/peer/v1/mcp/probe",
+            "/peer/v1/mcp/probe/",
+        )
 
         robots_paths = (
             "/robots.txt",
@@ -2170,6 +2188,27 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "prompt": doc},
+            )
+            return
+        if path in chat_meta_paths:
+            doc = peer_json("GET", "/api/chat", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "chat": doc},
+            )
+            return
+        if path in auth_start_meta_paths:
+            doc = peer_json("GET", "/api/auth/start", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "auth_start": doc},
+            )
+            return
+        if path in mcp_probe_meta_paths:
+            doc = peer_json("GET", "/api/mcp/probe", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "mcp_probe": doc},
             )
             return
         if path in shell_meta_paths:

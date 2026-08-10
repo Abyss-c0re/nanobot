@@ -1402,6 +1402,49 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh probes GET /api/auth/start and got not_found (POST-only). */
+  if (is_get && (strcmp(path, "/api/auth/start") == 0 ||
+                 strcmp(path, "/api/auth/start/") == 0 ||
+                 strcmp(path, "/peer/v1/auth/start") == 0 ||
+                 strcmp(path, "/peer/v1/auth/start/") == 0)) {
+    static const char as[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"auth_start\","
+      "\"auth_start\":true,"
+      "\"method\":\"POST\","
+      "\"methods\":[\"POST\"],"
+      "\"post_only\":true,"
+      "\"auth\":\"peer_token\","
+      "\"peer_token_header\":\"X-Nanobot-Peer-Token\","
+      "\"body\":{\"force\":false},"
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    {
+      static const char hdr[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Allow: POST, OPTIONS\r\n"
+        "Cache-Control: no-store\r\n"
+        "Connection: close\r\n";
+      char out[768];
+      int n = snprintf(out, sizeof out,
+                       "%sContent-Length: %zu\r\n\r\n%s",
+                       hdr, sizeof as - 1, as);
+      if (n > 0 && n < (int)sizeof out) send_all(cfd, out, (size_t)n);
+      else http_response(cfd, 200, "application/json", as, sizeof as - 1);
+    }
+    free(req); close(cfd); return;
+  }
+
   if (is_post && strcmp(path, "/api/auth/start") == 0) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!session || !agent) {
@@ -1799,6 +1842,48 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     free(req); close(cfd); return;
   }
+  /* Residual: mesh probes GET /api/mcp/probe and got not_found (POST-only). */
+  if (is_get && (strcmp(path, "/api/mcp/probe") == 0 ||
+                 strcmp(path, "/api/mcp/probe/") == 0 ||
+                 strcmp(path, "/peer/v1/mcp/probe") == 0 ||
+                 strcmp(path, "/peer/v1/mcp/probe/") == 0)) {
+    static const char mp[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"mcp_probe\","
+      "\"mcp_probe\":true,"
+      "\"method\":\"POST\","
+      "\"methods\":[\"POST\"],"
+      "\"post_only\":true,"
+      "\"auth\":\"peer_token\","
+      "\"peer_token_header\":\"X-Nanobot-Peer-Token\","
+      "\"body\":{\"id\":\"string\",\"url\":\"string\",\"auth\":\"string\"},"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    {
+      static const char hdr[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Allow: POST, OPTIONS\r\n"
+        "Cache-Control: no-store\r\n"
+        "Connection: close\r\n";
+      char out[900];
+      int n = snprintf(out, sizeof out,
+                       "%sContent-Length: %zu\r\n\r\n%s",
+                       hdr, sizeof mp - 1, mp);
+      if (n > 0 && n < (int)sizeof out) send_all(cfd, out, (size_t)n);
+      else http_response(cfd, 200, "application/json", mp, sizeof mp - 1);
+    }
+    free(req); close(cfd); return;
+  }
+
   /* Residual: trailing slash 404 on mcp/probe after servers gained slash. */
   if (is_post && (strcmp(path, "/api/mcp/probe") == 0 ||
                   strcmp(path, "/api/mcp/probe/") == 0 ||
@@ -1814,6 +1899,47 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(id); free(url); free(auth);
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
     free(out);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes GET /api/chat and got not_found (POST-only). */
+  if (is_get && (strcmp(path, "/api/chat") == 0 || strcmp(path, "/api/chat/") == 0 ||
+                 strcmp(path, "/peer/v1/chat") == 0 || strcmp(path, "/peer/v1/chat/") == 0)) {
+    static const char ch[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"chat\","
+      "\"chat\":true,"
+      "\"method\":\"POST\","
+      "\"methods\":[\"POST\"],"
+      "\"post_only\":true,"
+      "\"auth\":\"peer_token\","
+      "\"peer_token_header\":\"X-Nanobot-Peer-Token\","
+      "\"body\":{\"prompt\":\"string\"},"
+      "\"also\":\"/peer/v1/prompt\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    {
+      static const char hdr[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Allow: POST, OPTIONS\r\n"
+        "Cache-Control: no-store\r\n"
+        "Connection: close\r\n";
+      char out[900];
+      int n = snprintf(out, sizeof out,
+                       "%sContent-Length: %zu\r\n\r\n%s",
+                       hdr, sizeof ch - 1, ch);
+      if (n > 0 && n < (int)sizeof out) send_all(cfd, out, (size_t)n);
+      else http_response(cfd, 200, "application/json", ch, sizeof ch - 1);
+    }
     free(req); close(cfd); return;
   }
 
