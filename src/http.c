@@ -994,7 +994,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
-  if (is_get && strcmp(path, "/api/log") == 0) {
+  /* Residual: trailing slash + /peer/v1/log 404 while bare /api/log worked. */
+  if (is_get && (strcmp(path, "/api/log") == 0 || strcmp(path, "/api/log/") == 0 ||
+                 strcmp(path, "/peer/v1/log") == 0 || strcmp(path, "/peer/v1/log/") == 0)) {
     char *tail = ng_read_log_tail(16 * 1024);
     char *esc = ng_json_escape(tail ? tail : "");
     char *body = NULL;

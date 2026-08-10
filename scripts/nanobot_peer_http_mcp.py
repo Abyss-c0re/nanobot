@@ -288,6 +288,7 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET /api/settings after peer gained GET settings plate.
         # Residual: GET /version dual-wire after peer gained version plate.
         # Residual: GET /api|/peer/v1/mcp/servers after peer slash aliases.
+        # Residual: GET /api/log dual-wire after peer slash + /peer/v1/log.
         control_paths = ("/peer/v1/control", "/api/control")
         task_paths = ("/peer/v1/task", "/api/task")
         models_paths = ("/peer/v1/models", "/api/models")
@@ -309,6 +310,7 @@ class H(BaseHTTPRequestHandler):
         settings_paths = ("/api/settings", "/peer/v1/settings")
         version_paths = ("/version", "/api/version", "/peer/v1/version")
         mcp_servers_paths = ("/api/mcp/servers", "/peer/v1/mcp/servers")
+        log_paths = ("/api/log", "/peer/v1/log")
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -397,6 +399,12 @@ class H(BaseHTTPRequestHandler):
             srv = peer_json("GET", "/api/mcp/servers", timeout=5)
             self._send(
                 200, srv if isinstance(srv, dict) else {"ok": False, "servers": srv}
+            )
+            return
+        if path in log_paths:
+            logb = peer_json("GET", "/api/log", timeout=5)
+            self._send(
+                200, logb if isinstance(logb, dict) else {"ok": False, "log": logb}
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)
