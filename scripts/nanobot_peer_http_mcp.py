@@ -309,7 +309,8 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/status",
         )
         activate_paths = ("/activate",)
-        settings_paths = ("/api/settings", "/peer/v1/settings")
+        # Residual: bare /settings after peer gained bare settings plate.
+        settings_paths = ("/api/settings", "/peer/v1/settings", "/settings")
         version_paths = ("/version", "/api/version", "/peer/v1/version")
         mcp_servers_paths = ("/api/mcp/servers", "/peer/v1/mcp/servers")
         log_paths = ("/api/log", "/peer/v1/log")

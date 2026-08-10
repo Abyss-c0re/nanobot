@@ -826,10 +826,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Settings: select backend (grok | local) + optional base/model.
-   * Residual: root discovery listed /api/settings but only POST/PUT existed → GET not_found. */
+   * Residual: root discovery listed /api/settings but only POST/PUT existed → GET not_found.
+   * Residual: bare /settings 404 while /api + /peer/v1 settings plates already work. */
   if (is_get && (strcmp(path, "/api/settings") == 0 || strcmp(path, "/api/settings/") == 0 ||
                  strcmp(path, "/peer/v1/settings") == 0 ||
-                 strcmp(path, "/peer/v1/settings/") == 0)) {
+                 strcmp(path, "/peer/v1/settings/") == 0 ||
+                 strcmp(path, "/settings") == 0 || strcmp(path, "/settings/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!agent) {
       http_peer_err(cfd, 500, "no_agent");
@@ -868,7 +870,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if ((is_post || is_put) && (strcmp(path, "/api/settings") == 0 ||
                               strcmp(path, "/api/settings/") == 0 ||
                               strcmp(path, "/peer/v1/settings") == 0 ||
-                              strcmp(path, "/peer/v1/settings/") == 0)) {
+                              strcmp(path, "/peer/v1/settings/") == 0 ||
+                              strcmp(path, "/settings") == 0 ||
+                              strcmp(path, "/settings/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!agent) {
       http_peer_err(cfd, 500, "no_agent");
