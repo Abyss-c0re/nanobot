@@ -253,7 +253,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known doq|dns-query dual-wire + MCP | `3e52743`  |
 | GET well-known activitypub dual-wire + MCP | `1bc7020`  |
 | GET well-known a2a dual-wire + MCP | `3ea7707`  |
-| GET well-known token-issuer-directory dual-wire + MCP | PENDING |
+| GET well-known token-issuer-directory dual-wire + MCP | `5e9db19`  |
 ## Anti-chaos
 
 - One product bite per cycle  
