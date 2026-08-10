@@ -220,6 +220,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known gnap-as-rs dual-wire + MCP | `184cf0b`  |
 | GET well-known csaf provider-metadata dual-wire + MCP | `b5a6da0`  |
 | GET well-known discord dual-wire + MCP | `bbf8543`  |
+| GET well-known jmap dual-wire + MCP | `9c1f5b3`  |
 ## Anti-chaos
 
 - One product bite per cycle  
