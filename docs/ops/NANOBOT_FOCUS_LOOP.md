@@ -219,6 +219,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known mercure dual-wire + MCP | `4fab3ee`  |
 | GET well-known gnap-as-rs dual-wire + MCP | `184cf0b`  |
 | GET well-known csaf provider-metadata dual-wire + MCP | `b5a6da0`  |
+| GET well-known discord dual-wire + MCP | `bbf8543`  |
 ## Anti-chaos
 
 - One product bite per cycle  
