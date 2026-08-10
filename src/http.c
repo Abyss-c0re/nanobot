@@ -1450,6 +1450,30 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh probes hit /uptime|/api/uptime|/peer/v1/uptime and got
+   * not_found while health already exposes started/pid. */
+  if (is_get && (strcmp(path, "/uptime") == 0 || strcmp(path, "/uptime/") == 0 ||
+                 strcmp(path, "/api/uptime") == 0 || strcmp(path, "/api/uptime/") == 0 ||
+                 strcmp(path, "/peer/v1/uptime") == 0 ||
+                 strcmp(path, "/peer/v1/uptime/") == 0)) {
+    char body[640];
+    char *ver = ng_json_escape(NG_VERSION);
+    time_t now = time(NULL);
+    long started = (long)g_serve_started;
+    long up = (started > 0 && now >= (time_t)started) ? (long)(now - (time_t)started) : 0;
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"uptime\","
+      "\"service\":\"nanobot-peer\",\"version\":\"%s\","
+      "\"pid\":%d,\"started\":%ld,\"uptime_sec\":%ld,"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      ver ? ver : "",
+      (int)(g_serve_pid ? g_serve_pid : getpid()),
+      started, up);
+    free(ver);
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: mesh capability probes hit /capabilities|/api/capabilities|
    * /peer/v1/capabilities and got not_found while info/tools already exist. */
   if (is_get && (strcmp(path, "/capabilities") == 0 || strcmp(path, "/capabilities/") == 0 ||

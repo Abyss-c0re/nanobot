@@ -333,6 +333,8 @@ class H(BaseHTTPRequestHandler):
         # Residual: bare /settings after peer gained bare settings plate.
         settings_paths = ("/api/settings", "/peer/v1/settings", "/settings")
         version_paths = ("/version", "/api/version", "/peer/v1/version")
+        # Residual: GET uptime dual-wire after peer gained uptime plate.
+        uptime_paths = ("/uptime", "/api/uptime", "/peer/v1/uptime")
         mcp_servers_paths = ("/api/mcp/servers", "/peer/v1/mcp/servers")
         log_paths = ("/api/log", "/peer/v1/log")
         # Residual: GET /api|/peer/v1/backend after peer gained GET backend plate.
@@ -461,6 +463,12 @@ class H(BaseHTTPRequestHandler):
             ver = peer_json("GET", "/api/version", timeout=5)
             self._send(
                 200, ver if isinstance(ver, dict) else {"ok": False, "version": ver}
+            )
+            return
+        if path in uptime_paths:
+            up = peer_json("GET", "/api/uptime", timeout=5)
+            self._send(
+                200, up if isinstance(up, dict) else {"ok": False, "uptime": up}
             )
             return
         if path in mcp_servers_paths:
