@@ -422,14 +422,29 @@ class H(BaseHTTPRequestHandler):
         metrics_paths = ("/metrics", "/api/metrics", "/peer/v1/metrics")
         # Residual: GET /whoami dual-wire after peer gained whoami plate.
         # Residual: bare /status after peer gained bare status → auth plate.
+        # Residual: /me|/session|/auth/status after peer identity aliases.
         auth_paths = (
             "/api/auth",
+            "/api/auth/status",
+            "/peer/v1/auth/status",
             "/api/status",
             "/peer/v1/auth",
             "/peer/v1/status",
             "/status",
         )
-        whoami_paths = ("/whoami", "/api/whoami", "/peer/v1/whoami")
+        whoami_paths = (
+            "/whoami",
+            "/api/whoami",
+            "/peer/v1/whoami",
+            "/me",
+            "/api/me",
+            "/peer/v1/me",
+        )
+        session_paths = (
+            "/session",
+            "/api/session",
+            "/peer/v1/session",
+        )
         activate_paths = ("/activate",)
         # Residual: bare /settings after peer gained bare settings plate.
         settings_paths = ("/api/settings", "/peer/v1/settings", "/settings")
@@ -1781,15 +1796,45 @@ class H(BaseHTTPRequestHandler):
             return
         if path in auth_paths:
             # Peer auth plate is /api/auth (not under /peer/v1 historically).
-            auth = peer_json("GET", "/api/auth", timeout=5)
+            # Nested /auth/status keeps action=auth_status via matching path.
+            if path.endswith("/auth/status"):
+                peer_auth = path if path.startswith("/peer/") else "/api/auth/status"
+            else:
+                peer_auth = "/api/auth"
+            auth = peer_json("GET", peer_auth, timeout=5)
+            if not isinstance(auth, dict):
+                auth = peer_json("GET", "/api/auth", timeout=5)
             self._send(
                 200, auth if isinstance(auth, dict) else {"ok": False, "auth": auth}
             )
             return
         if path in whoami_paths:
-            who = peer_json("GET", "/api/whoami", timeout=5)
+            # Prefer matching peer path so action leaf is whoami|me.
+            peer_path = (
+                path
+                if path.startswith("/peer/") or path in ("/whoami", "/me")
+                else path.replace("/api/", "/peer/v1/", 1)
+            )
+            if peer_path in ("/whoami", "/me"):
+                peer_path = f"/peer/v1{peer_path}"
+            who = peer_json("GET", peer_path, timeout=5)
+            if not isinstance(who, dict):
+                who = peer_json("GET", "/api/whoami", timeout=5)
             self._send(
                 200, who if isinstance(who, dict) else {"ok": False, "whoami": who}
+            )
+            return
+        if path in session_paths:
+            peer_path = (
+                "/peer/v1/session"
+                if path in ("/session", "/api/session", "/peer/v1/session")
+                else path
+            )
+            sess = peer_json("GET", peer_path, timeout=5)
+            if not isinstance(sess, dict):
+                sess = peer_json("GET", "/api/auth", timeout=5)
+            self._send(
+                200, sess if isinstance(sess, dict) else {"ok": False, "session": sess}
             )
             return
         if path in activate_paths:

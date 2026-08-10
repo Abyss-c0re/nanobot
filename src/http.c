@@ -1440,8 +1440,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   /* Residual: trailing slash 404 on /api/auth while bare path worked (mesh probes).
    * Residual: /whoami|/api/whoami|/peer/v1/whoami not_found — identity probes.
-   * Residual: bare /status 404 while /api/status and /peer/v1/status already auth. */
+   * Residual: bare /status 404 while /api/status and /peer/v1/status already auth.
+   * Residual: /me|/session|/auth/status mesh identity aliases still not_found. */
   if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/auth/") == 0 ||
+                 strcmp(path, "/api/auth/status") == 0 ||
+                 strcmp(path, "/api/auth/status/") == 0 ||
+                 strcmp(path, "/peer/v1/auth/status") == 0 ||
+                 strcmp(path, "/peer/v1/auth/status/") == 0 ||
                  strcmp(path, "/api/status") == 0 || strcmp(path, "/api/status/") == 0 ||
                  strcmp(path, "/peer/v1/auth") == 0 || strcmp(path, "/peer/v1/auth/") == 0 ||
                  strcmp(path, "/peer/v1/status") == 0 ||
@@ -1450,7 +1455,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/whoami") == 0 || strcmp(path, "/whoami/") == 0 ||
                  strcmp(path, "/api/whoami") == 0 || strcmp(path, "/api/whoami/") == 0 ||
                  strcmp(path, "/peer/v1/whoami") == 0 ||
-                 strcmp(path, "/peer/v1/whoami/") == 0)) {
+                 strcmp(path, "/peer/v1/whoami/") == 0 ||
+                 strcmp(path, "/me") == 0 || strcmp(path, "/me/") == 0 ||
+                 strcmp(path, "/api/me") == 0 || strcmp(path, "/api/me/") == 0 ||
+                 strcmp(path, "/peer/v1/me") == 0 || strcmp(path, "/peer/v1/me/") == 0 ||
+                 strcmp(path, "/session") == 0 || strcmp(path, "/session/") == 0 ||
+                 strcmp(path, "/api/session") == 0 ||
+                 strcmp(path, "/api/session/") == 0 ||
+                 strcmp(path, "/peer/v1/session") == 0 ||
+                 strcmp(path, "/peer/v1/session/") == 0)) {
     int need_browser = agent && ng_agent_needs_browser_session(agent);
     /* Soft-expired access_token still counts as signed-in after a successful refresh.
      * Skip ensure while device-login is pending — refresh cannot help and spam-logs
@@ -1483,7 +1496,25 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                      strcmp(path, "/api/whoami") == 0 || strcmp(path, "/api/whoami/") == 0 ||
                      strcmp(path, "/peer/v1/whoami") == 0 ||
                      strcmp(path, "/peer/v1/whoami/") == 0);
-    const char *act = is_whoami ? "whoami" : "status";
+    int is_me = (strcmp(path, "/me") == 0 || strcmp(path, "/me/") == 0 ||
+                 strcmp(path, "/api/me") == 0 || strcmp(path, "/api/me/") == 0 ||
+                 strcmp(path, "/peer/v1/me") == 0 ||
+                 strcmp(path, "/peer/v1/me/") == 0);
+    int is_session =
+        (strcmp(path, "/session") == 0 || strcmp(path, "/session/") == 0 ||
+         strcmp(path, "/api/session") == 0 || strcmp(path, "/api/session/") == 0 ||
+         strcmp(path, "/peer/v1/session") == 0 ||
+         strcmp(path, "/peer/v1/session/") == 0);
+    int is_auth_status =
+        (strcmp(path, "/api/auth/status") == 0 ||
+         strcmp(path, "/api/auth/status/") == 0 ||
+         strcmp(path, "/peer/v1/auth/status") == 0 ||
+         strcmp(path, "/peer/v1/auth/status/") == 0);
+    const char *act = is_whoami       ? "whoami"
+                      : is_me         ? "me"
+                      : is_session    ? "session"
+                      : is_auth_status ? "auth_status"
+                                      : "status";
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"action\":\"%s\","
       "\"version\":\"%s\",\"model\":\"%s\",\"signed_in\":%s,"

@@ -695,7 +695,11 @@ int main(int argc, char **argv) {
 
   /* Residual: dual same-home start can pass connect-probe race then thrash
    * (auth import + learn.lock) without ever owning LISTEN — zombie peer.
-   * Exclusive serve lock: second start exits already_listening without work. */
+   * Exclusive serve lock: second start exits already_listening without work.
+   * Residual: flock fail while port free (orphan worker held lock fd after
+   * parent SIGTERM) → false already_listening; cool_restart health fails.
+   * Only treat as live peer when connect-probe succeeds; CLOEXEC so HTTP
+   * fork workers do not inherit the lock. */
   int serve_lock_fd = -1;
   if (want_peer && !oneshot && !mode_mcp && !mode_mcp_list && !mode_mcp_call &&
       !mode_order && !auth_status && !auth_start && !auth_poll && home && home[0]) {
@@ -706,18 +710,38 @@ int main(int argc, char **argv) {
       if (flock(serve_lock_fd, LOCK_EX | LOCK_NB) != 0) {
         close(serve_lock_fd);
         serve_lock_fd = -1;
-        if (port > 0)
+        if (port > 0 && peer_port_in_use(port, bind_lan)) {
           print_already_listening(port, bind_lan);
-        else
-          print_cli_err("serve", "already_serving", "lock_held");
-        return 0;
+          return 0;
+        }
+        /* Stale flock holder, port free: drop inode and reclaim. */
+        unlink(lk);
+        serve_lock_fd = open(lk, O_RDWR | O_CREAT, 0600);
+        if (serve_lock_fd < 0 ||
+            flock(serve_lock_fd, LOCK_EX | LOCK_NB) != 0) {
+          if (serve_lock_fd >= 0) {
+            close(serve_lock_fd);
+            serve_lock_fd = -1;
+          }
+          if (port > 0 && peer_port_in_use(port, bind_lan)) {
+            print_already_listening(port, bind_lan);
+            return 0;
+          }
+          print_cli_err("serve", "serve_lock_busy", "retry");
+          return 1;
+        }
       }
-      /* Keep serve_lock_fd open for process lifetime (implicit unlock on exit). */
+      /* Keep serve_lock_fd open for process lifetime (implicit unlock on exit).
+       * CLOEXEC: forked HTTP workers must not hold flock after parent exits. */
+      (void)fcntl(serve_lock_fd, F_SETFD, FD_CLOEXEC);
       (void)ftruncate(serve_lock_fd, 0);
       {
         char buf[32];
         int n = snprintf(buf, sizeof buf, "%d\n", (int)getpid());
-        if (n > 0) (void)write(serve_lock_fd, buf, (size_t)n);
+        if (n > 0) {
+          (void)lseek(serve_lock_fd, 0, SEEK_SET);
+          (void)write(serve_lock_fd, buf, (size_t)n);
+        }
       }
     }
   }
