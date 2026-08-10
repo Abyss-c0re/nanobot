@@ -232,6 +232,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known genid dual-wire + MCP | `43acc00`  |
 | GET well-known acme-challenge dual-wire + MCP | `5a49c46`  |
 | GET well-known ni dual-wire + MCP | `3c8146a`  |
+| GET well-known vapid dual-wire + MCP | `4fd8dd8`  |
 ## Anti-chaos
 
 - One product bite per cycle  
