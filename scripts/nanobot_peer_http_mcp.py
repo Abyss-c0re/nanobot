@@ -839,6 +839,15 @@ class H(BaseHTTPRequestHandler):
             "/api/discord",
             "/peer/v1/discord",
         )
+        # Residual: GET jmap after empty JMAP session plate (RFC 8620).
+        jmap_paths = (
+            "/.well-known/jmap",
+            "/.well-known/jmap.json",
+            "/jmap",
+            "/jmap.json",
+            "/api/jmap",
+            "/peer/v1/jmap",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1787,6 +1796,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "discord": doc},
+            )
+            return
+        if path in jmap_paths:
+            doc = peer_json("GET", "/.well-known/jmap", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "jmap": doc},
             )
             return
         if path in humans_paths:
