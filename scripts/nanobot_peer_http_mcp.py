@@ -687,6 +687,13 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/oauth-authorization-server/jwks",
             "/.well-known/openid-configuration/jwks",
         )
+        # Residual: GET related-website-set after empty RWS plate.
+        related_website_set_paths = (
+            "/.well-known/related-website-set.json",
+            "/related-website-set.json",
+            "/api/related-website-set.json",
+            "/peer/v1/related-website-set.json",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1466,6 +1473,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "jwks": doc},
+            )
+            return
+        if path in related_website_set_paths:
+            doc = peer_json("GET", "/.well-known/related-website-set.json", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "related_website_set": doc},
             )
             return
         if path in humans_paths:

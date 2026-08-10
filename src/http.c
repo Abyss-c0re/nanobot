@@ -578,6 +578,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/sshfp.json") || !strcmp(path, "/.well-known/sshfp.json") ||
         !strcmp(path, "/jwks.json") || !strcmp(path, "/.well-known/jwks.json") ||
         !strcmp(path, "/jwks") || !strcmp(path, "/.well-known/jwks") ||
+        !strcmp(path, "/.well-known/related-website-set.json") ||
+        !strcmp(path, "/related-website-set.json") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1638,7 +1640,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2935,6 +2937,39 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", jwks, sizeof jwks - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/browser probes hit /.well-known/related-website-set.json
+   * and got not_found. Lab ops publishes no Related Website Sets. */
+  if (is_get && (strcmp(path, "/.well-known/related-website-set.json") == 0 ||
+                 strcmp(path, "/.well-known/related-website-set.json/") == 0 ||
+                 strcmp(path, "/related-website-set.json") == 0 ||
+                 strcmp(path, "/related-website-set.json/") == 0 ||
+                 strcmp(path, "/api/related-website-set.json") == 0 ||
+                 strcmp(path, "/peer/v1/related-website-set.json") == 0)) {
+    static const char rws[] =
+      "{"
+      "\"primary\":\"\","
+      "\"associatedSites\":[],"
+      "\"serviceSites\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"related_website_set\","
+      "\"related_website_set\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", rws, sizeof rws - 1);
     free(req); close(cfd); return;
   }
 
