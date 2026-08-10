@@ -271,6 +271,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known uma/fido/webauthn/fed jwks + nodeinfo/2.x.json dual-wire + MCP | `7f3d2f8`  |
 | GET well-known oauth-register + apple-merchant.json + passkey/did jwks dual-wire + MCP | `5d80a7c`  |
 | GET well-known apple-merchant short + rws/ms + oauth/openid jwks/register + host-meta.xml dual-wire + MCP | `882a6d1`  |
+| GET well-known robots/humans/llms + oauth endpoint nest dual-wire + MCP | `9ced1f8`  |
 ## Anti-chaos
 
 - One product bite per cycle  
