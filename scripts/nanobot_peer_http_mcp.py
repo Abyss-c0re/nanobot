@@ -647,6 +647,13 @@ class H(BaseHTTPRequestHandler):
             "/api/keybase.txt",
             "/peer/v1/keybase.txt",
         )
+        # Residual: GET pgp-key.txt after peer gained empty OpenPGP plate.
+        pgp_key_txt_paths = (
+            "/pgp-key.txt",
+            "/.well-known/pgp-key.txt",
+            "/api/pgp-key.txt",
+            "/peer/v1/pgp-key.txt",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1348,6 +1355,31 @@ class H(BaseHTTPRequestHandler):
                     "username": "",
                     "security_txt": "/.well-known/security.txt",
                     "trust_txt": "/.well-known/trust.txt",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in pgp_key_txt_paths:
+            # Peer serves text/plain empty OpenPGP plate; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "pgp_key_txt",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/.well-known/pgp-key.txt",
+                    "pgp_key_txt": True,
+                    "openpgp_published": False,
+                    "armored_key": "",
+                    "security_txt": "/.well-known/security.txt",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,

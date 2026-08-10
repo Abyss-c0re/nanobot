@@ -571,6 +571,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt") ||
         !strcmp(path, "/trust.txt") || !strcmp(path, "/.well-known/trust.txt") ||
         !strcmp(path, "/keybase.txt") || !strcmp(path, "/.well-known/keybase.txt") ||
+        !strcmp(path, "/pgp-key.txt") || !strcmp(path, "/.well-known/pgp-key.txt") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1630,7 +1631,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"oauth_client_registration\",\"openid_federation\","
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
-        "\"did_configuration\",\"trust_txt\",\"keybase_txt\""
+        "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
+        "\"pgp_key_txt\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2772,6 +2774,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "# Companion: /.well-known/security.txt /.well-known/trust.txt\n"
       "# See: https://github.com/Abyss-c0re/nanobot\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", kbase, sizeof kbase - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/PGP probes hit /pgp-key.txt and /.well-known/pgp-key.txt
+   * and got not_found. Lab ops does not publish an armored key here — empty. */
+  if (is_get && (strcmp(path, "/pgp-key.txt") == 0 ||
+                 strcmp(path, "/pgp-key.txt/") == 0 ||
+                 strcmp(path, "/.well-known/pgp-key.txt") == 0 ||
+                 strcmp(path, "/.well-known/pgp-key.txt/") == 0 ||
+                 strcmp(path, "/api/pgp-key.txt") == 0 ||
+                 strcmp(path, "/peer/v1/pgp-key.txt") == 0)) {
+    static const char pgpk[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "# pgp-key.txt — no OpenPGP public key published at this peer\n"
+      "# Contact/policy: /.well-known/security.txt\n"
+      "# See: https://github.com/Abyss-c0re/nanobot/security/advisories/new\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", pgpk, sizeof pgpk - 1);
     free(req); close(cfd); return;
   }
 
