@@ -171,6 +171,8 @@ cd ~/Dev/AI/nanobot
 | GET well-known ai-plugin.json dual-wire + MCP | `2476103`  |
 | GET well-known assetlinks.json dual-wire + MCP | `20d9ea3`  |
 
+| GET well-known apple-app-site-association dual-wire + MCP | `0a9d338`  |
+
 ## Anti-chaos
 
 - One product bite per cycle  
