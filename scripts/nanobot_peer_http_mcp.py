@@ -272,6 +272,68 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Max-Age", "600")
         self.end_headers()
 
+    def _post_only_paths(self) -> set[str]:
+        return {
+            "/api/shell",
+            "/peer/v1/shell",
+            "/api/shell/gate",
+            "/peer/v1/shell/gate",
+            "/api/shell/approve",
+            "/peer/v1/shell/approve",
+            "/api/prompt",
+            "/peer/v1/prompt",
+            "/api/chat",
+            "/peer/v1/chat",
+            "/api/auth/start",
+            "/peer/v1/auth/start",
+            "/api/mcp/probe",
+            "/peer/v1/mcp/probe",
+        }
+
+    def _method_not_allowed(self):
+        # Residual: PUT/DELETE/PATCH on post_only fell to BaseHTTP 501; dual-wire 405.
+        path = self.path.split("?", 1)[0]
+        if path != "/" and path.endswith("/"):
+            path = path.rstrip("/") or "/"
+        allow = (
+            "GET, POST, OPTIONS"
+            if path in self._post_only_paths()
+            else "GET, POST, OPTIONS"
+        )
+        body = {
+            "schema": "nanobot.peer_http.v1",
+            "ok": False,
+            "action": "error",
+            "error": "method_not_allowed",
+            "allow": allow,
+            "product_wire": "smx2",
+            "peer_http": "lab_ops_only",
+            "peer_http_is_product_bus": False,
+            "share": "state_matrix_only",
+            "hold_flash": 1,
+            "llm_is_commander": False,
+            "python": 0,
+        }
+        raw = json.dumps(body).encode()
+        self.send_response(405)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Allow", allow)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", allow)
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_PUT(self):
+        self._method_not_allowed()
+
+    def do_DELETE(self):
+        self._method_not_allowed()
+
+    def do_PATCH(self):
+        self._method_not_allowed()
+
     def do_GET(self):
         # Mesh probes often hit /peer/v1/* on the HTTP MCP port by mistake —
         # answer them instead of {"error":"not_found"} so focus loops stay quiet.

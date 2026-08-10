@@ -359,6 +359,45 @@ static void http_options(int fd, const char *allow) {
     http_text(fd, 200, "");
 }
 
+/* Residual: PUT/DELETE/PATCH on post_only paths fell through to not_found
+ * (404) instead of 405 + Allow. Mesh dual-wire needs method_not_allowed. */
+static void http_method_not_allowed(int fd, const char *allow) {
+  const char *a =
+      (allow && allow[0]) ? allow : "GET, HEAD, POST, PUT, OPTIONS";
+  char body[480];
+  int bn = snprintf(body, sizeof body,
+                    "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+                    "\"action\":\"error\",\"error\":\"method_not_allowed\","
+                    "\"allow\":\"%s\"," NG_PEER_HTTP_DUAL_WIRE "}",
+                    a);
+  if (bn < 0 || bn >= (int)sizeof body) {
+    http_json(fd, 405,
+              "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+              "\"action\":\"error\",\"error\":\"method_not_allowed\","
+              NG_PEER_HTTP_DUAL_WIRE "}");
+    return;
+  }
+  char hdr[640];
+  int n = snprintf(hdr, sizeof hdr,
+                   "HTTP/1.1 405 Method Not Allowed\r\n"
+                   "Content-Type: application/json\r\n"
+                   "Allow: %s\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Access-Control-Allow-Methods: %s\r\n"
+                   "Access-Control-Allow-Headers: *\r\n"
+                   "Cache-Control: no-store\r\n"
+                   "Connection: close\r\n"
+                   "Content-Length: %d\r\n"
+                   "\r\n",
+                   a, a, bn);
+  if (n > 0 && n < (int)sizeof hdr) {
+    send_all(fd, hdr, (size_t)n);
+    send_all(fd, body, (size_t)bn);
+  } else {
+    http_json(fd, 405, body);
+  }
+}
+
 /* Residual: error plates had schema/ok/error dual-wire but no action leaf —
  * mesh could not classify fail responses like health/info/models. */
 static void http_peer_err(int fd, int code, const char *error) {
@@ -599,6 +638,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     const char *allow = path_is_post_only(path) ? "POST, OPTIONS"
                                                 : "GET, HEAD, POST, PUT, OPTIONS";
     http_options(cfd, allow);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: PUT/DELETE/PATCH on post_only hit not_found; advertise 405. */
+  if (path_is_post_only(path) && !is_get && !is_post) {
+    http_method_not_allowed(cfd, "GET, POST, OPTIONS");
     free(req); close(cfd); return;
   }
 
