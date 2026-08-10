@@ -280,6 +280,7 @@ cd ~/Dev/AI/nanobot
 | GET chat/auth-start/mcp-probe dual-wire post_only plates + MCP | `4d44afa`  |
 | exclusive nanobot.serve.lock + cool_restart orphan SIGKILL | `d134d7a`  |
 | GET shell gate/approve dual-wire post_only plates + MCP | `b7bc476`  |
+| OPTIONS dual-wire Allow + CORS methods (path-aware post_only) + MCP | `58f4f04`  |
 ## Anti-chaos
 
 - One product bite per cycle  
