@@ -236,6 +236,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known hoba dual-wire + MCP | `4547aa0`  |
 | GET well-known smime-aia dual-wire + MCP | `d034b4e`  |
 | GET well-known browserid dual-wire + MCP | `52fad8e`  |
+| GET well-known idp-proxy dual-wire + MCP | `7d18a45`  |
 ## Anti-chaos
 
 - One product bite per cycle  
