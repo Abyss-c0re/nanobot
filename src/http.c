@@ -585,7 +585,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/ai-plugin.json") ||
         !strcmp(path, "/ai-plugin.json") ||
         !strcmp(path, "/.well-known/assetlinks.json") ||
-        !strcmp(path, "/assetlinks.json"))
+        !strcmp(path, "/assetlinks.json") ||
+        !strcmp(path, "/.well-known/apple-app-site-association") ||
+        !strcmp(path, "/apple-app-site-association"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1561,7 +1563,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
         "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\","
         "\"browserconfig\",\"change_password\",\"sellers\","
-        "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\""
+        "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\","
+        "\"apple_app_site_association\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1716,6 +1719,40 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     static const char assetlinks[] = "[]";
     http_response(cfd, 200, "application/json", assetlinks,
                   sizeof assetlinks - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: iOS/mesh probes hit apple-app-site-association and got not_found.
+   * Lab ops has no Universal Links — empty AASA plate (companion to assetlinks). */
+  if (is_get &&
+      (strcmp(path, "/.well-known/apple-app-site-association") == 0 ||
+       strcmp(path, "/.well-known/apple-app-site-association/") == 0 ||
+       strcmp(path, "/apple-app-site-association") == 0 ||
+       strcmp(path, "/apple-app-site-association/") == 0 ||
+       strcmp(path, "/api/apple-app-site-association") == 0 ||
+       strcmp(path, "/peer/v1/apple-app-site-association") == 0)) {
+    static const char aasa[] =
+      "{"
+      "\"applinks\":{"
+        "\"apps\":[],"
+        "\"details\":[]"
+      "},"
+      "\"webcredentials\":{"
+        "\"apps\":[]"
+      "},"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"apple_app_site_association\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", aasa, sizeof aasa - 1);
     free(req); close(cfd); return;
   }
 

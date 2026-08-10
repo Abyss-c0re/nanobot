@@ -418,6 +418,13 @@ class H(BaseHTTPRequestHandler):
             "/api/assetlinks.json",
             "/peer/v1/assetlinks.json",
         )
+        # Residual: GET AASA after peer gained empty Universal Links plate.
+        aasa_paths = (
+            "/.well-known/apple-app-site-association",
+            "/apple-app-site-association",
+            "/api/apple-app-site-association",
+            "/peer/v1/apple-app-site-association",
+        )
         # Residual: GET crossdomain.xml after peer gained deny-all plate.
         crossdomain_paths = (
             "/crossdomain.xml",
@@ -734,6 +741,15 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in aasa_paths:
+            # Peer serves empty AASA; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/apple-app-site-association", timeout=5
+            )
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "aasa": doc}
             )
             return
         if path in crossdomain_paths:
