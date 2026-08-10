@@ -580,6 +580,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/jwks") || !strcmp(path, "/.well-known/jwks") ||
         !strcmp(path, "/.well-known/related-website-set.json") ||
         !strcmp(path, "/related-website-set.json") ||
+        !strcmp(path, "/.well-known/microsoft-identity-association.json") ||
+        !strcmp(path, "/microsoft-identity-association.json") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1640,7 +1642,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2970,6 +2972,38 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", rws, sizeof rws - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: Azure/mesh probes hit microsoft-identity-association.json
+   * and got not_found. Lab ops publishes no Microsoft identity domain assoc. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/microsoft-identity-association.json") == 0 ||
+       strcmp(path, "/.well-known/microsoft-identity-association.json/") == 0 ||
+       strcmp(path, "/microsoft-identity-association.json") == 0 ||
+       strcmp(path, "/microsoft-identity-association.json/") == 0 ||
+       strcmp(path, "/api/microsoft-identity-association.json") == 0 ||
+       strcmp(path, "/peer/v1/microsoft-identity-association.json") == 0)) {
+    static const char mia[] =
+      "{"
+      "\"associatedApplications\":[],"
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"microsoft_identity_association\","
+      "\"microsoft_identity_association\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", mia, sizeof mia - 1);
     free(req); close(cfd); return;
   }
 

@@ -694,6 +694,13 @@ class H(BaseHTTPRequestHandler):
             "/api/related-website-set.json",
             "/peer/v1/related-website-set.json",
         )
+        # Residual: GET microsoft-identity-association after empty plate.
+        microsoft_identity_association_paths = (
+            "/.well-known/microsoft-identity-association.json",
+            "/microsoft-identity-association.json",
+            "/api/microsoft-identity-association.json",
+            "/peer/v1/microsoft-identity-association.json",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1480,6 +1487,17 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "related_website_set": doc},
+            )
+            return
+        if path in microsoft_identity_association_paths:
+            doc = peer_json(
+                "GET", "/.well-known/microsoft-identity-association.json", timeout=5
+            )
+            self._send(
+                200,
+                doc
+                if isinstance(doc, dict)
+                else {"ok": False, "microsoft_identity_association": doc},
             )
             return
         if path in humans_paths:
