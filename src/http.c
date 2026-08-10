@@ -624,6 +624,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/openid-federation") ||
         !strcmp(path, "/openid-federation") ||
+        !strcmp(path, "/.well-known/uma2-configuration") ||
+        !strcmp(path, "/uma2-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
@@ -1612,7 +1614,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
         "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\","
         "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\","
-        "\"oauth_client_registration\",\"openid_federation\""
+        "\"oauth_client_registration\",\"openid_federation\","
+        "\"uma2_configuration\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2288,6 +2291,50 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", oif, sizeof oif - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: UMA/mesh probes hit /.well-known/uma2-configuration and got
+   * not_found. Lab ops is not a UMA 2.0 AS/RS — empty plate; auth is /api/auth. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/uma2-configuration") == 0 ||
+       strcmp(path, "/.well-known/uma2-configuration/") == 0 ||
+       strcmp(path, "/uma2-configuration") == 0 ||
+       strcmp(path, "/uma2-configuration/") == 0 ||
+       strcmp(path, "/api/uma2-configuration") == 0 ||
+       strcmp(path, "/peer/v1/uma2-configuration") == 0)) {
+    static const char uma2[] =
+      "{"
+      "\"issuer\":\"\","
+      "\"authorization_endpoint\":\"/api/auth\","
+      "\"token_endpoint\":\"\","
+      "\"jwks_uri\":\"\","
+      "\"registration_endpoint\":\"\","
+      "\"resource_registration_endpoint\":\"\","
+      "\"permission_endpoint\":\"\","
+      "\"introspection_endpoint\":\"\","
+      "\"claims_interaction_endpoint\":\"\","
+      "\"grant_types_supported\":[],"
+      "\"response_types_supported\":[],"
+      "\"token_endpoint_auth_methods_supported\":[],"
+      "\"uma_profiles_supported\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"uma2_configuration\","
+        "\"uma2\":false,"
+        "\"uma_as\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", uma2, sizeof uma2 - 1);
     free(req); close(cfd); return;
   }
 

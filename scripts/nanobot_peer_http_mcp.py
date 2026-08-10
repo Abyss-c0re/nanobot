@@ -541,6 +541,13 @@ class H(BaseHTTPRequestHandler):
             "/api/openid-federation",
             "/peer/v1/openid-federation",
         )
+        # Residual: GET uma2-configuration after peer gained non-UMA plate.
+        uma2_paths = (
+            "/.well-known/uma2-configuration",
+            "/uma2-configuration",
+            "/api/uma2-configuration",
+            "/peer/v1/uma2-configuration",
+        )
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
@@ -1048,6 +1055,16 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "openid_federation": doc},
+            )
+            return
+        if path in uma2_paths:
+            # Peer serves non-UMA uma2-configuration; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/uma2-configuration", timeout=5
+            )
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "uma2": doc},
             )
             return
         if path in oauth_as_paths:
