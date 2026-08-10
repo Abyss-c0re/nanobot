@@ -610,6 +610,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/tdmrep.json") ||
         !strcmp(path, "/.well-known/mta-sts.txt") ||
         !strcmp(path, "/mta-sts.txt") ||
+        !strcmp(path, "/.well-known/caldav") ||
+        !strcmp(path, "/.well-known/carddav") ||
+        !strcmp(path, "/caldav") ||
+        !strcmp(path, "/carddav") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1596,7 +1600,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"openid_configuration\",\"oauth_authorization_server\","
         "\"oauth_protected_resource\",\"dnt_policy\","
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
-        "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\""
+        "\"matrix_client\",\"matrix_server\",\"tdmrep\",\"mta_sts\","
+        "\"caldav\",\"carddav\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1857,6 +1862,62 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "mode: none\n"
       "max_age: 86400\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", mta, sizeof mta - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: calendar/mesh probes hit /.well-known/caldav (RFC 6764) and
+   * got not_found. Lab ops is not a CalDAV host — honest empty plate. */
+  if (is_get && (strcmp(path, "/.well-known/caldav") == 0 ||
+                 strcmp(path, "/.well-known/caldav/") == 0 ||
+                 strcmp(path, "/caldav") == 0 ||
+                 strcmp(path, "/caldav/") == 0 ||
+                 strcmp(path, "/api/caldav") == 0 ||
+                 strcmp(path, "/peer/v1/caldav") == 0)) {
+    static const char cal[] =
+      "{"
+      "\"href\":\"\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"caldav\","
+        "\"caldav\":false,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", cal, sizeof cal - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: contacts/mesh probes hit /.well-known/carddav (RFC 6764) and
+   * got not_found. Lab ops is not a CardDAV host — honest empty plate. */
+  if (is_get && (strcmp(path, "/.well-known/carddav") == 0 ||
+                 strcmp(path, "/.well-known/carddav/") == 0 ||
+                 strcmp(path, "/carddav") == 0 ||
+                 strcmp(path, "/carddav/") == 0 ||
+                 strcmp(path, "/api/carddav") == 0 ||
+                 strcmp(path, "/peer/v1/carddav") == 0)) {
+    static const char card[] =
+      "{"
+      "\"href\":\"\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"carddav\","
+        "\"carddav\":false,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", card, sizeof card - 1);
     free(req); close(cfd); return;
   }
 

@@ -446,6 +446,20 @@ class H(BaseHTTPRequestHandler):
             "/api/mta-sts.txt",
             "/peer/v1/mta-sts.txt",
         )
+        # Residual: GET caldav after peer gained empty CalDAV discovery plate.
+        caldav_paths = (
+            "/.well-known/caldav",
+            "/caldav",
+            "/api/caldav",
+            "/peer/v1/caldav",
+        )
+        # Residual: GET carddav after peer gained empty CardDAV discovery plate.
+        carddav_paths = (
+            "/.well-known/carddav",
+            "/carddav",
+            "/api/carddav",
+            "/peer/v1/carddav",
+        )
         # Residual: GET dnt-policy.txt after peer gained DNT honor plate.
         dnt_paths = (
             "/.well-known/dnt-policy.txt",
@@ -882,6 +896,20 @@ class H(BaseHTTPRequestHandler):
                     "llm_is_commander": False,
                     "python": 0,
                 },
+            )
+            return
+        if path in caldav_paths:
+            # Peer serves empty CalDAV discovery; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/caldav", timeout=5)
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "caldav": doc}
+            )
+            return
+        if path in carddav_paths:
+            # Peer serves empty CardDAV discovery; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/carddav", timeout=5)
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "carddav": doc}
             )
             return
         if path in dnt_paths:
