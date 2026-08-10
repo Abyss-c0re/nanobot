@@ -247,6 +247,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known ohttp-gateway dual-wire + MCP | `cbec8cf`  |
 | GET well-known masque dual-wire + MCP | `cec63a5`  |
 | GET well-known doh|dot dual-wire + MCP | `2162c0c`  |
+| GET well-known bluesky dual-wire + MCP | `2418999`  |
 ## Anti-chaos
 
 - One product bite per cycle  
