@@ -175,6 +175,7 @@ cd ~/Dev/AI/nanobot
 
 | GET well-known gpc.json dual-wire + MCP | `c4e945f`  |
 | GET well-known openid-configuration dual-wire + MCP | `966a75a`  |
+| GET well-known oauth-authorization-server dual-wire + MCP | `8b46d0e`  |
 ## Anti-chaos
 
 - One product bite per cycle  
