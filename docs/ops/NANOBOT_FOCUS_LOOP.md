@@ -155,6 +155,7 @@ cd ~/Dev/AI/nanobot
 | GET uptime dual-wire + MCP | `f1e5201`  |
 | GET bare /status auth alias + MCP | `af20287`  |
 | GET robots.txt lab-ops disallow + MCP | `bc36702`  |
+| GET security.txt RFC 9116 + MCP | `a86d705`  |
 
 ## Anti-chaos
 
