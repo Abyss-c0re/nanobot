@@ -555,6 +555,13 @@ class H(BaseHTTPRequestHandler):
             "/api/openid-credential-issuer",
             "/peer/v1/openid-credential-issuer",
         )
+        # Residual: GET fido2-configuration after peer gained non-FIDO2 plate.
+        fido2_paths = (
+            "/.well-known/fido2-configuration",
+            "/fido2-configuration",
+            "/api/fido2-configuration",
+            "/peer/v1/fido2-configuration",
+        )
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
@@ -1084,6 +1091,16 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "openid_credential_issuer": doc},
+            )
+            return
+        if path in fido2_paths:
+            # Peer serves non-FIDO2 fido2-configuration; proxy dual-wire JSON.
+            doc = peer_json(
+                "GET", "/.well-known/fido2-configuration", timeout=5
+            )
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "fido2": doc},
             )
             return
         if path in oauth_as_paths:
