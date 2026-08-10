@@ -432,6 +432,13 @@ class H(BaseHTTPRequestHandler):
             "/api/gpc.json",
             "/peer/v1/gpc.json",
         )
+        # Residual: GET dnt-policy.txt after peer gained DNT honor plate.
+        dnt_paths = (
+            "/.well-known/dnt-policy.txt",
+            "/dnt-policy.txt",
+            "/api/dnt-policy.txt",
+            "/peer/v1/dnt-policy.txt",
+        )
         # Residual: GET openid-configuration after peer gained non-OP plate.
         openid_paths = (
             "/.well-known/openid-configuration",
@@ -785,6 +792,29 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/.well-known/gpc.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "gpc": doc}
+            )
+            return
+        if path in dnt_paths:
+            # Peer serves text/plain DNT policy; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "dnt_policy",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/.well-known/dnt-policy.txt",
+                    "dnt_honored": True,
+                    "gpc_companion": "/.well-known/gpc.json",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
             )
             return
         if path in openid_paths:

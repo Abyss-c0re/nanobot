@@ -590,6 +590,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/apple-app-site-association") ||
         !strcmp(path, "/.well-known/gpc.json") ||
         !strcmp(path, "/gpc.json") ||
+        !strcmp(path, "/.well-known/dnt-policy.txt") ||
+        !strcmp(path, "/dnt-policy.txt") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1574,7 +1576,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"apple_touch_icon\",\"ai_plugin\",\"assetlinks\","
         "\"apple_app_site_association\",\"gpc\","
         "\"openid_configuration\",\"oauth_authorization_server\","
-        "\"oauth_protected_resource\""
+        "\"oauth_protected_resource\",\"dnt_policy\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1790,6 +1792,24 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", gpc, sizeof gpc - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: privacy/mesh probes hit /.well-known/dnt-policy.txt and got
+   * not_found while gpc.json already honors GPC. Short DNT honor plate. */
+  if (is_get && (strcmp(path, "/.well-known/dnt-policy.txt") == 0 ||
+                 strcmp(path, "/.well-known/dnt-policy.txt/") == 0 ||
+                 strcmp(path, "/dnt-policy.txt") == 0 ||
+                 strcmp(path, "/dnt-policy.txt/") == 0 ||
+                 strcmp(path, "/api/dnt-policy.txt") == 0 ||
+                 strcmp(path, "/peer/v1/dnt-policy.txt") == 0)) {
+    static const char dnt[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "# Do Not Track (DNT) and Global Privacy Control (GPC) are honored.\n"
+      "# No third-party tracking, ad networks, or sale of personal data.\n"
+      "# Companion: /.well-known/gpc.json\n"
+      "# Contact: https://github.com/Abyss-c0re/nanobot/security/advisories/new\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", dnt, sizeof dnt - 1);
     free(req); close(cfd); return;
   }
 
