@@ -857,6 +857,15 @@ class H(BaseHTTPRequestHandler):
             "/api/stun-key",
             "/peer/v1/stun-key",
         )
+        # Residual: GET thread after empty Thread mesh plate.
+        thread_paths = (
+            "/.well-known/thread",
+            "/.well-known/thread.json",
+            "/thread",
+            "/thread.json",
+            "/api/thread",
+            "/peer/v1/thread",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1819,6 +1828,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "stun_key": doc},
+            )
+            return
+        if path in thread_paths:
+            doc = peer_json("GET", "/.well-known/thread", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "thread": doc},
             )
             return
         if path in humans_paths:
