@@ -983,6 +983,15 @@ class H(BaseHTTPRequestHandler):
             "/api/browserid",
             "/peer/v1/browserid",
         )
+        # Residual: GET idp-proxy after empty IdP proxy plate.
+        idp_proxy_paths = (
+            "/.well-known/idp-proxy",
+            "/.well-known/idp-proxy.json",
+            "/idp-proxy",
+            "/idp-proxy.json",
+            "/api/idp-proxy",
+            "/peer/v1/idp-proxy",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2043,6 +2052,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "browserid": doc},
+            )
+            return
+        if path in idp_proxy_paths:
+            doc = peer_json("GET", "/.well-known/idp-proxy", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "idp_proxy": doc},
             )
             return
         if path in humans_paths:
