@@ -791,6 +791,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/activitypub.json") ||
         !strcmp(path, "/api/activitypub") ||
         !strcmp(path, "/peer/v1/activitypub") ||
+        !strcmp(path, "/.well-known/a2a") ||
+        !strncmp(path, "/.well-known/a2a/", 16) ||
+        !strcmp(path, "/.well-known/a2a.json") ||
+        !strcmp(path, "/.well-known/a2a-agent-card.json") ||
+        !strcmp(path, "/.well-known/agent-card") ||
+        !strcmp(path, "/a2a") ||
+        !strncmp(path, "/a2a/", 5) ||
+        !strcmp(path, "/a2a.json") ||
+        !strcmp(path, "/api/a2a") ||
+        !strcmp(path, "/peer/v1/a2a") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1851,7 +1861,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
         "\"did_configuration\",\"trust_txt\",\"keybase_txt\","
-        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\",\"web_bot_auth\",\"sbom\",\"privacy_pass\",\"ohttp_gateway\",\"masque\",\"doh\",\"bluesky\",\"solid\",\"web_app_origin_association\",\"doq\",\"activitypub\""
+        "\"pgp_key_txt\",\"openpgpkey\",\"sshfp\",\"jwks\",\"related_website_set\",\"microsoft_identity_association\",\"apple_merchantid_domain_association\",\"nostr\",\"atproto_did\",\"stellar_toml\",\"web_identity\",\"posh\",\"traffic_advice\",\"privacy_sandbox_attestations\",\"no_federation\",\"chrome_devtools\",\"http_opportunistic\",\"core\",\"mercure\",\"gnap_as_rs\",\"csaf\",\"discord\",\"jmap\",\"stun_key\",\"thread\",\"coap\",\"time\",\"timezone\",\"est\",\"pki_validation\",\"looking_glass\",\"genid\",\"acme_challenge\",\"ni\",\"vapid\",\"hoba\",\"smime_aia\",\"browserid\",\"idp_proxy\",\"dnt\",\"funding_manifest_urls\",\"xrpc_server_did\",\"mcp_json\",\"web_bot_auth\",\"sbom\",\"privacy_pass\",\"ohttp_gateway\",\"masque\",\"doh\",\"bluesky\",\"solid\",\"web_app_origin_association\",\"doq\",\"activitypub\",\"a2a\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -4995,6 +5005,47 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", apub, sizeof apub - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/agent probes hit /.well-known/a2a|agent-card and got
+   * not_found. Lab ops peer is not an A2A agent endpoint — empty plate
+   * (see agent-card.json / mcp.json empty plates). */
+  if (is_get &&
+      (strcmp(path, "/.well-known/a2a") == 0 ||
+       strcmp(path, "/.well-known/a2a/") == 0 ||
+       strncmp(path, "/.well-known/a2a/", 16) == 0 ||
+       strcmp(path, "/.well-known/a2a.json") == 0 ||
+       strcmp(path, "/.well-known/a2a-agent-card.json") == 0 ||
+       strcmp(path, "/.well-known/agent-card") == 0 ||
+       strcmp(path, "/a2a") == 0 ||
+       strcmp(path, "/a2a/") == 0 ||
+       strcmp(path, "/a2a.json") == 0 ||
+       strcmp(path, "/api/a2a") == 0 ||
+       strcmp(path, "/peer/v1/a2a") == 0)) {
+    static const char a2a[] =
+      "{"
+      "\"agents\":[],"
+      "\"url\":\"\","
+      "\"x-nanobot\":{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"a2a\","
+      "\"a2a\":false,"
+      "\"agent_card\":false,"
+      "\"agent2agent\":false,"
+      "\"auth\":\"browser_device_code\","
+      "\"auth_plate\":\"/api/auth\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", a2a, sizeof a2a - 1);
     free(req); close(cfd); return;
   }
 

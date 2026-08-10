@@ -252,6 +252,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known web-app-origin-association dual-wire + MCP | `6b5704e`  |
 | GET well-known doq|dns-query dual-wire + MCP | `3e52743`  |
 | GET well-known activitypub dual-wire + MCP | `1bc7020`  |
+| GET well-known a2a dual-wire + MCP | PENDING |
 ## Anti-chaos
 
 - One product bite per cycle  

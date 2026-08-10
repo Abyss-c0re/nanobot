@@ -1140,6 +1140,17 @@ class H(BaseHTTPRequestHandler):
             "/api/activitypub",
             "/peer/v1/activitypub",
         )
+        # Residual: GET a2a after empty Agent2Agent discovery plate.
+        a2a_paths = (
+            "/.well-known/a2a",
+            "/.well-known/a2a.json",
+            "/.well-known/a2a-agent-card.json",
+            "/.well-known/agent-card",
+            "/a2a",
+            "/a2a.json",
+            "/api/a2a",
+            "/peer/v1/a2a",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2318,6 +2329,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "activitypub": doc},
+            )
+            return
+        if path in a2a_paths:
+            doc = peer_json("GET", "/.well-known/a2a", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "a2a": doc},
             )
             return
         if path in humans_paths:
