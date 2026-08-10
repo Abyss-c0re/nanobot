@@ -632,6 +632,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/fido2-configuration") ||
         !strcmp(path, "/.well-known/webauthn") ||
         !strcmp(path, "/webauthn") ||
+        !strcmp(path, "/.well-known/did.json") ||
+        !strcmp(path, "/did.json") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
         !strcmp(path, "/oauth-authorization-server") ||
         !strcmp(path, "/.well-known/oauth-client-registration") ||
@@ -1623,7 +1625,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"caldav\",\"carddav\",\"api_catalog\",\"agent_card\","
         "\"oauth_client_registration\",\"openid_federation\","
         "\"uma2_configuration\",\"openid_credential_issuer\","
-        "\"fido2_configuration\",\"webauthn\""
+        "\"fido2_configuration\",\"webauthn\",\"did_json\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2460,6 +2462,43 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", wa, sizeof wa - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: DID/mesh probes hit /.well-known/did.json (did:web) and got
+   * not_found. Lab ops is not a DID subject — empty document plate. */
+  if (is_get &&
+      (strcmp(path, "/.well-known/did.json") == 0 ||
+       strcmp(path, "/.well-known/did.json/") == 0 ||
+       strcmp(path, "/did.json") == 0 ||
+       strcmp(path, "/did.json/") == 0 ||
+       strcmp(path, "/api/did.json") == 0 ||
+       strcmp(path, "/peer/v1/did.json") == 0)) {
+    static const char did[] =
+      "{"
+      "\"@context\":[\"https://www.w3.org/ns/did/v1\"],"
+      "\"id\":\"\","
+      "\"verificationMethod\":[],"
+      "\"authentication\":[],"
+      "\"assertionMethod\":[],"
+      "\"service\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"did_json\","
+        "\"did\":false,"
+        "\"did_web\":false,"
+        "\"auth\":\"browser_device_code\","
+        "\"auth_plate\":\"/api/auth\","
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", did, sizeof did - 1);
     free(req); close(cfd); return;
   }
 

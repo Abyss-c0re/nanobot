@@ -569,6 +569,13 @@ class H(BaseHTTPRequestHandler):
             "/api/webauthn",
             "/peer/v1/webauthn",
         )
+        # Residual: GET did.json after peer gained empty did:web plate.
+        did_json_paths = (
+            "/.well-known/did.json",
+            "/did.json",
+            "/api/did.json",
+            "/peer/v1/did.json",
+        )
         # Residual: GET oauth-authorization-server after peer gained non-AS plate.
         oauth_as_paths = (
             "/.well-known/oauth-authorization-server",
@@ -1116,6 +1123,14 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "webauthn": doc},
+            )
+            return
+        if path in did_json_paths:
+            # Peer serves empty did:web document; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/did.json", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "did_json": doc},
             )
             return
         if path in oauth_as_paths:
