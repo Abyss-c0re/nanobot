@@ -392,6 +392,13 @@ class H(BaseHTTPRequestHandler):
             "/api/app-ads.txt",
             "/peer/v1/app-ads.txt",
         )
+        # Residual: GET crossdomain.xml after peer gained deny-all plate.
+        crossdomain_paths = (
+            "/crossdomain.xml",
+            "/api/crossdomain.xml",
+            "/peer/v1/crossdomain.xml",
+            "/clientaccesspolicy.xml",
+        )
         # Residual: GET robots.txt after peer gained robots plate.
         robots_paths = ("/robots.txt",)
         # Residual: GET security.txt after peer gained RFC 9116 plate.
@@ -639,6 +646,28 @@ class H(BaseHTTPRequestHandler):
                     "content_type": "text/plain",
                     "peer_path": peer_path,
                     "authorized_sellers": 0,
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in crossdomain_paths:
+            # Peer serves deny-all policy XML; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "crossdomain",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/x-cross-domain-policy",
+                    "peer_path": "/crossdomain.xml",
+                    "permitted_cross_domain_policies": "none",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,

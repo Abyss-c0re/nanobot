@@ -572,7 +572,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/sitemap_index.xml") ||
         !strcmp(path, "/llms.txt") || !strcmp(path, "/ai.txt") ||
         !strcmp(path, "/service-worker.js") || !strcmp(path, "/sw.js") ||
-        !strcmp(path, "/ads.txt") || !strcmp(path, "/app-ads.txt"))
+        !strcmp(path, "/ads.txt") || !strcmp(path, "/app-ads.txt") ||
+        !strcmp(path, "/crossdomain.xml") ||
+        !strcmp(path, "/clientaccesspolicy.xml"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1546,7 +1548,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"info\",\"version\",\"uptime\",\"capabilities\",\"schema\","
         "\"metrics\",\"whoami\",\"status\",\"openapi\",\"manifest\","
         "\"robots\",\"security_txt\",\"humans\",\"sitemap\",\"llms\","
-        "\"favicon\",\"service_worker\",\"ads\""
+        "\"favicon\",\"service_worker\",\"ads\",\"crossdomain\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1608,6 +1610,26 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "# No authorized digital sellers. This is not a public ad inventory site.\n"
       "# CONTACT=https://github.com/Abyss-c0re/nanobot/security/advisories/new\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", adstxt, sizeof adstxt - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: scanner/mesh probes hit /crossdomain.xml and got not_found.
+   * Lab ops denies all Adobe/Flash cross-domain policies. */
+  if (is_get && (strcmp(path, "/crossdomain.xml") == 0 ||
+                 strcmp(path, "/crossdomain.xml/") == 0 ||
+                 strcmp(path, "/api/crossdomain.xml") == 0 ||
+                 strcmp(path, "/peer/v1/crossdomain.xml") == 0 ||
+                 strcmp(path, "/clientaccesspolicy.xml") == 0 ||
+                 strcmp(path, "/clientaccesspolicy.xml/") == 0)) {
+    static const char xdom[] =
+      "<?xml version=\"1.0\"?>\n"
+      "<!-- nanobot peer HTTP — lab ops only (not product SMX2) -->\n"
+      "<!DOCTYPE cross-domain-policy SYSTEM "
+      "\"http://www.adobe.com/xml/dtds/cross-domain-policy.dtd\">\n"
+      "<cross-domain-policy>\n"
+      "  <site-control permitted-cross-domain-policies=\"none\"/>\n"
+      "</cross-domain-policy>\n";
+    http_response(cfd, 200, "text/x-cross-domain-policy", xdom, sizeof xdom - 1);
     free(req); close(cfd); return;
   }
 
