@@ -1163,6 +1163,15 @@ class H(BaseHTTPRequestHandler):
             "/api/private-token-issuer-directory",
             "/peer/v1/private-token-issuer-directory",
         )
+        # Residual: GET tls-rpt after empty TLS reporting plate (RFC 8460).
+        tls_rpt_paths = (
+            "/.well-known/tls-rpt",
+            "/.well-known/tls-rpt.json",
+            "/tls-rpt",
+            "/tls-rpt.json",
+            "/api/tls-rpt",
+            "/peer/v1/tls-rpt",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2359,6 +2368,13 @@ class H(BaseHTTPRequestHandler):
                 doc
                 if isinstance(doc, dict)
                 else {"ok": False, "token_issuer_directory": doc},
+            )
+            return
+        if path in tls_rpt_paths:
+            doc = peer_json("GET", "/.well-known/tls-rpt", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "tls_rpt": doc},
             )
             return
         if path in humans_paths:
