@@ -1172,6 +1172,15 @@ class H(BaseHTTPRequestHandler):
             "/api/tls-rpt",
             "/peer/v1/tls-rpt",
         )
+        # Residual: GET bimi after empty BIMI brand-indicator plate.
+        bimi_paths = (
+            "/.well-known/bimi",
+            "/.well-known/bimi.json",
+            "/bimi",
+            "/bimi.json",
+            "/api/bimi",
+            "/peer/v1/bimi",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2375,6 +2384,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "tls_rpt": doc},
+            )
+            return
+        if path in bimi_paths:
+            doc = peer_json("GET", "/.well-known/bimi", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "bimi": doc},
             )
             return
         if path in humans_paths:
