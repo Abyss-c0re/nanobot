@@ -875,6 +875,15 @@ class H(BaseHTTPRequestHandler):
             "/api/coap",
             "/peer/v1/coap",
         )
+        # Residual: GET time after empty time-service plate.
+        time_paths = (
+            "/.well-known/time",
+            "/.well-known/time.json",
+            "/time",
+            "/time.json",
+            "/api/time",
+            "/peer/v1/time",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1851,6 +1860,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "coap": doc},
+            )
+            return
+        if path in time_paths:
+            doc = peer_json("GET", "/.well-known/time", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "time": doc},
             )
             return
         if path in humans_paths:
