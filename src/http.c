@@ -594,6 +594,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/dnt-policy.txt") ||
         !strcmp(path, "/.well-known/passkey-endpoints") ||
         !strcmp(path, "/passkey-endpoints") ||
+        !strcmp(path, "/.well-known/webfinger") ||
+        !strcmp(path, "/webfinger") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1579,7 +1581,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"apple_app_site_association\",\"gpc\","
         "\"openid_configuration\",\"oauth_authorization_server\","
         "\"oauth_protected_resource\",\"dnt_policy\","
-        "\"passkey_endpoints\""
+        "\"passkey_endpoints\",\"webfinger\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1845,6 +1847,36 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", passkeys, sizeof passkeys - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: ActivityPub/mesh probes hit /.well-known/webfinger (RFC 7033)
+   * and got not_found. Lab ops is not a WebFinger host — empty JRD plate. */
+  if (is_get && (strcmp(path, "/.well-known/webfinger") == 0 ||
+                 strcmp(path, "/.well-known/webfinger/") == 0 ||
+                 strcmp(path, "/webfinger") == 0 ||
+                 strcmp(path, "/webfinger/") == 0 ||
+                 strcmp(path, "/api/webfinger") == 0 ||
+                 strcmp(path, "/peer/v1/webfinger") == 0)) {
+    static const char wf[] =
+      "{"
+      "\"subject\":\"\","
+      "\"aliases\":[],"
+      "\"links\":[],"
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"webfinger\","
+        "\"webfinger\":false,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/jrd+json", wf, sizeof wf - 1);
     free(req); close(cfd); return;
   }
 

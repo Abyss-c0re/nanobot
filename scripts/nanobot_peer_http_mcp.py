@@ -446,6 +446,13 @@ class H(BaseHTTPRequestHandler):
             "/api/passkey-endpoints",
             "/peer/v1/passkey-endpoints",
         )
+        # Residual: GET webfinger after peer gained empty JRD plate.
+        webfinger_paths = (
+            "/.well-known/webfinger",
+            "/webfinger",
+            "/api/webfinger",
+            "/peer/v1/webfinger",
+        )
         # Residual: GET openid-configuration after peer gained non-OP plate.
         openid_paths = (
             "/.well-known/openid-configuration",
@@ -832,6 +839,14 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "passkeys": doc},
+            )
+            return
+        if path in webfinger_paths:
+            # Peer serves empty WebFinger JRD; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/webfinger", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "webfinger": doc},
             )
             return
         if path in openid_paths:
