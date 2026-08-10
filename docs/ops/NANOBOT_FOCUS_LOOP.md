@@ -277,6 +277,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known discovery autoconfig/DWN/org + OAuth logout/CIBA residual dual-wire + MCP | `c452661`  |
 | GET well-known OIDC logout/revocation URIs nodeinfo/2.3 matrix/support dual-wire + MCP | `f672d64`  |
 | GET shell/prompt dual-wire post_only method plate + MCP | `fc683a1`  |
+| GET chat/auth-start/mcp-probe dual-wire post_only plates + MCP | `4d44afa`  |
 ## Anti-chaos
 
 - One product bite per cycle  
