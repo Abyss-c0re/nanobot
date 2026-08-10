@@ -88,6 +88,7 @@ fi
 # (bind-fail thrash leftovers / race after SIGTERM). Never touch other homes.
 reap_home_orphans() {
   local keep="${1:-}"
+  local p cmd lp
   for p in $(pgrep -x nanobot 2>/dev/null || true); do
     [[ -n "$keep" && "$p" == "$keep" ]] && continue
     cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)
@@ -104,7 +105,24 @@ reap_home_orphans() {
     esac
   done
   sleep 0.3
+  # Residual: bind-fail thrash leftovers ignore SIGTERM while holding learn.lock.
+  for p in $(pgrep -x nanobot 2>/dev/null || true); do
+    [[ -n "$keep" && "$p" == "$keep" ]] && continue
+    cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)
+    case "$cmd" in
+      *"--home $HOME_NB"*|*"--home=${HOME_NB}"*)
+        lp=$(listen_pid || true)
+        if [[ -n "$lp" && "$p" == "$lp" ]]; then
+          continue
+        fi
+        echo "cool_restart_peer: orphan SIGKILL $p" | tee -a "$LOG"
+        kill -9 "$p" 2>/dev/null || true
+        ;;
+    esac
+  done
+  sleep 0.2
 }
+
 
 reap_home_orphans ""
 

@@ -22,6 +22,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/file.h>
 
 /* CMake sets NANOBOT_ENABLE_*; default all-on for ad-hoc compiles */
 #ifndef NANOBOT_ENABLE_MCP
@@ -689,6 +691,35 @@ int main(int argc, char **argv) {
       peer_port_in_use(port, bind_lan)) {
     print_already_listening(port, bind_lan);
     return 0;
+  }
+
+  /* Residual: dual same-home start can pass connect-probe race then thrash
+   * (auth import + learn.lock) without ever owning LISTEN — zombie peer.
+   * Exclusive serve lock: second start exits already_listening without work. */
+  int serve_lock_fd = -1;
+  if (want_peer && !oneshot && !mode_mcp && !mode_mcp_list && !mode_mcp_call &&
+      !mode_order && !auth_status && !auth_start && !auth_poll && home && home[0]) {
+    char lk[700];
+    snprintf(lk, sizeof lk, "%s/nanobot.serve.lock", home);
+    serve_lock_fd = open(lk, O_RDWR | O_CREAT, 0600);
+    if (serve_lock_fd >= 0) {
+      if (flock(serve_lock_fd, LOCK_EX | LOCK_NB) != 0) {
+        close(serve_lock_fd);
+        serve_lock_fd = -1;
+        if (port > 0)
+          print_already_listening(port, bind_lan);
+        else
+          print_cli_err("serve", "already_serving", "lock_held");
+        return 0;
+      }
+      /* Keep serve_lock_fd open for process lifetime (implicit unlock on exit). */
+      (void)ftruncate(serve_lock_fd, 0);
+      {
+        char buf[32];
+        int n = snprintf(buf, sizeof buf, "%d\n", (int)getpid());
+        if (n > 0) (void)write(serve_lock_fd, buf, (size_t)n);
+      }
+    }
   }
 
   /* normalize www path: DIR with index.html, or DIR/www/index.html */
