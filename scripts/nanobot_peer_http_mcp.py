@@ -1056,6 +1056,17 @@ class H(BaseHTTPRequestHandler):
             "/api/privacy-pass",
             "/peer/v1/privacy-pass",
         )
+        # Residual: GET ohttp-gateway after empty Oblivious HTTP plate.
+        ohttp_gateway_paths = (
+            "/.well-known/ohttp-gateway",
+            "/.well-known/ohttp-gateway.json",
+            "/.well-known/ohttp-config",
+            "/.well-known/ohttp-config.json",
+            "/ohttp-gateway",
+            "/ohttp-config",
+            "/api/ohttp-gateway",
+            "/peer/v1/ohttp-gateway",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2174,6 +2185,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "privacy_pass": doc},
+            )
+            return
+        if path in ohttp_gateway_paths:
+            doc = peer_json("GET", "/.well-known/ohttp-gateway", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "ohttp_gateway": doc},
             )
             return
         if path in humans_paths:
