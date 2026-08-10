@@ -181,6 +181,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known passkey-endpoints dual-wire + MCP | `2a18d8b`  |
 | GET well-known webfinger dual-wire + MCP | `2b2ba80`  |
 | GET well-known nodeinfo dual-wire + MCP | `78422ec`  |
+| GET well-known host-meta dual-wire + MCP | `b51d99d`  |
 ## Anti-chaos
 
 - One product bite per cycle  
