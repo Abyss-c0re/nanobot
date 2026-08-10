@@ -507,6 +507,8 @@ class H(BaseHTTPRequestHandler):
         passkey_paths = (
             "/.well-known/passkey-endpoints",
             "/.well-known/passkey-endpoints.json",
+            "/.well-known/passkey-endpoints/enroll",
+            "/.well-known/passkey-endpoints/manage",
             "/passkey-endpoints",
             "/passkey-endpoints.json",
             "/api/passkey-endpoints",
@@ -581,6 +583,8 @@ class H(BaseHTTPRequestHandler):
         openid_paths = (
             "/.well-known/openid-configuration",
             "/.well-known/openid-configuration.json",
+            "/.well-known/oauth-authorization-server/openid-configuration",
+            "/.well-known/oauth-authorization-server/.well-known/openid-configuration",
             "/openid-configuration",
             "/openid-configuration.json",
             "/api/openid-configuration",
@@ -605,6 +609,11 @@ class H(BaseHTTPRequestHandler):
         uma2_paths = (
             "/.well-known/uma2-configuration",
             "/.well-known/uma2-configuration.json",
+            "/.well-known/uma2-configuration/resource_set",
+            "/.well-known/uma2-configuration/permission",
+            "/.well-known/uma2-configuration/resource_registration",
+            "/.well-known/uma2-configuration/permission_endpoint",
+            "/.well-known/uma2-configuration/introspection",
             "/uma2-configuration",
             "/uma2-configuration.json",
             "/api/uma2-configuration",
@@ -614,6 +623,11 @@ class H(BaseHTTPRequestHandler):
         oid4vci_paths = (
             "/.well-known/openid-credential-issuer",
             "/.well-known/openid-credential-issuer.json",
+            "/.well-known/openid-credential-issuer/credential_endpoint",
+            "/.well-known/openid-credential-issuer/batch_credential",
+            "/.well-known/openid-credential-issuer/deferred_credential",
+            "/.well-known/credential-issuer",
+            "/.well-known/vc-configuration",
             "/openid-credential-issuer",
             "/openid-credential-issuer.json",
             "/api/openid-credential-issuer",
@@ -623,6 +637,10 @@ class H(BaseHTTPRequestHandler):
         fido2_paths = (
             "/.well-known/fido2-configuration",
             "/.well-known/fido2-configuration.json",
+            "/.well-known/fido2-configuration/origins",
+            "/.well-known/fido2-configuration/trusted-facets",
+            "/.well-known/fido-u2f-facets",
+            "/.well-known/u2f",
             "/fido2-configuration",
             "/fido2-configuration.json",
             "/api/fido2-configuration",
@@ -634,6 +652,8 @@ class H(BaseHTTPRequestHandler):
             "/.well-known/webauthn.json",
             "/.well-known/webauthn/origins",
             "/.well-known/webauthn/related-origins",
+            "/.well-known/webauthn/configuration",
+            "/.well-known/webauthn/attestation",
             "/.well-known/passkey-endpoints/related-origins",
             "/.well-known/passkey-endpoints/origins",
             "/webauthn",
@@ -644,7 +664,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET did.json after peer gained empty did:web plate.
         did_json_paths = (
             "/.well-known/did.json",
+            "/.well-known/did",
             "/did.json",
+            "/did",
             "/api/did.json",
             "/peer/v1/did.json",
         )
@@ -652,6 +674,7 @@ class H(BaseHTTPRequestHandler):
         did_cfg_paths = (
             "/.well-known/did-configuration",
             "/.well-known/did-configuration.json",
+            "/.well-known/did-configuration/resources",
             "/did-configuration",
             "/did-configuration.json",
             "/api/did-configuration",
@@ -698,6 +721,7 @@ class H(BaseHTTPRequestHandler):
         oauth_pr_paths = (
             "/.well-known/oauth-protected-resource",
             "/.well-known/oauth-protected-resource.json",
+            "/.well-known/oauth-protected-resource/metadata",
             "/oauth-protected-resource",
             "/oauth-protected-resource.json",
             "/api/oauth-protected-resource",
@@ -737,6 +761,7 @@ class H(BaseHTTPRequestHandler):
             "/security.txt",
             "/.well-known/security.txt",
             "/.well-known/security.json",
+            "/.well-known/security.txt.json",
             "/api/security.txt",
             "/peer/v1/security.txt",
         )
@@ -902,6 +927,7 @@ class H(BaseHTTPRequestHandler):
         nostr_paths = (
             "/.well-known/nostr.json",
             "/.well-known/nostr",
+            "/.well-known/nostr/nip05",
             "/nostr.json",
             "/nostr",
             "/api/nostr.json",

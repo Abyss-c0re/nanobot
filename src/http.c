@@ -644,6 +644,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/oauth-protected-resource/resource") ||
         !strcmp(path, "/.well-known/webauthn/origins") ||
         !strcmp(path, "/.well-known/webauthn/related-origins") ||
+        !strcmp(path, "/.well-known/webauthn/configuration") ||
+        !strcmp(path, "/.well-known/webauthn/attestation") ||
         !strcmp(path, "/.well-known/passkey-endpoints/related-origins") ||
         !strcmp(path, "/.well-known/passkey-endpoints/origins") ||
         !strcmp(path, "/.well-known/openid-federation/entity-statement") ||
@@ -972,6 +974,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/dnt-policy.txt") ||
         !strcmp(path, "/.well-known/passkey-endpoints") ||
         !strcmp(path, "/.well-known/passkey-endpoints.json") ||
+        !strcmp(path, "/.well-known/passkey-endpoints/enroll") ||
+        !strcmp(path, "/.well-known/passkey-endpoints/manage") ||
         !strcmp(path, "/passkey-endpoints") ||
         !strcmp(path, "/passkey-endpoints.json") ||
         !strcmp(path, "/.well-known/webfinger") ||
@@ -1051,14 +1055,28 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openid-federation.json") ||
         !strcmp(path, "/.well-known/uma2-configuration") ||
         !strcmp(path, "/.well-known/uma2-configuration.json") ||
+        !strcmp(path, "/.well-known/uma2-configuration/resource_set") ||
+        !strcmp(path, "/.well-known/uma2-configuration/permission") ||
+        !strcmp(path, "/.well-known/uma2-configuration/resource_registration") ||
+        !strcmp(path, "/.well-known/uma2-configuration/permission_endpoint") ||
+        !strcmp(path, "/.well-known/uma2-configuration/introspection") ||
         !strcmp(path, "/uma2-configuration") ||
         !strcmp(path, "/uma2-configuration.json") ||
         !strcmp(path, "/.well-known/openid-credential-issuer") ||
         !strcmp(path, "/.well-known/openid-credential-issuer.json") ||
+        !strcmp(path, "/.well-known/openid-credential-issuer/credential_endpoint") ||
+        !strcmp(path, "/.well-known/openid-credential-issuer/batch_credential") ||
+        !strcmp(path, "/.well-known/openid-credential-issuer/deferred_credential") ||
+        !strcmp(path, "/.well-known/credential-issuer") ||
+        !strcmp(path, "/.well-known/vc-configuration") ||
         !strcmp(path, "/openid-credential-issuer") ||
         !strcmp(path, "/openid-credential-issuer.json") ||
         !strcmp(path, "/.well-known/fido2-configuration") ||
         !strcmp(path, "/.well-known/fido2-configuration.json") ||
+        !strcmp(path, "/.well-known/fido2-configuration/origins") ||
+        !strcmp(path, "/.well-known/fido2-configuration/trusted-facets") ||
+        !strcmp(path, "/.well-known/fido-u2f-facets") ||
+        !strcmp(path, "/.well-known/u2f") ||
         !strcmp(path, "/fido2-configuration") ||
         !strcmp(path, "/fido2-configuration.json") ||
         !strcmp(path, "/.well-known/webauthn") ||
@@ -1066,9 +1084,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/webauthn") ||
         !strcmp(path, "/webauthn.json") ||
         !strcmp(path, "/.well-known/did.json") ||
+        !strcmp(path, "/.well-known/did") ||
         !strcmp(path, "/did.json") ||
+        !strcmp(path, "/did") ||
         !strcmp(path, "/.well-known/did-configuration") ||
         !strcmp(path, "/.well-known/did-configuration.json") ||
+        !strcmp(path, "/.well-known/did-configuration/resources") ||
         !strcmp(path, "/did-configuration") ||
         !strcmp(path, "/did-configuration.json") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1100,8 +1121,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/api/oauth-client-registration.json") ||
         !strcmp(path, "/.well-known/oauth-protected-resource") ||
         !strcmp(path, "/.well-known/oauth-protected-resource.json") ||
+        !strcmp(path, "/.well-known/oauth-protected-resource/metadata") ||
         !strcmp(path, "/oauth-protected-resource") ||
-        !strcmp(path, "/oauth-protected-resource.json"))
+        !strcmp(path, "/oauth-protected-resource.json") ||
+        !strcmp(path, "/.well-known/oauth-authorization-server/openid-configuration") ||
+        !strcmp(path,
+                "/.well-known/oauth-authorization-server/.well-known/openid-configuration") ||
+        !strcmp(path, "/.well-known/nostr/nip05") ||
+        !strcmp(path, "/.well-known/security.txt.json"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -2587,6 +2614,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/passkey-endpoints") == 0 ||
        strcmp(path, "/.well-known/passkey-endpoints/") == 0 ||
        strcmp(path, "/.well-known/passkey-endpoints.json") == 0 ||
+       strcmp(path, "/.well-known/passkey-endpoints/enroll") == 0 ||
+       strcmp(path, "/.well-known/passkey-endpoints/manage") == 0 ||
        strcmp(path, "/passkey-endpoints") == 0 ||
        strcmp(path, "/passkey-endpoints/") == 0 ||
        strcmp(path, "/passkey-endpoints.json") == 0 ||
@@ -2804,6 +2833,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/openid-configuration") == 0 ||
        strcmp(path, "/.well-known/openid-configuration/") == 0 ||
        strcmp(path, "/.well-known/openid-configuration.json") == 0 ||
+       strcmp(path, "/.well-known/oauth-authorization-server/openid-configuration") == 0 ||
+       strcmp(path,
+              "/.well-known/oauth-authorization-server/.well-known/openid-configuration") == 0 ||
        strcmp(path, "/openid-configuration") == 0 ||
        strcmp(path, "/openid-configuration/") == 0 ||
        strcmp(path, "/openid-configuration.json") == 0 ||
@@ -2892,6 +2924,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/uma2-configuration") == 0 ||
        strcmp(path, "/.well-known/uma2-configuration.json") == 0 ||
        strcmp(path, "/.well-known/uma2-configuration/") == 0 ||
+       strcmp(path, "/.well-known/uma2-configuration/resource_set") == 0 ||
+       strcmp(path, "/.well-known/uma2-configuration/permission") == 0 ||
+       strcmp(path, "/.well-known/uma2-configuration/resource_registration") == 0 ||
+       strcmp(path, "/.well-known/uma2-configuration/permission_endpoint") == 0 ||
+       strcmp(path, "/.well-known/uma2-configuration/introspection") == 0 ||
        strcmp(path, "/uma2-configuration") == 0 ||
        strcmp(path, "/uma2-configuration.json") == 0 ||
        strcmp(path, "/uma2-configuration/") == 0 ||
@@ -2938,6 +2975,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/openid-credential-issuer") == 0 ||
        strcmp(path, "/.well-known/openid-credential-issuer/") == 0 ||
        strcmp(path, "/.well-known/openid-credential-issuer.json") == 0 ||
+       strcmp(path, "/.well-known/openid-credential-issuer/credential_endpoint") == 0 ||
+       strcmp(path, "/.well-known/openid-credential-issuer/batch_credential") == 0 ||
+       strcmp(path, "/.well-known/openid-credential-issuer/deferred_credential") == 0 ||
+       strcmp(path, "/.well-known/credential-issuer") == 0 ||
+       strcmp(path, "/.well-known/vc-configuration") == 0 ||
        strcmp(path, "/openid-credential-issuer") == 0 ||
        strcmp(path, "/openid-credential-issuer/") == 0 ||
        strcmp(path, "/openid-credential-issuer.json") == 0 ||
@@ -2980,6 +3022,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/fido2-configuration") == 0 ||
        strcmp(path, "/.well-known/fido2-configuration.json") == 0 ||
        strcmp(path, "/.well-known/fido2-configuration/") == 0 ||
+       strcmp(path, "/.well-known/fido2-configuration/origins") == 0 ||
+       strcmp(path, "/.well-known/fido2-configuration/trusted-facets") == 0 ||
+       strcmp(path, "/.well-known/fido-u2f-facets") == 0 ||
+       strcmp(path, "/.well-known/u2f") == 0 ||
        strcmp(path, "/fido2-configuration") == 0 ||
        strcmp(path, "/fido2-configuration.json") == 0 ||
        strcmp(path, "/fido2-configuration/") == 0 ||
@@ -3021,6 +3067,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/webauthn.json") == 0 ||
        strcmp(path, "/.well-known/webauthn/origins") == 0 ||
        strcmp(path, "/.well-known/webauthn/related-origins") == 0 ||
+       strcmp(path, "/.well-known/webauthn/configuration") == 0 ||
+       strcmp(path, "/.well-known/webauthn/attestation") == 0 ||
        strcmp(path, "/.well-known/passkey-endpoints/related-origins") == 0 ||
        strcmp(path, "/.well-known/passkey-endpoints/origins") == 0 ||
        strcmp(path, "/webauthn") == 0 ||
@@ -3059,8 +3107,12 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/did.json") == 0 ||
        strcmp(path, "/.well-known/did.json/") == 0 ||
+       strcmp(path, "/.well-known/did") == 0 ||
+       strcmp(path, "/.well-known/did/") == 0 ||
        strcmp(path, "/did.json") == 0 ||
        strcmp(path, "/did.json/") == 0 ||
+       strcmp(path, "/did") == 0 ||
+       strcmp(path, "/did/") == 0 ||
        strcmp(path, "/api/did.json") == 0 ||
        strcmp(path, "/peer/v1/did.json") == 0)) {
     static const char did[] =
@@ -3097,6 +3149,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/did-configuration") == 0 ||
        strcmp(path, "/.well-known/did-configuration/") == 0 ||
        strcmp(path, "/.well-known/did-configuration.json") == 0 ||
+       strcmp(path, "/.well-known/did-configuration/resources") == 0 ||
        strcmp(path, "/did-configuration") == 0 ||
        strcmp(path, "/did-configuration/") == 0 ||
        strcmp(path, "/did-configuration.json") == 0 ||
@@ -3232,6 +3285,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (strcmp(path, "/.well-known/oauth-protected-resource") == 0 ||
        strcmp(path, "/.well-known/oauth-protected-resource/") == 0 ||
        strcmp(path, "/.well-known/oauth-protected-resource.json") == 0 ||
+       strcmp(path, "/.well-known/oauth-protected-resource/metadata") == 0 ||
        strcmp(path, "/oauth-protected-resource") == 0 ||
        strcmp(path, "/oauth-protected-resource/") == 0 ||
        strcmp(path, "/oauth-protected-resource.json") == 0 ||
@@ -3348,6 +3402,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/.well-known/security.txt") == 0 ||
                  strcmp(path, "/.well-known/security.txt/") == 0 ||
                  strcmp(path, "/.well-known/security.json") == 0 ||
+                 strcmp(path, "/.well-known/security.txt.json") == 0 ||
                  strcmp(path, "/api/security.txt") == 0 ||
                  strcmp(path, "/peer/v1/security.txt") == 0)) {
     static const char sectxt[] =
@@ -3767,6 +3822,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
        strcmp(path, "/.well-known/nostr.json/") == 0 ||
        strcmp(path, "/.well-known/nostr") == 0 ||
        strcmp(path, "/.well-known/nostr/") == 0 ||
+       strcmp(path, "/.well-known/nostr/nip05") == 0 ||
        strcmp(path, "/nostr.json") == 0 ||
        strcmp(path, "/nostr.json/") == 0 ||
        strcmp(path, "/nostr") == 0 ||
