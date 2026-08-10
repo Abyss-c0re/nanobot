@@ -570,6 +570,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt") ||
         !strcmp(path, "/security.txt") || !strcmp(path, "/.well-known/security.txt") ||
         !strcmp(path, "/trust.txt") || !strcmp(path, "/.well-known/trust.txt") ||
+        !strcmp(path, "/keybase.txt") || !strcmp(path, "/.well-known/keybase.txt") ||
         !strcmp(path, "/manifest.json") || !strcmp(path, "/manifest.webmanifest") ||
         !strcmp(path, "/site.webmanifest") ||
         !strcmp(path, "/humans.txt") || !strcmp(path, "/sitemap.xml") ||
@@ -1629,7 +1630,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"oauth_client_registration\",\"openid_federation\","
         "\"uma2_configuration\",\"openid_credential_issuer\","
         "\"fido2_configuration\",\"webauthn\",\"did_json\","
-        "\"did_configuration\",\"trust_txt\""
+        "\"did_configuration\",\"trust_txt\",\"keybase_txt\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -2754,6 +2755,23 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "# Companion: /.well-known/security.txt\n"
       "# See: https://github.com/Abyss-c0re/nanobot\n";
     http_response(cfd, 200, "text/plain; charset=utf-8", trust, sizeof trust - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/Keybase probes hit /keybase.txt and /.well-known/keybase.txt
+   * and got not_found. Lab ops publishes no Keybase site proofs — empty plate. */
+  if (is_get && (strcmp(path, "/keybase.txt") == 0 ||
+                 strcmp(path, "/keybase.txt/") == 0 ||
+                 strcmp(path, "/.well-known/keybase.txt") == 0 ||
+                 strcmp(path, "/.well-known/keybase.txt/") == 0 ||
+                 strcmp(path, "/api/keybase.txt") == 0 ||
+                 strcmp(path, "/peer/v1/keybase.txt") == 0)) {
+    static const char kbase[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "# keybase.txt — no site proofs published for this peer\n"
+      "# Companion: /.well-known/security.txt /.well-known/trust.txt\n"
+      "# See: https://github.com/Abyss-c0re/nanobot\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", kbase, sizeof kbase - 1);
     free(req); close(cfd); return;
   }
 

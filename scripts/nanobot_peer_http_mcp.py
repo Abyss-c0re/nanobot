@@ -640,6 +640,13 @@ class H(BaseHTTPRequestHandler):
             "/api/trust.txt",
             "/peer/v1/trust.txt",
         )
+        # Residual: GET keybase.txt after peer gained empty proofs plate.
+        keybase_txt_paths = (
+            "/keybase.txt",
+            "/.well-known/keybase.txt",
+            "/api/keybase.txt",
+            "/peer/v1/keybase.txt",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -1315,6 +1322,32 @@ class H(BaseHTTPRequestHandler):
                     "memberships": [],
                     "control": [],
                     "security_txt": "/.well-known/security.txt",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in keybase_txt_paths:
+            # Peer serves text/plain empty Keybase proofs; MCP dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "keybase_txt",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/.well-known/keybase.txt",
+                    "keybase_txt": True,
+                    "proofs": [],
+                    "username": "",
+                    "security_txt": "/.well-known/security.txt",
+                    "trust_txt": "/.well-known/trust.txt",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,
