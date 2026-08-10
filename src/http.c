@@ -297,6 +297,68 @@ static void http_text(int fd, int code, const char *body) {
   http_response(fd, code, "text/plain", body, body ? strlen(body) : 0);
 }
 
+/* Residual: OPTIONS returned empty 200 without Allow / CORS preflight methods.
+ * Mesh and browser probes only read headers; dual-wire GET post_only plates
+ * already advertise Allow: POST, OPTIONS — OPTIONS must match. */
+static int path_is_post_only(const char *path) {
+  static const char *const posts[] = {
+      "/api/shell",
+      "/api/shell/",
+      "/peer/v1/shell",
+      "/peer/v1/shell/",
+      "/api/shell/gate",
+      "/api/shell/gate/",
+      "/peer/v1/shell/gate",
+      "/peer/v1/shell/gate/",
+      "/api/shell/approve",
+      "/api/shell/approve/",
+      "/peer/v1/shell/approve",
+      "/peer/v1/shell/approve/",
+      "/api/prompt",
+      "/api/prompt/",
+      "/peer/v1/prompt",
+      "/peer/v1/prompt/",
+      "/api/chat",
+      "/api/chat/",
+      "/peer/v1/chat",
+      "/peer/v1/chat/",
+      "/api/auth/start",
+      "/api/auth/start/",
+      "/peer/v1/auth/start",
+      "/peer/v1/auth/start/",
+      "/api/mcp/probe",
+      "/api/mcp/probe/",
+      "/peer/v1/mcp/probe",
+      "/peer/v1/mcp/probe/",
+      NULL};
+  for (int i = 0; posts[i]; i++) {
+    if (strcmp(path, posts[i]) == 0) return 1;
+  }
+  return 0;
+}
+
+static void http_options(int fd, const char *allow) {
+  const char *a =
+      (allow && allow[0]) ? allow : "GET, HEAD, POST, PUT, OPTIONS";
+  char hdr[512];
+  int n = snprintf(hdr, sizeof hdr,
+                   "HTTP/1.1 204 No Content\r\n"
+                   "Allow: %s\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Access-Control-Allow-Methods: %s\r\n"
+                   "Access-Control-Allow-Headers: *\r\n"
+                   "Access-Control-Max-Age: 600\r\n"
+                   "Content-Length: 0\r\n"
+                   "Connection: close\r\n"
+                   "Cache-Control: no-store\r\n"
+                   "\r\n",
+                   a, a);
+  if (n > 0 && n < (int)sizeof hdr)
+    send_all(fd, hdr, (size_t)n);
+  else
+    http_text(fd, 200, "");
+}
+
 /* Residual: error plates had schema/ok/error dual-wire but no action leaf —
  * mesh could not classify fail responses like health/info/models. */
 static void http_peer_err(int fd, int code, const char *error) {
@@ -533,7 +595,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   path[i] = 0;
 
   if (is_opts) {
-    http_text(cfd, 200, "");
+    /* Residual: bare 200 + empty body lacked Allow and CORS methods. */
+    const char *allow = path_is_post_only(path) ? "POST, OPTIONS"
+                                                : "GET, HEAD, POST, PUT, OPTIONS";
+    http_options(cfd, allow);
     free(req); close(cfd); return;
   }
 

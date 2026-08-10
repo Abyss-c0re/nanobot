@@ -242,10 +242,34 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+        # Residual: OPTIONS lacked Allow; post-only dual-wire paths should
+        # advertise POST, OPTIONS only (match peer :18787).
+        path = self.path.split("?", 1)[0]
+        if path != "/" and path.endswith("/"):
+            path = path.rstrip("/") or "/"
+        post_only = {
+            "/api/shell",
+            "/peer/v1/shell",
+            "/api/shell/gate",
+            "/peer/v1/shell/gate",
+            "/api/shell/approve",
+            "/peer/v1/shell/approve",
+            "/api/prompt",
+            "/peer/v1/prompt",
+            "/api/chat",
+            "/peer/v1/chat",
+            "/api/auth/start",
+            "/peer/v1/auth/start",
+            "/api/mcp/probe",
+            "/peer/v1/mcp/probe",
+        }
+        allow = "POST, OPTIONS" if path in post_only else "GET, POST, OPTIONS"
         self.send_response(204)
+        self.send_header("Allow", allow)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", allow)
         self.send_header("Access-Control-Allow-Headers", "*")
+        self.send_header("Access-Control-Max-Age", "600")
         self.end_headers()
 
     def do_GET(self):
