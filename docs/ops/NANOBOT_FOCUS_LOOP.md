@@ -208,6 +208,7 @@ cd ~/Dev/AI/nanobot
 | GET well-known nostr.json dual-wire + MCP | `6217807`  |
 | GET well-known atproto-did dual-wire + MCP | `8c9587d`  |
 | GET well-known stellar.toml dual-wire + MCP | `c108cf0`  |
+| GET well-known web-identity dual-wire + MCP | `49a463f`  |
 ## Anti-chaos
 
 - One product bite per cycle  
