@@ -472,14 +472,18 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET caldav after peer gained empty CalDAV discovery plate.
         caldav_paths = (
             "/.well-known/caldav",
+            "/.well-known/caldav.json",
             "/caldav",
+            "/caldav.json",
             "/api/caldav",
             "/peer/v1/caldav",
         )
         # Residual: GET carddav after peer gained empty CardDAV discovery plate.
         carddav_paths = (
             "/.well-known/carddav",
+            "/.well-known/carddav.json",
             "/carddav",
+            "/carddav.json",
             "/api/carddav",
             "/peer/v1/carddav",
         )
@@ -768,7 +772,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET atproto-did after empty ATProto plate.
         atproto_did_paths = (
             "/.well-known/atproto-did",
+            "/.well-known/atproto-did.json",
             "/atproto-did",
+            "/atproto-did.json",
             "/api/atproto-did",
             "/peer/v1/atproto-did",
         )
@@ -782,7 +788,9 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET web-identity after empty FedCM plate.
         web_identity_paths = (
             "/.well-known/web-identity",
+            "/.well-known/web-identity.json",
             "/web-identity",
+            "/web-identity.json",
             "/api/web-identity",
             "/peer/v1/web-identity",
         )

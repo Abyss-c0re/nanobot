@@ -586,9 +586,11 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/apple-developer-merchantid-domain-association") ||
         !strcmp(path, "/.well-known/nostr.json") || !strcmp(path, "/.well-known/nostr") ||
         !strcmp(path, "/nostr.json") || !strcmp(path, "/nostr") ||
-        !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/atproto-did") ||
+        !strcmp(path, "/.well-known/atproto-did") || !strcmp(path, "/.well-known/atproto-did.json") ||
+        !strcmp(path, "/atproto-did") || !strcmp(path, "/atproto-did.json") ||
         !strcmp(path, "/.well-known/stellar.toml") || !strcmp(path, "/stellar.toml") ||
-        !strcmp(path, "/.well-known/web-identity") || !strcmp(path, "/web-identity") ||
+        !strcmp(path, "/.well-known/web-identity") || !strcmp(path, "/.well-known/web-identity.json") ||
+        !strcmp(path, "/web-identity") || !strcmp(path, "/web-identity.json") ||
         !strncmp(path, "/.well-known/posh", 16) || !strncmp(path, "/posh", 5) ||
         !strcmp(path, "/.well-known/traffic-advice") ||
         !strcmp(path, "/traffic-advice") ||
@@ -902,9 +904,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/api/mta-sts") ||
         !strcmp(path, "/peer/v1/mta-sts") ||
         !strcmp(path, "/.well-known/caldav") ||
+        !strcmp(path, "/.well-known/caldav.json") ||
         !strcmp(path, "/.well-known/carddav") ||
+        !strcmp(path, "/.well-known/carddav.json") ||
         !strcmp(path, "/caldav") ||
+        !strcmp(path, "/caldav.json") ||
         !strcmp(path, "/carddav") ||
+        !strcmp(path, "/carddav.json") ||
         !strcmp(path, "/.well-known/api-catalog") ||
         !strcmp(path, "/.well-known/api-catalog.json") ||
         !strcmp(path, "/api-catalog") ||
@@ -2360,8 +2366,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * got not_found. Lab ops is not a CalDAV host — honest empty plate. */
   if (is_get && (strcmp(path, "/.well-known/caldav") == 0 ||
                  strcmp(path, "/.well-known/caldav/") == 0 ||
+                 strcmp(path, "/.well-known/caldav.json") == 0 ||
                  strcmp(path, "/caldav") == 0 ||
                  strcmp(path, "/caldav/") == 0 ||
+                 strcmp(path, "/caldav.json") == 0 ||
                  strcmp(path, "/api/caldav") == 0 ||
                  strcmp(path, "/peer/v1/caldav") == 0)) {
     static const char cal[] =
@@ -2388,8 +2396,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * got not_found. Lab ops is not a CardDAV host — honest empty plate. */
   if (is_get && (strcmp(path, "/.well-known/carddav") == 0 ||
                  strcmp(path, "/.well-known/carddav/") == 0 ||
+                 strcmp(path, "/.well-known/carddav.json") == 0 ||
                  strcmp(path, "/carddav") == 0 ||
                  strcmp(path, "/carddav/") == 0 ||
+                 strcmp(path, "/carddav.json") == 0 ||
                  strcmp(path, "/api/carddav") == 0 ||
                  strcmp(path, "/peer/v1/carddav") == 0)) {
     static const char card[] =
@@ -3475,8 +3485,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/atproto-did") == 0 ||
        strcmp(path, "/.well-known/atproto-did/") == 0 ||
+       strcmp(path, "/.well-known/atproto-did.json") == 0 ||
        strcmp(path, "/atproto-did") == 0 ||
        strcmp(path, "/atproto-did/") == 0 ||
+       strcmp(path, "/atproto-did.json") == 0 ||
        strcmp(path, "/api/atproto-did") == 0 ||
        strcmp(path, "/peer/v1/atproto-did") == 0)) {
     static const char atp[] =
@@ -3522,8 +3534,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get &&
       (strcmp(path, "/.well-known/web-identity") == 0 ||
        strcmp(path, "/.well-known/web-identity/") == 0 ||
+       strcmp(path, "/.well-known/web-identity.json") == 0 ||
        strcmp(path, "/web-identity") == 0 ||
        strcmp(path, "/web-identity/") == 0 ||
+       strcmp(path, "/web-identity.json") == 0 ||
        strcmp(path, "/api/web-identity") == 0 ||
        strcmp(path, "/peer/v1/web-identity") == 0)) {
     static const char wi[] =
