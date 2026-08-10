@@ -1020,6 +1020,14 @@ class H(BaseHTTPRequestHandler):
             "/api/xrpc-server-did",
             "/peer/v1/xrpc-server-did",
         )
+        # Residual: GET mcp.json after empty MCP discovery plate.
+        mcp_json_paths = (
+            "/.well-known/mcp.json",
+            "/.well-known/mcp",
+            "/mcp.json",
+            "/api/mcp.json",
+            "/peer/v1/mcp.json",
+        )
         # Residual: GET humans.txt after peer gained humans plate.
         humans_paths = (
             "/humans.txt",
@@ -2110,6 +2118,13 @@ class H(BaseHTTPRequestHandler):
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "xrpc_server_did": doc},
+            )
+            return
+        if path in mcp_json_paths:
+            doc = peer_json("GET", "/.well-known/mcp.json", timeout=5)
+            self._send(
+                200,
+                doc if isinstance(doc, dict) else {"ok": False, "mcp_json": doc},
             )
             return
         if path in humans_paths:
