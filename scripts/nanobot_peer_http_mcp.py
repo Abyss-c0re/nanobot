@@ -432,6 +432,13 @@ class H(BaseHTTPRequestHandler):
             "/api/gpc.json",
             "/peer/v1/gpc.json",
         )
+        # Residual: GET tdmrep.json after peer gained TDM reservation plate.
+        tdmrep_paths = (
+            "/.well-known/tdmrep.json",
+            "/tdmrep.json",
+            "/api/tdmrep.json",
+            "/peer/v1/tdmrep.json",
+        )
         # Residual: GET dnt-policy.txt after peer gained DNT honor plate.
         dnt_paths = (
             "/.well-known/dnt-policy.txt",
@@ -836,6 +843,13 @@ class H(BaseHTTPRequestHandler):
             doc = peer_json("GET", "/.well-known/gpc.json", timeout=5)
             self._send(
                 200, doc if isinstance(doc, dict) else {"ok": False, "gpc": doc}
+            )
+            return
+        if path in tdmrep_paths:
+            # Peer serves TDM reservation plate; proxy dual-wire JSON.
+            doc = peer_json("GET", "/.well-known/tdmrep.json", timeout=5)
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "tdmrep": doc}
             )
             return
         if path in dnt_paths:

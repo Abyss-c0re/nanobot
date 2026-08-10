@@ -606,6 +606,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/.well-known/matrix/server") ||
         !strcmp(path, "/matrix/client") ||
         !strcmp(path, "/matrix/server") ||
+        !strcmp(path, "/.well-known/tdmrep.json") ||
+        !strcmp(path, "/tdmrep.json") ||
         !strcmp(path, "/.well-known/openid-configuration") ||
         !strcmp(path, "/openid-configuration") ||
         !strcmp(path, "/.well-known/oauth-authorization-server") ||
@@ -1592,7 +1594,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"openid_configuration\",\"oauth_authorization_server\","
         "\"oauth_protected_resource\",\"dnt_policy\","
         "\"passkey_endpoints\",\"webfinger\",\"nodeinfo\",\"host_meta\","
-        "\"matrix_client\",\"matrix_server\""
+        "\"matrix_client\",\"matrix_server\",\"tdmrep\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "");
@@ -1808,6 +1810,35 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "}"
       "}";
     http_response(cfd, 200, "application/json", gpc, sizeof gpc - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: AI/mesh probes hit /.well-known/tdmrep.json (TDM Reservation)
+   * and got not_found. Lab ops reserves all content against TDM (opt-out). */
+  if (is_get && (strcmp(path, "/.well-known/tdmrep.json") == 0 ||
+                 strcmp(path, "/.well-known/tdmrep.json/") == 0 ||
+                 strcmp(path, "/tdmrep.json") == 0 ||
+                 strcmp(path, "/tdmrep.json/") == 0 ||
+                 strcmp(path, "/api/tdmrep.json") == 0 ||
+                 strcmp(path, "/peer/v1/tdmrep.json") == 0)) {
+    static const char tdm[] =
+      "{"
+      "\"version\":1,"
+      "\"tdm-reservation\":\"all\","
+      "\"x-nanobot\":{"
+        "\"schema\":\"nanobot.peer_http.v1\","
+        "\"action\":\"tdmrep\","
+        "\"tdmrep\":true,"
+        "\"product_wire\":\"smx2\","
+        "\"peer_http\":\"lab_ops_only\","
+        "\"peer_http_is_product_bus\":false,"
+        "\"share\":\"state_matrix_only\","
+        "\"hold_flash\":1,"
+        "\"llm_is_commander\":false,"
+        "\"python\":0"
+      "}"
+      "}";
+    http_response(cfd, 200, "application/json", tdm, sizeof tdm - 1);
     free(req); close(cfd); return;
   }
 
