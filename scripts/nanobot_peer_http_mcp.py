@@ -324,6 +324,19 @@ class H(BaseHTTPRequestHandler):
         log_paths = ("/api/log", "/peer/v1/log")
         # Residual: GET /api|/peer/v1/backend after peer gained GET backend plate.
         backend_paths = ("/api/backend", "/peer/v1/backend")
+        # Residual: GET openapi/favicon after peer gained those plates.
+        openapi_paths = (
+            "/openapi.json",
+            "/openapi",
+            "/api/openapi.json",
+            "/api/openapi",
+            "/peer/v1/openapi.json",
+            "/peer/v1/openapi",
+            "/openapi.yaml",
+            "/api/openapi.yaml",
+            "/peer/v1/openapi.yaml",
+        )
+        favicon_paths = ("/favicon.ico", "/favicon")
         if path in info_paths:
             info = peer_json("GET", "/peer/v1/info", timeout=5)
             self._send(200, info if isinstance(info, dict) else {"ok": False, "info": info})
@@ -436,6 +449,34 @@ class H(BaseHTTPRequestHandler):
             be = peer_json("GET", "/api/backend", timeout=5)
             self._send(
                 200, be if isinstance(be, dict) else {"ok": False, "backend": be}
+            )
+            return
+        if path in openapi_paths:
+            # Peer YAML is not JSON; always proxy the JSON OpenAPI plate.
+            doc = peer_json("GET", "/openapi.json", timeout=5)
+            self._send(
+                200, doc if isinstance(doc, dict) else {"ok": False, "openapi": doc}
+            )
+            return
+        if path in favicon_paths:
+            # Peer serves image/svg+xml; MCP mesh probes want dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "favicon",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "image/svg+xml",
+                    "peer_path": "/favicon.ico",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
             )
             return
         # Poll-by-id: /peer/v1/jobs/{id} or /api/jobs/{id} (+ optional trailing slash)

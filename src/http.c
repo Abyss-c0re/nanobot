@@ -558,7 +558,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     /* only serve plain static under www; API paths fall through */
     int is_static = 1;
     if (!strncmp(path, "/api/", 5) || !strncmp(path, "/peer/", 6) ||
-        !strcmp(path, "/activate") || !strcmp(path, "/openapi.yaml"))
+        !strcmp(path, "/activate") ||
+        !strcmp(path, "/openapi.yaml") || !strcmp(path, "/openapi.json") ||
+        !strcmp(path, "/openapi") || !strcmp(path, "/favicon.ico") ||
+        !strcmp(path, "/favicon"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1397,6 +1400,141 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       ver ? ver : "");
     free(ver);
     http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh/browser probes hit /favicon.ico and got not_found (noisy 404
+   * without www_root). Serve a tiny cyan-cube SVG so probes stay quiet. */
+  if (is_get && (strcmp(path, "/favicon.ico") == 0 || strcmp(path, "/favicon.ico/") == 0 ||
+                 strcmp(path, "/favicon") == 0 || strcmp(path, "/favicon/") == 0)) {
+    static const char favicon_svg[] =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\">"
+      "<rect width=\"32\" height=\"32\" fill=\"#0a0a0a\"/>"
+      "<rect x=\"6\" y=\"6\" width=\"20\" height=\"20\" fill=\"none\" "
+      "stroke=\"#00e5ff\" stroke-width=\"2\"/>"
+      "</svg>";
+    http_response(cfd, 200, "image/svg+xml", favicon_svg, sizeof favicon_svg - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh OpenAPI probes hit /openapi.json|/openapi.yaml (and dual-wire
+   * aliases) while only static www exclusion reserved the path — always 404. */
+  if (is_get && (strcmp(path, "/openapi.json") == 0 || strcmp(path, "/openapi.json/") == 0 ||
+                 strcmp(path, "/openapi") == 0 || strcmp(path, "/openapi/") == 0 ||
+                 strcmp(path, "/api/openapi.json") == 0 ||
+                 strcmp(path, "/api/openapi.json/") == 0 ||
+                 strcmp(path, "/api/openapi") == 0 || strcmp(path, "/api/openapi/") == 0 ||
+                 strcmp(path, "/peer/v1/openapi.json") == 0 ||
+                 strcmp(path, "/peer/v1/openapi.json/") == 0 ||
+                 strcmp(path, "/peer/v1/openapi") == 0 ||
+                 strcmp(path, "/peer/v1/openapi/") == 0 ||
+                 strcmp(path, "/openapi.yaml") == 0 || strcmp(path, "/openapi.yaml/") == 0 ||
+                 strcmp(path, "/api/openapi.yaml") == 0 ||
+                 strcmp(path, "/api/openapi.yaml/") == 0 ||
+                 strcmp(path, "/peer/v1/openapi.yaml") == 0 ||
+                 strcmp(path, "/peer/v1/openapi.yaml/") == 0)) {
+    int want_yaml =
+      (strcmp(path, "/openapi.yaml") == 0 || strcmp(path, "/openapi.yaml/") == 0 ||
+       strcmp(path, "/api/openapi.yaml") == 0 || strcmp(path, "/api/openapi.yaml/") == 0 ||
+       strcmp(path, "/peer/v1/openapi.yaml") == 0 ||
+       strcmp(path, "/peer/v1/openapi.yaml/") == 0);
+    char *ver = ng_json_escape(NG_VERSION);
+    char body[2800];
+    int n;
+    if (want_yaml) {
+      n = snprintf(body, sizeof body,
+        "openapi: 3.0.3\n"
+        "info:\n"
+        "  title: nanobot peer HTTP\n"
+        "  version: \"%s\"\n"
+        "  description: Lab ops peer bus (not product SMX2).\n"
+        "paths:\n"
+        "  /peer/v1/health:\n"
+        "    get: {summary: health}\n"
+        "  /health:\n"
+        "    get: {summary: health alias}\n"
+        "  /api/health:\n"
+        "    get: {summary: health alias}\n"
+        "  /ready:\n"
+        "    get: {summary: ready}\n"
+        "  /peer/v1/info:\n"
+        "    get: {summary: info}\n"
+        "  /peer/v1/prompt:\n"
+        "    post: {summary: prompt job}\n"
+        "  /peer/v1/shell:\n"
+        "    post: {summary: shell job}\n"
+        "  /peer/v1/jobs:\n"
+        "    get: {summary: jobs index}\n"
+        "  /peer/v1/control:\n"
+        "    get: {summary: control}\n"
+        "  /version:\n"
+        "    get: {summary: version}\n"
+        "  /metrics:\n"
+        "    get: {summary: host metrics}\n"
+        "  /whoami:\n"
+        "    get: {summary: auth whoami}\n"
+        "  /openapi.json:\n"
+        "    get: {summary: this document (JSON)}\n"
+        "  /favicon.ico:\n"
+        "    get: {summary: favicon SVG}\n",
+        ver ? ver : "");
+      free(ver);
+      http_response(cfd, 200, "application/yaml", body, (size_t)n);
+    } else {
+      n = snprintf(body, sizeof body,
+        "{"
+        "\"openapi\":\"3.0.3\","
+        "\"info\":{"
+          "\"title\":\"nanobot peer HTTP\","
+          "\"version\":\"%s\","
+          "\"description\":\"Lab ops peer bus (not product SMX2).\""
+        "},"
+        "\"paths\":{"
+          "\"/peer/v1/health\":{\"get\":{\"summary\":\"health\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/health\":{\"get\":{\"summary\":\"health alias\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/api/health\":{\"get\":{\"summary\":\"health alias\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/ready\":{\"get\":{\"summary\":\"ready\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/peer/v1/info\":{\"get\":{\"summary\":\"info\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/peer/v1/prompt\":{\"post\":{\"summary\":\"prompt job\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/peer/v1/shell\":{\"post\":{\"summary\":\"shell job\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/peer/v1/jobs\":{\"get\":{\"summary\":\"jobs index\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/peer/v1/control\":{\"get\":{\"summary\":\"control\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/version\":{\"get\":{\"summary\":\"version\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/metrics\":{\"get\":{\"summary\":\"host metrics\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/whoami\":{\"get\":{\"summary\":\"auth whoami\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/openapi.json\":{\"get\":{\"summary\":\"this document\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}},"
+          "\"/favicon.ico\":{\"get\":{\"summary\":\"favicon SVG\","
+            "\"responses\":{\"200\":{\"description\":\"ok\"}}}}"
+        "},"
+        "\"x-nanobot\":{"
+          "\"schema\":\"nanobot.peer_http.v1\","
+          "\"action\":\"openapi\","
+          "\"product_wire\":\"smx2\","
+          "\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,"
+          "\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,"
+          "\"llm_is_commander\":false,"
+          "\"python\":0"
+        "}"
+        "}",
+        ver ? ver : "");
+      free(ver);
+      http_response(cfd, 200, "application/json", body, (size_t)n);
+    }
     free(req); close(cfd); return;
   }
 
