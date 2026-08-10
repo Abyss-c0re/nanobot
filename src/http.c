@@ -563,7 +563,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         !strcmp(path, "/openapi") || !strcmp(path, "/favicon.ico") ||
         !strcmp(path, "/favicon") || !strcmp(path, "/swagger.json") ||
         !strcmp(path, "/swagger") || !strcmp(path, "/docs") ||
-        !strcmp(path, "/api/docs"))
+        !strcmp(path, "/api/docs") || !strcmp(path, "/robots.txt"))
       is_static = 0;
     if (is_static && static_path_ok(rel)) {
       char fpath[768];
@@ -1522,6 +1522,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "stroke=\"#00e5ff\" stroke-width=\"2\"/>"
       "</svg>";
     http_response(cfd, 200, "image/svg+xml", favicon_svg, sizeof favicon_svg - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: crawler/mesh probes hit /robots.txt and got dual-wire not_found.
+   * Lab ops peer is not public product — disallow all. */
+  if (is_get && (strcmp(path, "/robots.txt") == 0 || strcmp(path, "/robots.txt/") == 0)) {
+    static const char robots[] =
+      "# nanobot peer HTTP — lab ops only (not product SMX2)\n"
+      "User-agent: *\n"
+      "Disallow: /\n";
+    http_response(cfd, 200, "text/plain; charset=utf-8", robots, sizeof robots - 1);
     free(req); close(cfd); return;
   }
 

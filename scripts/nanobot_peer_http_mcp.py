@@ -365,6 +365,8 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/docs",
         )
         favicon_paths = ("/favicon.ico", "/favicon")
+        # Residual: GET robots.txt after peer gained robots plate.
+        robots_paths = ("/robots.txt",)
         # Residual: GET capabilities dual-wire after peer gained capabilities plate.
         capabilities_paths = (
             "/capabilities",
@@ -515,6 +517,28 @@ class H(BaseHTTPRequestHandler):
                     "service": "blackcube-nanobot-http-mcp",
                     "content_type": "image/svg+xml",
                     "peer_path": "/favicon.ico",
+                    "product_wire": "smx2",
+                    "peer_http": "lab_ops_only",
+                    "peer_http_is_product_bus": False,
+                    "share": "state_matrix_only",
+                    "hold_flash": 1,
+                    "llm_is_commander": False,
+                    "python": 0,
+                },
+            )
+            return
+        if path in robots_paths:
+            # Peer serves text/plain; MCP mesh probes want dual-wire JSON.
+            self._send(
+                200,
+                {
+                    "schema": "nanobot.peer_http.v1",
+                    "ok": True,
+                    "action": "robots",
+                    "service": "blackcube-nanobot-http-mcp",
+                    "content_type": "text/plain",
+                    "peer_path": "/robots.txt",
+                    "disallow": "/",
                     "product_wire": "smx2",
                     "peer_http": "lab_ops_only",
                     "peer_http_is_product_bus": False,
