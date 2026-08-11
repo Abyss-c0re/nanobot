@@ -292,6 +292,7 @@ cd ~/Dev/AI/nanobot
 | GET token/echo/events dual-wire discovery + MCP | `4b83fa4`  |
 | GET stream/sse/ws dual-wire discovery + MCP | `f9eb367`  |
 | GET heartbeat/peers/state dual-wire discovery + MCP | `5e8dd19`  |
+| GET api/v1 ping/time/version/ready/info + notify dual-wire + MCP | `8bb1eb1`  |
 ## Anti-chaos
 
 - One product bite per cycle  
