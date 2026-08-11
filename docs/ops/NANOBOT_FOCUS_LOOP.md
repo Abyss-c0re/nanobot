@@ -291,7 +291,7 @@ cd ~/Dev/AI/nanobot
 | GET config + /api/v1 identity dual-wire aliases + MCP | `9596feb`  |
 | GET token/echo/events dual-wire discovery + MCP | `4b83fa4`  |
 | GET stream/sse/ws dual-wire discovery + MCP | `f9eb367`  |
-| GET heartbeat/peers/state dual-wire discovery + MCP | `PLACEHOLDER`  |
+| GET heartbeat/peers/state dual-wire discovery + MCP | `5e8dd19`  |
 ## Anti-chaos
 
 - One product bite per cycle  
