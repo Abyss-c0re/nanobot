@@ -1619,6 +1619,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: application/json\r\n"
         "Allow: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n";
       char out[768];
@@ -2058,6 +2059,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: application/json\r\n"
         "Allow: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n";
       char out[900];
@@ -2117,6 +2119,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: application/json\r\n"
         "Allow: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n";
       char out[900];
@@ -7563,6 +7566,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: application/json\r\n"
         "Allow: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n";
       char out[768];
@@ -7605,6 +7609,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: application/json\r\n"
         "Allow: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n";
       char out[768];
@@ -7813,6 +7818,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: application/json\r\n"
         "Allow: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n";
       char out[960];
@@ -7856,6 +7862,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: application/json\r\n"
         "Allow: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n";
       char out[1024];
