@@ -2376,12 +2376,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/peer/v1/ready/") == 0 ||
                  strcmp(path, "/api/ready") == 0 ||
                  strcmp(path, "/api/ready/") == 0 ||
+                 strcmp(path, "/api/v1/ready") == 0 ||
+                 strcmp(path, "/api/v1/ready/") == 0 ||
                  strcmp(path, "/ping") == 0 ||
                  strcmp(path, "/ping/") == 0 ||
                  strcmp(path, "/api/ping") == 0 ||
                  strcmp(path, "/api/ping/") == 0 ||
                  strcmp(path, "/peer/v1/ping") == 0 ||
                  strcmp(path, "/peer/v1/ping/") == 0 ||
+                 strcmp(path, "/api/v1/ping") == 0 ||
+                 strcmp(path, "/api/v1/ping/") == 0 ||
                  strcmp(path, "/livez") == 0 || strcmp(path, "/livez/") == 0 ||
                  strcmp(path, "/api/livez") == 0 || strcmp(path, "/api/livez/") == 0 ||
                  strcmp(path, "/peer/v1/livez") == 0 ||
@@ -2415,7 +2419,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                     strcmp(path, "/peer/v1/ready") == 0 ||
                     strcmp(path, "/peer/v1/ready/") == 0 ||
                     strcmp(path, "/api/ready") == 0 ||
-                    strcmp(path, "/api/ready/") == 0);
+                    strcmp(path, "/api/ready/") == 0 ||
+                    strcmp(path, "/api/v1/ready") == 0 ||
+                    strcmp(path, "/api/v1/ready/") == 0);
     int is_readyz = (strcmp(path, "/readyz") == 0 || strcmp(path, "/readyz/") == 0 ||
                      strcmp(path, "/api/readyz") == 0 ||
                      strcmp(path, "/api/readyz/") == 0 ||
@@ -2426,7 +2432,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                    strcmp(path, "/api/ping") == 0 ||
                    strcmp(path, "/api/ping/") == 0 ||
                    strcmp(path, "/peer/v1/ping") == 0 ||
-                   strcmp(path, "/peer/v1/ping/") == 0);
+                   strcmp(path, "/peer/v1/ping/") == 0 ||
+                   strcmp(path, "/api/v1/ping") == 0 ||
+                   strcmp(path, "/api/v1/ping/") == 0);
     int is_livez = (strcmp(path, "/livez") == 0 || strcmp(path, "/livez/") == 0 ||
                     strcmp(path, "/api/livez") == 0 || strcmp(path, "/api/livez/") == 0 ||
                     strcmp(path, "/peer/v1/livez") == 0 ||
@@ -2768,12 +2776,62 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh probes /notify|/webhook got not_found. Lab ops has no
+   * inbound webhook bus — dual-wire discovery (jobs/prompt are the plane). */
+  if (is_get && (strcmp(path, "/notify") == 0 || strcmp(path, "/notify/") == 0 ||
+                 strcmp(path, "/api/notify") == 0 ||
+                 strcmp(path, "/api/notify/") == 0 ||
+                 strcmp(path, "/peer/v1/notify") == 0 ||
+                 strcmp(path, "/peer/v1/notify/") == 0 ||
+                 strcmp(path, "/api/v1/notify") == 0 ||
+                 strcmp(path, "/api/v1/notify/") == 0 ||
+                 strcmp(path, "/webhook") == 0 || strcmp(path, "/webhook/") == 0 ||
+                 strcmp(path, "/api/webhook") == 0 ||
+                 strcmp(path, "/api/webhook/") == 0 ||
+                 strcmp(path, "/peer/v1/webhook") == 0 ||
+                 strcmp(path, "/peer/v1/webhook/") == 0 ||
+                 strcmp(path, "/api/v1/webhook") == 0 ||
+                 strcmp(path, "/api/v1/webhook/") == 0 ||
+                 strcmp(path, "/hooks") == 0 || strcmp(path, "/hooks/") == 0 ||
+                 strcmp(path, "/api/hooks") == 0 ||
+                 strcmp(path, "/api/hooks/") == 0 ||
+                 strcmp(path, "/peer/v1/hooks") == 0 ||
+                 strcmp(path, "/peer/v1/hooks/") == 0 ||
+                 strcmp(path, "/callback") == 0 ||
+                 strcmp(path, "/callback/") == 0 ||
+                 strcmp(path, "/api/callback") == 0 ||
+                 strcmp(path, "/api/callback/") == 0 ||
+                 strcmp(path, "/peer/v1/callback") == 0 ||
+                 strcmp(path, "/peer/v1/callback/") == 0)) {
+    int is_webhook = (strstr(path, "webhook") != NULL);
+    int is_hooks = (strstr(path, "hooks") != NULL);
+    int is_cb = (strstr(path, "callback") != NULL);
+    const char *act = is_webhook ? "webhook" : is_hooks ? "hooks"
+                      : is_cb ? "callback" : "notify";
+    char body[640];
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
+      "\"notify\":true,"
+      "\"inbound\":false,"
+      "\"webhook\":false,"
+      "\"hub_jobs\":\"/peer/v1/jobs\","
+      "\"prompt\":\"/peer/v1/prompt\","
+      "\"methods\":[\"GET\"],"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      act);
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: mesh OpenAPI-ish probes hit /version|/api/version|/peer/v1/version
-   * and got not_found while health/info already expose NG_VERSION. */
+   * and got not_found while health/info already expose NG_VERSION.
+   * Residual: /api/v1/version still not_found after dual-wire version plate. */
   if (is_get && (strcmp(path, "/version") == 0 || strcmp(path, "/version/") == 0 ||
                  strcmp(path, "/api/version") == 0 || strcmp(path, "/api/version/") == 0 ||
                  strcmp(path, "/peer/v1/version") == 0 ||
-                 strcmp(path, "/peer/v1/version/") == 0)) {
+                 strcmp(path, "/peer/v1/version/") == 0 ||
+                 strcmp(path, "/api/v1/version") == 0 ||
+                 strcmp(path, "/api/v1/version/") == 0)) {
     char body[512];
     char *ver = ng_json_escape(NG_VERSION);
     int n = snprintf(body, sizeof body,
@@ -5417,14 +5475,19 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Residual: time/mesh probes hit /.well-known/time and got not_found.
-   * Lab ops is not a time-service host — empty plate (OS clock is local). */
+   * Lab ops is not a time-service host — empty plate (OS clock is local).
+   * Residual: /api/v1/time + trailing slash dual-wire still not_found. */
   if (is_get &&
       (strcmp(path, "/.well-known/time") == 0 ||
        strcmp(path, "/.well-known/time/") == 0 ||
        strcmp(path, "/time") == 0 ||
        strcmp(path, "/time/") == 0 ||
        strcmp(path, "/api/time") == 0 ||
+       strcmp(path, "/api/time/") == 0 ||
        strcmp(path, "/peer/v1/time") == 0 ||
+       strcmp(path, "/peer/v1/time/") == 0 ||
+       strcmp(path, "/api/v1/time") == 0 ||
+       strcmp(path, "/api/v1/time/") == 0 ||
        strcmp(path, "/.well-known/time.json") == 0 ||
        strcmp(path, "/time.json") == 0)) {
     static const char tim[] =
@@ -6955,11 +7018,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   /* Residual: /api/info and trailing slash 404 while health/jobs already
    * accept /api + slash aliases — mesh OpenAPI-ish probes hit not_found.
-   * Residual: bare /hello 404 while /api/hello and /peer/v1/hello already info. */
+   * Residual: bare /hello 404 while /api/hello and /peer/v1/hello already info.
+   * Residual: /api/v1/info still not_found after info dual-wire plate. */
   if (is_get && (strcmp(path, "/peer/v1/info") == 0 || strcmp(path, "/peer/v1/hello") == 0 ||
                  strcmp(path, "/peer/v1/info/") == 0 || strcmp(path, "/peer/v1/hello/") == 0 ||
                  strcmp(path, "/api/info") == 0 || strcmp(path, "/api/info/") == 0 ||
                  strcmp(path, "/api/hello") == 0 || strcmp(path, "/api/hello/") == 0 ||
+                 strcmp(path, "/api/v1/info") == 0 || strcmp(path, "/api/v1/info/") == 0 ||
+                 strcmp(path, "/api/v1/hello") == 0 || strcmp(path, "/api/v1/hello/") == 0 ||
                  strcmp(path, "/hello") == 0 || strcmp(path, "/hello/") == 0)) {
     /* Residual: info used raw ng_session_valid without ensure — soft-expired
      * access_token reported signed_in=false while /api/auth ensure → true. */

@@ -344,7 +344,12 @@ class H(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path != "/" and path.endswith("/"):
             path = path.rstrip("/") or "/"
-        ready_paths = ("/ready", "/peer/v1/ready", "/api/ready")
+        ready_paths = (
+            "/ready",
+            "/peer/v1/ready",
+            "/api/ready",
+            "/api/v1/ready",
+        )
         # Residual: k8s-style probes after peer gained livez/readyz/healthz/alive.
         readyz_paths = ("/readyz", "/api/readyz", "/peer/v1/readyz")
         livez_paths = (
@@ -357,7 +362,8 @@ class H(BaseHTTPRequestHandler):
         )
         healthz_paths = ("/healthz", "/api/healthz", "/peer/v1/healthz")
         # Residual: GET /ping dual-wire after peer gained ping plate.
-        ping_paths = ("/ping", "/api/ping", "/peer/v1/ping")
+        # Residual: /api/v1/ping after api/v1 dual-wire completion.
+        ping_paths = ("/ping", "/api/ping", "/peer/v1/ping", "/api/v1/ping")
         # Residual: GET /api|/api/v1|/peer/v1 index after peer namespace plates.
         index_paths = ("/api", "/api/v1", "/peer/v1")
         health_paths = (
@@ -373,8 +379,10 @@ class H(BaseHTTPRequestHandler):
         info_paths = (
             "/peer/v1/info",
             "/api/info",
+            "/api/v1/info",
             "/peer/v1/hello",
             "/api/hello",
+            "/api/v1/hello",
             "/hello",
         )
         jobs_coll = (
@@ -559,7 +567,12 @@ class H(BaseHTTPRequestHandler):
             "/api/v1/config",
             "/api/v1/settings",
         )
-        version_paths = ("/version", "/api/version", "/peer/v1/version")
+        version_paths = (
+            "/version",
+            "/api/version",
+            "/peer/v1/version",
+            "/api/v1/version",
+        )
         # Residual: GET uptime dual-wire after peer gained uptime plate.
         uptime_paths = ("/uptime", "/api/uptime", "/peer/v1/uptime")
         mcp_servers_paths = ("/api/mcp/servers", "/peer/v1/mcp/servers")
@@ -1491,6 +1504,7 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/coap",
         )
         # Residual: GET time after empty time-service plate.
+        # Residual: /api/v1/time after api/v1 dual-wire completion.
         time_paths = (
             "/.well-known/time",
             "/.well-known/time.json",
@@ -1498,6 +1512,24 @@ class H(BaseHTTPRequestHandler):
             "/time.json",
             "/api/time",
             "/peer/v1/time",
+            "/api/v1/time",
+        )
+        # Residual: notify/webhook discovery (no inbound bus).
+        notify_paths = (
+            "/notify",
+            "/api/notify",
+            "/peer/v1/notify",
+            "/api/v1/notify",
+            "/webhook",
+            "/api/webhook",
+            "/peer/v1/webhook",
+            "/api/v1/webhook",
+            "/hooks",
+            "/api/hooks",
+            "/peer/v1/hooks",
+            "/callback",
+            "/api/callback",
+            "/peer/v1/callback",
         )
         # Residual: GET timezone after empty timezone plate.
         timezone_paths = (
@@ -1975,6 +2007,20 @@ class H(BaseHTTPRequestHandler):
             sy = peer_json("GET", "/peer/v1/sync", timeout=5)
             self._send(
                 200, sy if isinstance(sy, dict) else {"ok": False, "sync": sy}
+            )
+            return
+        if path in notify_paths:
+            if "webhook" in path:
+                peer_n = "/peer/v1/webhook"
+            elif "hooks" in path:
+                peer_n = "/peer/v1/hooks"
+            elif "callback" in path:
+                peer_n = "/peer/v1/callback"
+            else:
+                peer_n = "/peer/v1/notify"
+            nt = peer_json("GET", peer_n, timeout=5)
+            self._send(
+                200, nt if isinstance(nt, dict) else {"ok": False, "notify": nt}
             )
             return
         if path in auth_paths:
