@@ -465,6 +465,39 @@ class H(BaseHTTPRequestHandler):
             "/api/websocket",
             "/peer/v1/websocket",
         )
+        # Residual: heartbeat/peers/state discovery after stream/sse/ws plates.
+        heartbeat_paths = (
+            "/heartbeat",
+            "/api/heartbeat",
+            "/peer/v1/heartbeat",
+            "/api/v1/heartbeat",
+        )
+        peers_paths = (
+            "/peers",
+            "/api/peers",
+            "/peer/v1/peers",
+            "/api/v1/peers",
+            "/nodes",
+            "/api/nodes",
+            "/peer/v1/nodes",
+            "/api/v1/nodes",
+            "/devices",
+            "/api/devices",
+            "/peer/v1/devices",
+            "/api/v1/devices",
+        )
+        state_paths = (
+            "/state",
+            "/api/state",
+            "/peer/v1/state",
+            "/api/v1/state",
+        )
+        sync_paths = (
+            "/sync",
+            "/api/sync",
+            "/peer/v1/sync",
+            "/api/v1/sync",
+        )
         # Residual: GET /whoami dual-wire after peer gained whoami plate.
         # Residual: bare /status after peer gained bare status → auth plate.
         # Residual: /me|/session|/auth/status after peer identity aliases.
@@ -1911,6 +1944,37 @@ class H(BaseHTTPRequestHandler):
             w = peer_json("GET", "/peer/v1/ws", timeout=5)
             self._send(
                 200, w if isinstance(w, dict) else {"ok": False, "ws": w}
+            )
+            return
+        if path in heartbeat_paths:
+            hb = peer_json("GET", "/peer/v1/heartbeat", timeout=5)
+            self._send(
+                200, hb if isinstance(hb, dict) else {"ok": False, "heartbeat": hb}
+            )
+            return
+        if path in peers_paths:
+            # Map nodes/devices aliases to peer dual-wire leaf for action match.
+            if "nodes" in path:
+                peer_p = "/peer/v1/nodes"
+            elif "devices" in path:
+                peer_p = "/peer/v1/devices"
+            else:
+                peer_p = "/peer/v1/peers"
+            pr = peer_json("GET", peer_p, timeout=5)
+            self._send(
+                200, pr if isinstance(pr, dict) else {"ok": False, "peers": pr}
+            )
+            return
+        if path in state_paths:
+            stt = peer_json("GET", "/peer/v1/state", timeout=5)
+            self._send(
+                200, stt if isinstance(stt, dict) else {"ok": False, "state": stt}
+            )
+            return
+        if path in sync_paths:
+            sy = peer_json("GET", "/peer/v1/sync", timeout=5)
+            self._send(
+                200, sy if isinstance(sy, dict) else {"ok": False, "sync": sy}
             )
             return
         if path in auth_paths:

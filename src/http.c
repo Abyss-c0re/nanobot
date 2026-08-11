@@ -2358,7 +2358,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
    * Residual: /api/health|/api/ready 404 — API-namespace clients (OpenAPI-ish).
    * Residual: trailing slash on health/ready 404 after resources/models gained slash.
    * Residual: /ping|/api/ping|/peer/v1/ping not_found while health already lives.
-   * Residual: k8s-style /livez|/readyz|/healthz|/alive (+ dual-wire) not_found. */
+   * Residual: k8s-style /livez|/readyz|/healthz|/alive (+ dual-wire) not_found.
+   * Residual: /heartbeat (+ dual-wire) not_found while livez/alive already live. */
   if (is_get && (strcmp(path, "/peer/v1/health") == 0 ||
                  strcmp(path, "/peer/v1/health/") == 0 ||
                  strcmp(path, "/health") == 0 ||
@@ -2397,7 +2398,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/alive") == 0 || strcmp(path, "/alive/") == 0 ||
                  strcmp(path, "/api/alive") == 0 || strcmp(path, "/api/alive/") == 0 ||
                  strcmp(path, "/peer/v1/alive") == 0 ||
-                 strcmp(path, "/peer/v1/alive/") == 0)) {
+                 strcmp(path, "/peer/v1/alive/") == 0 ||
+                 strcmp(path, "/heartbeat") == 0 ||
+                 strcmp(path, "/heartbeat/") == 0 ||
+                 strcmp(path, "/api/heartbeat") == 0 ||
+                 strcmp(path, "/api/heartbeat/") == 0 ||
+                 strcmp(path, "/peer/v1/heartbeat") == 0 ||
+                 strcmp(path, "/peer/v1/heartbeat/") == 0 ||
+                 strcmp(path, "/api/v1/heartbeat") == 0 ||
+                 strcmp(path, "/api/v1/heartbeat/") == 0)) {
     char body[640];
     char *ver = ng_json_escape(NG_VERSION);
     int jn = jobs_meta_count();
@@ -2431,11 +2440,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                       strcmp(path, "/api/healthz/") == 0 ||
                       strcmp(path, "/peer/v1/healthz") == 0 ||
                       strcmp(path, "/peer/v1/healthz/") == 0);
+    int is_heartbeat = (strcmp(path, "/heartbeat") == 0 ||
+                        strcmp(path, "/heartbeat/") == 0 ||
+                        strcmp(path, "/api/heartbeat") == 0 ||
+                        strcmp(path, "/api/heartbeat/") == 0 ||
+                        strcmp(path, "/peer/v1/heartbeat") == 0 ||
+                        strcmp(path, "/peer/v1/heartbeat/") == 0 ||
+                        strcmp(path, "/api/v1/heartbeat") == 0 ||
+                        strcmp(path, "/api/v1/heartbeat/") == 0);
     const char *act = is_readyz ? "readyz"
                       : is_ready ? "ready"
                       : is_ping ? "ping"
                       : is_livez ? "livez"
                       : is_healthz ? "healthz"
+                      : is_heartbeat ? "heartbeat"
                       : "health";
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
@@ -2643,6 +2661,110 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"python\":0"
       "}";
     http_response(cfd, 200, "application/json", ws, sizeof ws - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes /peers|/nodes|/devices got not_found. Lab ops is a
+   * single session-bus peer — dual-wire self roster (not a multi-node mesh). */
+  if (is_get && (strcmp(path, "/peers") == 0 || strcmp(path, "/peers/") == 0 ||
+                 strcmp(path, "/api/peers") == 0 || strcmp(path, "/api/peers/") == 0 ||
+                 strcmp(path, "/peer/v1/peers") == 0 ||
+                 strcmp(path, "/peer/v1/peers/") == 0 ||
+                 strcmp(path, "/api/v1/peers") == 0 ||
+                 strcmp(path, "/api/v1/peers/") == 0 ||
+                 strcmp(path, "/nodes") == 0 || strcmp(path, "/nodes/") == 0 ||
+                 strcmp(path, "/api/nodes") == 0 || strcmp(path, "/api/nodes/") == 0 ||
+                 strcmp(path, "/peer/v1/nodes") == 0 ||
+                 strcmp(path, "/peer/v1/nodes/") == 0 ||
+                 strcmp(path, "/api/v1/nodes") == 0 ||
+                 strcmp(path, "/api/v1/nodes/") == 0 ||
+                 strcmp(path, "/devices") == 0 || strcmp(path, "/devices/") == 0 ||
+                 strcmp(path, "/api/devices") == 0 ||
+                 strcmp(path, "/api/devices/") == 0 ||
+                 strcmp(path, "/peer/v1/devices") == 0 ||
+                 strcmp(path, "/peer/v1/devices/") == 0 ||
+                 strcmp(path, "/api/v1/devices") == 0 ||
+                 strcmp(path, "/api/v1/devices/") == 0)) {
+    int is_nodes = (strstr(path, "nodes") != NULL);
+    int is_devices = (strstr(path, "devices") != NULL);
+    const char *act = is_devices ? "devices" : is_nodes ? "nodes" : "peers";
+    char body[768];
+    char *ver = ng_json_escape(NG_VERSION);
+    int n = snprintf(body, sizeof body,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
+      "\"service\":\"nanobot-peer\",\"version\":\"%s\","
+      "\"peers\":true,"
+      "\"multi_node\":false,"
+      "\"count\":1,"
+      "\"self\":{"
+        "\"role\":\"session-bus\","
+        "\"health\":\"/peer/v1/health\","
+        "\"info\":\"/peer/v1/info\""
+      "},"
+      "\"list\":[\"self\"],"
+      "\"methods\":[\"GET\"],"
+      NG_PEER_HTTP_DUAL_WIRE "}",
+      act, ver ? ver : "");
+    free(ver);
+    http_response(cfd, 200, "application/json", body, (size_t)n);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes /state|/sync got not_found. Share is state_matrix_only
+   * via jobs hub — dual-wire plate, not a live state bus. */
+  if (is_get && (strcmp(path, "/state") == 0 || strcmp(path, "/state/") == 0 ||
+                 strcmp(path, "/api/state") == 0 || strcmp(path, "/api/state/") == 0 ||
+                 strcmp(path, "/peer/v1/state") == 0 ||
+                 strcmp(path, "/peer/v1/state/") == 0 ||
+                 strcmp(path, "/api/v1/state") == 0 ||
+                 strcmp(path, "/api/v1/state/") == 0 ||
+                 strcmp(path, "/sync") == 0 || strcmp(path, "/sync/") == 0 ||
+                 strcmp(path, "/api/sync") == 0 || strcmp(path, "/api/sync/") == 0 ||
+                 strcmp(path, "/peer/v1/sync") == 0 ||
+                 strcmp(path, "/peer/v1/sync/") == 0 ||
+                 strcmp(path, "/api/v1/sync") == 0 ||
+                 strcmp(path, "/api/v1/sync/") == 0)) {
+    int is_sync = (strstr(path, "sync") != NULL);
+    static const char state_body[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"state\","
+      "\"state\":true,"
+      "\"live_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hub_jobs\":\"/peer/v1/jobs\","
+      "\"health\":\"/peer/v1/health\","
+      "\"methods\":[\"GET\"],"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    static const char sync_body[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"sync\","
+      "\"sync\":true,"
+      "\"push\":false,"
+      "\"pull\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hub_jobs\":\"/peer/v1/jobs\","
+      "\"health\":\"/peer/v1/health\","
+      "\"methods\":[\"GET\"],"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    const char *body = is_sync ? sync_body : state_body;
+    size_t blen = is_sync ? (sizeof sync_body - 1) : (sizeof state_body - 1);
+    http_response(cfd, 200, "application/json", body, blen);
     free(req); close(cfd); return;
   }
 
