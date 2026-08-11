@@ -2452,6 +2452,98 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh probes /token|/api/token got not_found. Dual-wire plate
+   * advertises peer_token header auth — never returns the secret. */
+  if (is_get && (strcmp(path, "/token") == 0 || strcmp(path, "/token/") == 0 ||
+                 strcmp(path, "/api/token") == 0 || strcmp(path, "/api/token/") == 0 ||
+                 strcmp(path, "/peer/v1/token") == 0 ||
+                 strcmp(path, "/peer/v1/token/") == 0 ||
+                 strcmp(path, "/api/v1/token") == 0 ||
+                 strcmp(path, "/api/v1/token/") == 0 ||
+                 strcmp(path, "/api/peer-token") == 0 ||
+                 strcmp(path, "/api/peer-token/") == 0 ||
+                 strcmp(path, "/peer/v1/peer-token") == 0 ||
+                 strcmp(path, "/peer/v1/peer-token/") == 0)) {
+    static const char tok[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"token\","
+      "\"token\":true,"
+      "\"auth\":\"peer_token\","
+      "\"peer_token_header\":\"X-Nanobot-Peer-Token\","
+      "\"secret\":false,"
+      "\"token_in_body\":false,"
+      "\"hint\":\"header_only\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", tok, sizeof tok - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh connectivity probes /echo got not_found. Dual-wire pong. */
+  if (is_get && (strcmp(path, "/echo") == 0 || strcmp(path, "/echo/") == 0 ||
+                 strcmp(path, "/api/echo") == 0 || strcmp(path, "/api/echo/") == 0 ||
+                 strcmp(path, "/peer/v1/echo") == 0 ||
+                 strcmp(path, "/peer/v1/echo/") == 0 ||
+                 strcmp(path, "/api/v1/echo") == 0 ||
+                 strcmp(path, "/api/v1/echo/") == 0)) {
+    static const char echo[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"echo\","
+      "\"echo\":true,"
+      "\"message\":\"pong\","
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", echo, sizeof echo - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes /events|/api/events got not_found. Lab ops has no
+   * long-lived SSE bus on peer HTTP — dual-wire plate, not a stream. */
+  if (is_get && (strcmp(path, "/events") == 0 || strcmp(path, "/events/") == 0 ||
+                 strcmp(path, "/api/events") == 0 ||
+                 strcmp(path, "/api/events/") == 0 ||
+                 strcmp(path, "/peer/v1/events") == 0 ||
+                 strcmp(path, "/peer/v1/events/") == 0 ||
+                 strcmp(path, "/api/v1/events") == 0 ||
+                 strcmp(path, "/api/v1/events/") == 0)) {
+    static const char ev[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"events\","
+      "\"events\":true,"
+      "\"sse\":false,"
+      "\"stream\":false,"
+      "\"hub_jobs\":\"/peer/v1/jobs\","
+      "\"methods\":[\"GET\"],"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", ev, sizeof ev - 1);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: mesh OpenAPI-ish probes hit /version|/api/version|/peer/v1/version
    * and got not_found while health/info already expose NG_VERSION. */
   if (is_get && (strcmp(path, "/version") == 0 || strcmp(path, "/version/") == 0 ||

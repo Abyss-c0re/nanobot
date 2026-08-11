@@ -422,6 +422,27 @@ class H(BaseHTTPRequestHandler):
         )
         # Residual: GET /metrics dual-wire after peer gained metrics plate.
         metrics_paths = ("/metrics", "/api/metrics", "/peer/v1/metrics")
+        # Residual: token/echo/events discovery after peer dual-wire plates.
+        token_paths = (
+            "/token",
+            "/api/token",
+            "/peer/v1/token",
+            "/api/v1/token",
+            "/api/peer-token",
+            "/peer/v1/peer-token",
+        )
+        echo_paths = (
+            "/echo",
+            "/api/echo",
+            "/peer/v1/echo",
+            "/api/v1/echo",
+        )
+        events_paths = (
+            "/events",
+            "/api/events",
+            "/peer/v1/events",
+            "/api/v1/events",
+        )
         # Residual: GET /whoami dual-wire after peer gained whoami plate.
         # Residual: bare /status after peer gained bare status → auth plate.
         # Residual: /me|/session|/auth/status after peer identity aliases.
@@ -1832,6 +1853,24 @@ class H(BaseHTTPRequestHandler):
             met = peer_json("GET", "/api/metrics", timeout=5)
             self._send(
                 200, met if isinstance(met, dict) else {"ok": False, "metrics": met}
+            )
+            return
+        if path in token_paths:
+            tok = peer_json("GET", "/peer/v1/token", timeout=5)
+            self._send(
+                200, tok if isinstance(tok, dict) else {"ok": False, "token": tok}
+            )
+            return
+        if path in echo_paths:
+            ech = peer_json("GET", "/peer/v1/echo", timeout=5)
+            self._send(
+                200, ech if isinstance(ech, dict) else {"ok": False, "echo": ech}
+            )
+            return
+        if path in events_paths:
+            ev = peer_json("GET", "/peer/v1/events", timeout=5)
+            self._send(
+                200, ev if isinstance(ev, dict) else {"ok": False, "events": ev}
             )
             return
         if path in auth_paths:
