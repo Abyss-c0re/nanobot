@@ -2544,6 +2544,108 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* Residual: mesh probes /stream after events plate still got not_found.
+   * Lab ops has no long-lived HTTP stream — dual-wire discovery only. */
+  if (is_get && (strcmp(path, "/stream") == 0 || strcmp(path, "/stream/") == 0 ||
+                 strcmp(path, "/api/stream") == 0 ||
+                 strcmp(path, "/api/stream/") == 0 ||
+                 strcmp(path, "/peer/v1/stream") == 0 ||
+                 strcmp(path, "/peer/v1/stream/") == 0 ||
+                 strcmp(path, "/api/v1/stream") == 0 ||
+                 strcmp(path, "/api/v1/stream/") == 0)) {
+    static const char stream_body[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"stream\","
+      "\"stream\":true,"
+      "\"sse\":false,"
+      "\"websocket\":false,"
+      "\"long_poll\":false,"
+      "\"hub_jobs\":\"/peer/v1/jobs\","
+      "\"events\":\"/peer/v1/events\","
+      "\"methods\":[\"GET\"],"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", stream_body, sizeof stream_body - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes /sse after events plate still got not_found.
+   * No EventSource bus on peer HTTP — dual-wire discovery plate. */
+  if (is_get && (strcmp(path, "/sse") == 0 || strcmp(path, "/sse/") == 0 ||
+                 strcmp(path, "/api/sse") == 0 || strcmp(path, "/api/sse/") == 0 ||
+                 strcmp(path, "/peer/v1/sse") == 0 ||
+                 strcmp(path, "/peer/v1/sse/") == 0 ||
+                 strcmp(path, "/api/v1/sse") == 0 ||
+                 strcmp(path, "/api/v1/sse/") == 0)) {
+    static const char sse_body[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"sse\","
+      "\"sse\":true,"
+      "\"stream\":false,"
+      "\"websocket\":false,"
+      "\"event_source\":false,"
+      "\"hub_jobs\":\"/peer/v1/jobs\","
+      "\"events\":\"/peer/v1/events\","
+      "\"methods\":[\"GET\"],"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", sse_body, sizeof sse_body - 1);
+    free(req); close(cfd); return;
+  }
+
+  /* Residual: mesh probes /ws|/api/ws got not_found. No WebSocket upgrade on
+   * peer HTTP — dual-wire discovery plate (not a socket). */
+  if (is_get && (strcmp(path, "/ws") == 0 || strcmp(path, "/ws/") == 0 ||
+                 strcmp(path, "/api/ws") == 0 || strcmp(path, "/api/ws/") == 0 ||
+                 strcmp(path, "/peer/v1/ws") == 0 ||
+                 strcmp(path, "/peer/v1/ws/") == 0 ||
+                 strcmp(path, "/api/v1/ws") == 0 ||
+                 strcmp(path, "/api/v1/ws/") == 0 ||
+                 strcmp(path, "/websocket") == 0 ||
+                 strcmp(path, "/websocket/") == 0 ||
+                 strcmp(path, "/api/websocket") == 0 ||
+                 strcmp(path, "/api/websocket/") == 0 ||
+                 strcmp(path, "/peer/v1/websocket") == 0 ||
+                 strcmp(path, "/peer/v1/websocket/") == 0)) {
+    static const char ws[] =
+      "{"
+      "\"schema\":\"nanobot.peer_http.v1\","
+      "\"ok\":true,"
+      "\"action\":\"ws\","
+      "\"ws\":true,"
+      "\"websocket\":false,"
+      "\"upgrade\":false,"
+      "\"hub_jobs\":\"/peer/v1/jobs\","
+      "\"events\":\"/peer/v1/events\","
+      "\"methods\":[\"GET\"],"
+      "\"product_wire\":\"smx2\","
+      "\"peer_http\":\"lab_ops_only\","
+      "\"peer_http_is_product_bus\":false,"
+      "\"share\":\"state_matrix_only\","
+      "\"hold_flash\":1,"
+      "\"llm_is_commander\":false,"
+      "\"python\":0"
+      "}";
+    http_response(cfd, 200, "application/json", ws, sizeof ws - 1);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: mesh OpenAPI-ish probes hit /version|/api/version|/peer/v1/version
    * and got not_found while health/info already expose NG_VERSION. */
   if (is_get && (strcmp(path, "/version") == 0 || strcmp(path, "/version/") == 0 ||

@@ -443,6 +443,28 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/events",
             "/api/v1/events",
         )
+        # Residual: stream/sse/ws discovery after events plate (no live bus).
+        stream_paths = (
+            "/stream",
+            "/api/stream",
+            "/peer/v1/stream",
+            "/api/v1/stream",
+        )
+        sse_paths = (
+            "/sse",
+            "/api/sse",
+            "/peer/v1/sse",
+            "/api/v1/sse",
+        )
+        ws_paths = (
+            "/ws",
+            "/api/ws",
+            "/peer/v1/ws",
+            "/api/v1/ws",
+            "/websocket",
+            "/api/websocket",
+            "/peer/v1/websocket",
+        )
         # Residual: GET /whoami dual-wire after peer gained whoami plate.
         # Residual: bare /status after peer gained bare status → auth plate.
         # Residual: /me|/session|/auth/status after peer identity aliases.
@@ -1871,6 +1893,24 @@ class H(BaseHTTPRequestHandler):
             ev = peer_json("GET", "/peer/v1/events", timeout=5)
             self._send(
                 200, ev if isinstance(ev, dict) else {"ok": False, "events": ev}
+            )
+            return
+        if path in stream_paths:
+            st = peer_json("GET", "/peer/v1/stream", timeout=5)
+            self._send(
+                200, st if isinstance(st, dict) else {"ok": False, "stream": st}
+            )
+            return
+        if path in sse_paths:
+            ss = peer_json("GET", "/peer/v1/sse", timeout=5)
+            self._send(
+                200, ss if isinstance(ss, dict) else {"ok": False, "sse": ss}
+            )
+            return
+        if path in ws_paths:
+            w = peer_json("GET", "/peer/v1/ws", timeout=5)
+            self._send(
+                200, w if isinstance(w, dict) else {"ok": False, "ws": w}
             )
             return
         if path in auth_paths:
