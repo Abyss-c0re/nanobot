@@ -287,6 +287,7 @@ cd ~/Dev/AI/nanobot
 | GET me/session/auth_status + serve.lock CLOEXEC reclaim + MCP | `67e0040`  |
 | GET shell/status + shell/pending dual-wire aliases + MCP | `6caad42`  |
 | GET login/logout/user/identity dual-wire auth aliases + MCP | `afd71af`  |
+| ACAO on post_only GET method plates (Allow dual-wire) | `e95dac9`  |
 ## Anti-chaos
 
 - One product bite per cycle  
