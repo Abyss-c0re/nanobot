@@ -440,6 +440,11 @@ class H(BaseHTTPRequestHandler):
             "/logout",
             "/api/logout",
             "/peer/v1/logout",
+            "/api/v1/auth",
+            "/api/v1/auth/status",
+            "/api/v1/status",
+            "/api/v1/login",
+            "/api/v1/logout",
         )
         whoami_paths = (
             "/whoami",
@@ -454,15 +459,30 @@ class H(BaseHTTPRequestHandler):
             "/identity",
             "/api/identity",
             "/peer/v1/identity",
+            "/api/v1/whoami",
+            "/api/v1/me",
+            "/api/v1/user",
+            "/api/v1/identity",
         )
         session_paths = (
             "/session",
             "/api/session",
             "/peer/v1/session",
+            "/api/v1/session",
         )
         activate_paths = ("/activate",)
         # Residual: bare /settings after peer gained bare settings plate.
-        settings_paths = ("/api/settings", "/peer/v1/settings", "/settings")
+        # Residual: /config + /api/v1/settings after peer config/settings aliases.
+        settings_paths = (
+            "/api/settings",
+            "/peer/v1/settings",
+            "/settings",
+            "/api/config",
+            "/peer/v1/config",
+            "/config",
+            "/api/v1/config",
+            "/api/v1/settings",
+        )
         version_paths = ("/version", "/api/version", "/peer/v1/version")
         # Residual: GET uptime dual-wire after peer gained uptime plate.
         uptime_paths = ("/uptime", "/api/uptime", "/peer/v1/uptime")
@@ -1817,7 +1837,9 @@ class H(BaseHTTPRequestHandler):
         if path in auth_paths:
             # Peer auth plate is /api/auth (not under /peer/v1 historically).
             # Nested /auth/status and /login|/logout keep action leaf via path.
-            if path.endswith("/auth/status"):
+            if path.startswith("/api/v1/"):
+                peer_auth = path
+            elif path.endswith("/auth/status"):
                 peer_auth = path if path.startswith("/peer/") else "/api/auth/status"
             elif path.rstrip("/").endswith("/login") or path in ("/login", "/login/"):
                 peer_auth = "/peer/v1/login"
@@ -1842,6 +1864,9 @@ class H(BaseHTTPRequestHandler):
             }
             if path in bare:
                 peer_path = bare[path]
+            elif path.startswith("/api/v1/"):
+                # Peer maps /api/v1/* identity onto same action leaf names.
+                peer_path = path
             elif path.startswith("/peer/"):
                 peer_path = path
             else:
@@ -1855,9 +1880,13 @@ class H(BaseHTTPRequestHandler):
             return
         if path in session_paths:
             peer_path = (
-                "/peer/v1/session"
-                if path in ("/session", "/api/session", "/peer/v1/session")
-                else path
+                path
+                if path.startswith("/api/v1/")
+                else (
+                    "/peer/v1/session"
+                    if path in ("/session", "/api/session", "/peer/v1/session")
+                    else path
+                )
             )
             sess = peer_json("GET", peer_path, timeout=5)
             if not isinstance(sess, dict):
@@ -1886,7 +1915,14 @@ class H(BaseHTTPRequestHandler):
             self._send(503, _missing("login_not_ready"))
             return
         if path in settings_paths:
-            stg = peer_json("GET", "/api/settings", timeout=5)
+            peer_stg = (
+                "/peer/v1/config"
+                if "config" in path
+                else "/api/settings"
+            )
+            stg = peer_json("GET", peer_stg, timeout=5)
+            if not isinstance(stg, dict):
+                stg = peer_json("GET", "/api/settings", timeout=5)
             self._send(
                 200, stg if isinstance(stg, dict) else {"ok": False, "settings": stg}
             )

@@ -1483,7 +1483,28 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/identity") == 0 ||
                  strcmp(path, "/api/identity/") == 0 ||
                  strcmp(path, "/peer/v1/identity") == 0 ||
-                 strcmp(path, "/peer/v1/identity/") == 0)) {
+                 strcmp(path, "/peer/v1/identity/") == 0 ||
+                 /* Residual: /api/v1/* identity aliases still not_found. */
+                 strcmp(path, "/api/v1/me") == 0 ||
+                 strcmp(path, "/api/v1/me/") == 0 ||
+                 strcmp(path, "/api/v1/session") == 0 ||
+                 strcmp(path, "/api/v1/session/") == 0 ||
+                 strcmp(path, "/api/v1/status") == 0 ||
+                 strcmp(path, "/api/v1/status/") == 0 ||
+                 strcmp(path, "/api/v1/whoami") == 0 ||
+                 strcmp(path, "/api/v1/whoami/") == 0 ||
+                 strcmp(path, "/api/v1/login") == 0 ||
+                 strcmp(path, "/api/v1/login/") == 0 ||
+                 strcmp(path, "/api/v1/logout") == 0 ||
+                 strcmp(path, "/api/v1/logout/") == 0 ||
+                 strcmp(path, "/api/v1/user") == 0 ||
+                 strcmp(path, "/api/v1/user/") == 0 ||
+                 strcmp(path, "/api/v1/identity") == 0 ||
+                 strcmp(path, "/api/v1/identity/") == 0 ||
+                 strcmp(path, "/api/v1/auth") == 0 ||
+                 strcmp(path, "/api/v1/auth/") == 0 ||
+                 strcmp(path, "/api/v1/auth/status") == 0 ||
+                 strcmp(path, "/api/v1/auth/status/") == 0)) {
     int need_browser = agent && ng_agent_needs_browser_session(agent);
     /* Soft-expired access_token still counts as signed-in after a successful refresh.
      * Skip ensure while device-login is pending — refresh cannot help and spam-logs
@@ -1515,42 +1536,58 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     int is_whoami = (strcmp(path, "/whoami") == 0 || strcmp(path, "/whoami/") == 0 ||
                      strcmp(path, "/api/whoami") == 0 || strcmp(path, "/api/whoami/") == 0 ||
                      strcmp(path, "/peer/v1/whoami") == 0 ||
-                     strcmp(path, "/peer/v1/whoami/") == 0);
+                     strcmp(path, "/peer/v1/whoami/") == 0 ||
+                     strcmp(path, "/api/v1/whoami") == 0 ||
+                     strcmp(path, "/api/v1/whoami/") == 0);
     int is_me = (strcmp(path, "/me") == 0 || strcmp(path, "/me/") == 0 ||
                  strcmp(path, "/api/me") == 0 || strcmp(path, "/api/me/") == 0 ||
                  strcmp(path, "/peer/v1/me") == 0 ||
-                 strcmp(path, "/peer/v1/me/") == 0);
+                 strcmp(path, "/peer/v1/me/") == 0 ||
+                 strcmp(path, "/api/v1/me") == 0 ||
+                 strcmp(path, "/api/v1/me/") == 0);
     int is_session =
         (strcmp(path, "/session") == 0 || strcmp(path, "/session/") == 0 ||
          strcmp(path, "/api/session") == 0 || strcmp(path, "/api/session/") == 0 ||
          strcmp(path, "/peer/v1/session") == 0 ||
-         strcmp(path, "/peer/v1/session/") == 0);
+         strcmp(path, "/peer/v1/session/") == 0 ||
+         strcmp(path, "/api/v1/session") == 0 ||
+         strcmp(path, "/api/v1/session/") == 0);
     int is_auth_status =
         (strcmp(path, "/api/auth/status") == 0 ||
          strcmp(path, "/api/auth/status/") == 0 ||
          strcmp(path, "/peer/v1/auth/status") == 0 ||
-         strcmp(path, "/peer/v1/auth/status/") == 0);
+         strcmp(path, "/peer/v1/auth/status/") == 0 ||
+         strcmp(path, "/api/v1/auth/status") == 0 ||
+         strcmp(path, "/api/v1/auth/status/") == 0);
     int is_login = (strcmp(path, "/login") == 0 || strcmp(path, "/login/") == 0 ||
                     strcmp(path, "/api/login") == 0 ||
                     strcmp(path, "/api/login/") == 0 ||
                     strcmp(path, "/peer/v1/login") == 0 ||
-                    strcmp(path, "/peer/v1/login/") == 0);
+                    strcmp(path, "/peer/v1/login/") == 0 ||
+                    strcmp(path, "/api/v1/login") == 0 ||
+                    strcmp(path, "/api/v1/login/") == 0);
     int is_logout =
         (strcmp(path, "/logout") == 0 || strcmp(path, "/logout/") == 0 ||
          strcmp(path, "/api/logout") == 0 || strcmp(path, "/api/logout/") == 0 ||
          strcmp(path, "/peer/v1/logout") == 0 ||
-         strcmp(path, "/peer/v1/logout/") == 0);
+         strcmp(path, "/peer/v1/logout/") == 0 ||
+         strcmp(path, "/api/v1/logout") == 0 ||
+         strcmp(path, "/api/v1/logout/") == 0);
     int is_user = (strcmp(path, "/user") == 0 || strcmp(path, "/user/") == 0 ||
                    strcmp(path, "/api/user") == 0 ||
                    strcmp(path, "/api/user/") == 0 ||
                    strcmp(path, "/peer/v1/user") == 0 ||
-                   strcmp(path, "/peer/v1/user/") == 0);
+                   strcmp(path, "/peer/v1/user/") == 0 ||
+                   strcmp(path, "/api/v1/user") == 0 ||
+                   strcmp(path, "/api/v1/user/") == 0);
     int is_identity =
         (strcmp(path, "/identity") == 0 || strcmp(path, "/identity/") == 0 ||
          strcmp(path, "/api/identity") == 0 ||
          strcmp(path, "/api/identity/") == 0 ||
          strcmp(path, "/peer/v1/identity") == 0 ||
-         strcmp(path, "/peer/v1/identity/") == 0);
+         strcmp(path, "/peer/v1/identity/") == 0 ||
+         strcmp(path, "/api/v1/identity") == 0 ||
+         strcmp(path, "/api/v1/identity/") == 0);
     const char *act = is_whoami        ? "whoami"
                       : is_me          ? "me"
                       : is_session     ? "session"
@@ -1760,11 +1797,20 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
   /* Settings: select backend (grok | local) + optional base/model.
    * Residual: root discovery listed /api/settings but only POST/PUT existed → GET not_found.
-   * Residual: bare /settings 404 while /api + /peer/v1 settings plates already work. */
+   * Residual: bare /settings 404 while /api + /peer/v1 settings plates already work.
+   * Residual: /config mesh probes still not_found (same plate as settings). */
   if (is_get && (strcmp(path, "/api/settings") == 0 || strcmp(path, "/api/settings/") == 0 ||
                  strcmp(path, "/peer/v1/settings") == 0 ||
                  strcmp(path, "/peer/v1/settings/") == 0 ||
-                 strcmp(path, "/settings") == 0 || strcmp(path, "/settings/") == 0)) {
+                 strcmp(path, "/settings") == 0 || strcmp(path, "/settings/") == 0 ||
+                 strcmp(path, "/api/config") == 0 || strcmp(path, "/api/config/") == 0 ||
+                 strcmp(path, "/peer/v1/config") == 0 ||
+                 strcmp(path, "/peer/v1/config/") == 0 ||
+                 strcmp(path, "/config") == 0 || strcmp(path, "/config/") == 0 ||
+                 strcmp(path, "/api/v1/config") == 0 ||
+                 strcmp(path, "/api/v1/config/") == 0 ||
+                 strcmp(path, "/api/v1/settings") == 0 ||
+                 strcmp(path, "/api/v1/settings/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     if (!agent) {
       http_peer_err(cfd, 500, "no_agent");
@@ -1778,13 +1824,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *bk = ng_json_escape(ng_agent_backend_kind(agent));
     char *sp = ng_json_escape(ng_settings_path());
     char *out = NULL;
+    const char *act =
+        (strstr(path, "config") != NULL) ? "config" : "settings";
     asprintf(&out,
-      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"settings\","
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
       "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
       "\"needs_browser\":%s,\"signed_in\":%s,"
       "\"subagents\":%s,\"subagents_max\":%d,\"llm_serial\":%s,"
       "\"settings\":\"%s\","
       NG_PEER_HTTP_DUAL_WIRE "}",
+      act,
       bk ? bk : "",
       be ? be : "",
       me ? me : "",
