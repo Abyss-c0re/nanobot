@@ -290,6 +290,7 @@ cd ~/Dev/AI/nanobot
 | ACAO on post_only GET method plates (Allow dual-wire) | `e95dac9`  |
 | GET config + /api/v1 identity dual-wire aliases + MCP | `9596feb`  |
 | GET token/echo/events dual-wire discovery + MCP | `4b83fa4`  |
+| GET stream/sse/ws dual-wire discovery + MCP | `f9eb367`  |
 ## Anti-chaos
 
 - One product bite per cycle  
