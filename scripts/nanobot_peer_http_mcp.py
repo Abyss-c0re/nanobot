@@ -425,6 +425,7 @@ class H(BaseHTTPRequestHandler):
         # Residual: GET /whoami dual-wire after peer gained whoami plate.
         # Residual: bare /status after peer gained bare status → auth plate.
         # Residual: /me|/session|/auth/status after peer identity aliases.
+        # Residual: /login|/logout|/user|/identity after peer auth plate aliases.
         auth_paths = (
             "/api/auth",
             "/api/auth/status",
@@ -433,6 +434,12 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/auth",
             "/peer/v1/status",
             "/status",
+            "/login",
+            "/api/login",
+            "/peer/v1/login",
+            "/logout",
+            "/api/logout",
+            "/peer/v1/logout",
         )
         whoami_paths = (
             "/whoami",
@@ -441,6 +448,12 @@ class H(BaseHTTPRequestHandler):
             "/me",
             "/api/me",
             "/peer/v1/me",
+            "/user",
+            "/api/user",
+            "/peer/v1/user",
+            "/identity",
+            "/api/identity",
+            "/peer/v1/identity",
         )
         session_paths = (
             "/session",
@@ -1803,9 +1816,13 @@ class H(BaseHTTPRequestHandler):
             return
         if path in auth_paths:
             # Peer auth plate is /api/auth (not under /peer/v1 historically).
-            # Nested /auth/status keeps action=auth_status via matching path.
+            # Nested /auth/status and /login|/logout keep action leaf via path.
             if path.endswith("/auth/status"):
                 peer_auth = path if path.startswith("/peer/") else "/api/auth/status"
+            elif path.rstrip("/").endswith("/login") or path in ("/login", "/login/"):
+                peer_auth = "/peer/v1/login"
+            elif path.rstrip("/").endswith("/logout") or path in ("/logout", "/logout/"):
+                peer_auth = "/peer/v1/logout"
             else:
                 peer_auth = "/api/auth"
             auth = peer_json("GET", peer_auth, timeout=5)
@@ -1816,14 +1833,19 @@ class H(BaseHTTPRequestHandler):
             )
             return
         if path in whoami_paths:
-            # Prefer matching peer path so action leaf is whoami|me.
-            peer_path = (
-                path
-                if path.startswith("/peer/") or path in ("/whoami", "/me")
-                else path.replace("/api/", "/peer/v1/", 1)
-            )
-            if peer_path in ("/whoami", "/me"):
-                peer_path = f"/peer/v1{peer_path}"
+            # Prefer matching peer path so action leaf is whoami|me|user|identity.
+            bare = {
+                "/whoami": "/peer/v1/whoami",
+                "/me": "/peer/v1/me",
+                "/user": "/peer/v1/user",
+                "/identity": "/peer/v1/identity",
+            }
+            if path in bare:
+                peer_path = bare[path]
+            elif path.startswith("/peer/"):
+                peer_path = path
+            else:
+                peer_path = path.replace("/api/", "/peer/v1/", 1)
             who = peer_json("GET", peer_path, timeout=5)
             if not isinstance(who, dict):
                 who = peer_json("GET", "/api/whoami", timeout=5)

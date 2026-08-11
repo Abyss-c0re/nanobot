@@ -1441,7 +1441,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Residual: trailing slash 404 on /api/auth while bare path worked (mesh probes).
    * Residual: /whoami|/api/whoami|/peer/v1/whoami not_found — identity probes.
    * Residual: bare /status 404 while /api/status and /peer/v1/status already auth.
-   * Residual: /me|/session|/auth/status mesh identity aliases still not_found. */
+   * Residual: /me|/session|/auth/status mesh identity aliases still not_found.
+   * Residual: /login|/logout|/user|/identity still not_found (same auth plate). */
   if (is_get && (strcmp(path, "/api/auth") == 0 || strcmp(path, "/api/auth/") == 0 ||
                  strcmp(path, "/api/auth/status") == 0 ||
                  strcmp(path, "/api/auth/status/") == 0 ||
@@ -1463,7 +1464,26 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/session") == 0 ||
                  strcmp(path, "/api/session/") == 0 ||
                  strcmp(path, "/peer/v1/session") == 0 ||
-                 strcmp(path, "/peer/v1/session/") == 0)) {
+                 strcmp(path, "/peer/v1/session/") == 0 ||
+                 strcmp(path, "/login") == 0 || strcmp(path, "/login/") == 0 ||
+                 strcmp(path, "/api/login") == 0 || strcmp(path, "/api/login/") == 0 ||
+                 strcmp(path, "/peer/v1/login") == 0 ||
+                 strcmp(path, "/peer/v1/login/") == 0 ||
+                 strcmp(path, "/logout") == 0 || strcmp(path, "/logout/") == 0 ||
+                 strcmp(path, "/api/logout") == 0 ||
+                 strcmp(path, "/api/logout/") == 0 ||
+                 strcmp(path, "/peer/v1/logout") == 0 ||
+                 strcmp(path, "/peer/v1/logout/") == 0 ||
+                 strcmp(path, "/user") == 0 || strcmp(path, "/user/") == 0 ||
+                 strcmp(path, "/api/user") == 0 || strcmp(path, "/api/user/") == 0 ||
+                 strcmp(path, "/peer/v1/user") == 0 ||
+                 strcmp(path, "/peer/v1/user/") == 0 ||
+                 strcmp(path, "/identity") == 0 ||
+                 strcmp(path, "/identity/") == 0 ||
+                 strcmp(path, "/api/identity") == 0 ||
+                 strcmp(path, "/api/identity/") == 0 ||
+                 strcmp(path, "/peer/v1/identity") == 0 ||
+                 strcmp(path, "/peer/v1/identity/") == 0)) {
     int need_browser = agent && ng_agent_needs_browser_session(agent);
     /* Soft-expired access_token still counts as signed-in after a successful refresh.
      * Skip ensure while device-login is pending — refresh cannot help and spam-logs
@@ -1510,11 +1530,36 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
          strcmp(path, "/api/auth/status/") == 0 ||
          strcmp(path, "/peer/v1/auth/status") == 0 ||
          strcmp(path, "/peer/v1/auth/status/") == 0);
-    const char *act = is_whoami       ? "whoami"
-                      : is_me         ? "me"
-                      : is_session    ? "session"
+    int is_login = (strcmp(path, "/login") == 0 || strcmp(path, "/login/") == 0 ||
+                    strcmp(path, "/api/login") == 0 ||
+                    strcmp(path, "/api/login/") == 0 ||
+                    strcmp(path, "/peer/v1/login") == 0 ||
+                    strcmp(path, "/peer/v1/login/") == 0);
+    int is_logout =
+        (strcmp(path, "/logout") == 0 || strcmp(path, "/logout/") == 0 ||
+         strcmp(path, "/api/logout") == 0 || strcmp(path, "/api/logout/") == 0 ||
+         strcmp(path, "/peer/v1/logout") == 0 ||
+         strcmp(path, "/peer/v1/logout/") == 0);
+    int is_user = (strcmp(path, "/user") == 0 || strcmp(path, "/user/") == 0 ||
+                   strcmp(path, "/api/user") == 0 ||
+                   strcmp(path, "/api/user/") == 0 ||
+                   strcmp(path, "/peer/v1/user") == 0 ||
+                   strcmp(path, "/peer/v1/user/") == 0);
+    int is_identity =
+        (strcmp(path, "/identity") == 0 || strcmp(path, "/identity/") == 0 ||
+         strcmp(path, "/api/identity") == 0 ||
+         strcmp(path, "/api/identity/") == 0 ||
+         strcmp(path, "/peer/v1/identity") == 0 ||
+         strcmp(path, "/peer/v1/identity/") == 0);
+    const char *act = is_whoami        ? "whoami"
+                      : is_me          ? "me"
+                      : is_session     ? "session"
                       : is_auth_status ? "auth_status"
-                                      : "status";
+                      : is_login       ? "login"
+                      : is_logout      ? "logout"
+                      : is_user        ? "user"
+                      : is_identity    ? "identity"
+                                       : "status";
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.auth.v1\",\"ok\":true,\"action\":\"%s\","
       "\"version\":\"%s\",\"model\":\"%s\",\"signed_in\":%s,"
