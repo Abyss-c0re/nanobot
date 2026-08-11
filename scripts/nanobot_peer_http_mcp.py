@@ -401,6 +401,8 @@ class H(BaseHTTPRequestHandler):
             "/api/control",
             "/peer/v1/control/shell",
             "/api/control/shell",
+            "/peer/v1/shell/status",
+            "/api/shell/status",
             "/peer/v1/control/watcher",
             "/api/control/watcher",
             "/peer/v1/control/ui",
@@ -943,11 +945,16 @@ class H(BaseHTTPRequestHandler):
             "/peer/v1/shell/approve/",
         )
         # Residual: GET shell/approvals 404 on MCP while peer lists pending gate.
+        # Residual: /shell/pending alias after peer gained shell_pending plate.
         shell_approvals_paths = (
             "/api/shell/approvals",
             "/api/shell/approvals/",
             "/peer/v1/shell/approvals",
             "/peer/v1/shell/approvals/",
+            "/api/shell/pending",
+            "/api/shell/pending/",
+            "/peer/v1/shell/pending",
+            "/peer/v1/shell/pending/",
         )
 
         robots_paths = (
@@ -2397,7 +2404,14 @@ class H(BaseHTTPRequestHandler):
             )
             return
         if path in shell_approvals_paths:
-            doc = peer_json("GET", "/peer/v1/shell/approvals", timeout=5)
+            peer_path = (
+                "/peer/v1/shell/pending"
+                if "pending" in path
+                else "/peer/v1/shell/approvals"
+            )
+            doc = peer_json("GET", peer_path, timeout=5)
+            if not isinstance(doc, dict):
+                doc = peer_json("GET", "/peer/v1/shell/approvals", timeout=5)
             self._send(
                 200,
                 doc if isinstance(doc, dict) else {"ok": False, "shell_approvals": doc},

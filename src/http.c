@@ -6659,12 +6659,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Residual: mesh probes /control/shell|watcher|ui and /watcher got not_found
-   * while control plate already exposes enabled leaves. Nested dual-wire status. */
+   * while control plate already exposes enabled leaves. Nested dual-wire status.
+   * Residual: /shell/status still not_found while control/shell works. */
   if (is_get &&
       (strcmp(path, "/peer/v1/control/shell") == 0 ||
        strcmp(path, "/peer/v1/control/shell/") == 0 ||
        strcmp(path, "/api/control/shell") == 0 ||
        strcmp(path, "/api/control/shell/") == 0 ||
+       strcmp(path, "/peer/v1/shell/status") == 0 ||
+       strcmp(path, "/peer/v1/shell/status/") == 0 ||
+       strcmp(path, "/api/shell/status") == 0 ||
+       strcmp(path, "/api/shell/status/") == 0 ||
        strcmp(path, "/peer/v1/control/watcher") == 0 ||
        strcmp(path, "/peer/v1/control/watcher/") == 0 ||
        strcmp(path, "/api/control/watcher") == 0 ||
@@ -6685,6 +6690,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     } else if (strstr(path, "/ui") || strstr(path, "/ui/")) {
       svc = "ui";
       action = "control_ui";
+    } else if (strstr(path, "shell/status")) {
+      action = "shell_status";
     }
     int enabled = 0;
     if (!strcmp(svc, "shell")) {
@@ -7703,18 +7710,27 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   }
 
   /* Shell security: gate password + pending approvals.
-   * Residual: trailing slash 404 while bare /shell/approvals worked (mesh probes). */
+   * Residual: trailing slash 404 while bare /shell/approvals worked (mesh probes).
+   * Residual: /shell/pending alias still not_found (same pending list). */
   if (is_get && (strcmp(path, "/api/shell/approvals") == 0 ||
                  strcmp(path, "/api/shell/approvals/") == 0 ||
                  strcmp(path, "/peer/v1/shell/approvals") == 0 ||
-                 strcmp(path, "/peer/v1/shell/approvals/") == 0)) {
+                 strcmp(path, "/peer/v1/shell/approvals/") == 0 ||
+                 strcmp(path, "/api/shell/pending") == 0 ||
+                 strcmp(path, "/api/shell/pending/") == 0 ||
+                 strcmp(path, "/peer/v1/shell/pending") == 0 ||
+                 strcmp(path, "/peer/v1/shell/pending/") == 0)) {
     if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
     char *list = ng_shell_approval_list_json();
     char *out = NULL;
+    const char *act =
+        (strstr(path, "pending") != NULL) ? "shell_pending" : "shell_approvals";
     asprintf(&out,
              "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
-             "\"action\":\"shell_approvals\",\"gate_configured\":%s,\"pending\":%s,"
+             "\"action\":\"%s\",\"gate_configured\":%s,\"pending\":%s,"
+             "\"approvals\":\"/peer/v1/shell/approvals\","
              NG_PEER_HTTP_DUAL_WIRE "}",
+             act,
              ng_shell_gate_configured() ? "true" : "false",
              list ? list : "[]");
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
