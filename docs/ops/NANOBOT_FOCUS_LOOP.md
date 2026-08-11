@@ -286,6 +286,7 @@ cd ~/Dev/AI/nanobot
 | GET control/shell|watcher|ui + /watcher dual-wire + MCP | `5cde865`  |
 | GET me/session/auth_status + serve.lock CLOEXEC reclaim + MCP | `67e0040`  |
 | GET shell/status + shell/pending dual-wire aliases + MCP | `6caad42`  |
+| GET login/logout/user/identity dual-wire auth aliases + MCP | `afd71af`  |
 ## Anti-chaos
 
 - One product bite per cycle  
