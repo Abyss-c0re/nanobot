@@ -1,3 +1,12 @@
+## 0.5.4 — 2026-08-13
+
+### P2P API share (exit node)
+- **Law:** any home with working provider API is an **exit node**; others relay `POST /peer/v1/prompt`.
+- CubalC discovery (matrix only): see `Dev/cubalc` `programs/p2p/api_exit_node.cubalc`, `api_share_mesh.cubalc`, proof `10b_api_exit_node`.
+- `api_share.c`: `NANOBOT_EXIT_PEERS` / `mesh/api_peers.json`; relay on not_signed_in / curl_failed.
+- `/peer/v1/info` fields `exit_node` · `api_ok` · `api_share`; GET `/peer/v1/api-share`.
+- Docs: `docs/P2P_API_SHARE.md`.
+
 ## 0.5.1 — 2026-07-28
 
 ### Auth / home SoT

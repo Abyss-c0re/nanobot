@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(nanobot VERSION 0.5.3 LANGUAGES C)
+project(nanobot VERSION 0.5.4 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -47,6 +47,7 @@ add_library(nanobot_legacy STATIC
   src/memory.c
   src/task.c
   src/agent.c
+  src/api_share.c
   src/http.c
   src/mcp.c
   src/mcp_remote.c

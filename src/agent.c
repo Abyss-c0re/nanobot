@@ -1,4 +1,5 @@
 #include "agent.h"
+#include "api_share.h"
 #include "memory.h"
 #include "mcp_remote.h"
 #include "shell.h"
@@ -1320,16 +1321,32 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   const char *bearer = NULL;
   if (grok) {
     if (!c->session || ng_session_ensure(c->session) != 0) {
+      /* No local API → CubalC-discovered exit node (peer HTTP prompt). */
+      if (!has_image) {
+        char *via = ng_api_share_relay_prompt(user_prompt);
+        if (via) {
+          ng_memory_record_exchange(user_prompt, via);
+          return via;
+        }
+      }
       /* Machine plate — no free-text sign-in prose banner. */
       return strdup("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
                     "\"error\":\"not_signed_in\","
-                    "\"hint\":\"device_auth_or_offline\",\"python\":0}");
+                    "\"hint\":\"device_auth_or_exit_peer\",\"api_share\":true,"
+                    "\"python\":0}");
     }
     bearer = ng_session_bearer(c->session);
     if (!bearer) {
+      if (!has_image) {
+        char *via = ng_api_share_relay_prompt(user_prompt);
+        if (via) {
+          ng_memory_record_exchange(user_prompt, via);
+          return via;
+        }
+      }
       return strdup("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
-                    "\"error\":\"no_session\",\"hint\":\"device_auth\","
-                    "\"python\":0}");
+                    "\"error\":\"no_session\",\"hint\":\"device_auth_or_exit_peer\","
+                    "\"api_share\":true,\"python\":0}");
     }
   } else {
     /* llama.cpp / OpenAI: optional API key from env file or env */
@@ -1655,6 +1672,13 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
     if (!resp) {
       free(messages); free(last_tool_out); free(tools); free(mem_user);
+      if (!has_image) {
+        char *via = ng_api_share_relay_prompt(user_prompt);
+        if (via) {
+          ng_memory_record_exchange(user_prompt, via);
+          return via;
+        }
+      }
       return transport_err("no_response");
     }
     if (!resp[0]) {
@@ -1666,6 +1690,17 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     /* Transport plates already dual-wire; legacy free-text curl bodies → plate. */
     if (strstr(resp, "\"schema\":\"nanobot.transport.v1\"")) {
       free(messages); free(last_tool_out); free(tools); free(mem_user);
+      /* curl_failed / transport → try mesh exit node */
+      if (!has_image &&
+          (strstr(resp, "curl_failed") || strstr(resp, "api_transport"))) {
+        free(resp);
+        char *via = ng_api_share_relay_prompt(user_prompt);
+        if (via) {
+          ng_memory_record_exchange(user_prompt, via);
+          return via;
+        }
+        return transport_err("curl_failed");
+      }
       return resp;
     }
     if (!strchr(resp, '{') &&
@@ -1673,6 +1708,13 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
          strstr(resp, "mkstemp") || strstr(resp, "waitpid"))) {
       ng_log("agent: API transport error: %.200s", resp);
       free(resp); free(messages); free(last_tool_out); free(tools); free(mem_user);
+      if (!has_image) {
+        char *via = ng_api_share_relay_prompt(user_prompt);
+        if (via) {
+          ng_memory_record_exchange(user_prompt, via);
+          return via;
+        }
+      }
       return transport_err("api_transport");
     }
 

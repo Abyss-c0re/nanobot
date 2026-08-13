@@ -6,6 +6,7 @@
 #include "util.h"
 #include "hub_local.h"
 #include "agent.h"
+#include "api_share.h"
 #include "subagent.h"
 #include "ng_sched.h"
 #include "braincube_plugin.h"
@@ -1457,6 +1458,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/whoami") == 0 || strcmp(path, "/api/whoami/") == 0 ||
                  strcmp(path, "/peer/v1/whoami") == 0 ||
                  strcmp(path, "/peer/v1/whoami/") == 0 ||
+                 strcmp(path, "/api/v1/whoami") == 0 ||
+                 strcmp(path, "/api/v1/whoami/") == 0 ||
                  strcmp(path, "/me") == 0 || strcmp(path, "/me/") == 0 ||
                  strcmp(path, "/api/me") == 0 || strcmp(path, "/api/me/") == 0 ||
                  strcmp(path, "/peer/v1/me") == 0 || strcmp(path, "/peer/v1/me/") == 0 ||
@@ -2331,13 +2334,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/metrics") == 0 || strcmp(path, "/metrics/") == 0 ||
                  strcmp(path, "/api/metrics") == 0 || strcmp(path, "/api/metrics/") == 0 ||
                  strcmp(path, "/peer/v1/metrics") == 0 ||
-                 strcmp(path, "/peer/v1/metrics/") == 0)) {
+                 strcmp(path, "/peer/v1/metrics/") == 0 ||
+                 strcmp(path, "/api/v1/metrics") == 0 ||
+                 strcmp(path, "/api/v1/metrics/") == 0)) {
     char *body = ng_resources_json();
     int is_metrics = (strcmp(path, "/metrics") == 0 || strcmp(path, "/metrics/") == 0 ||
                       strcmp(path, "/api/metrics") == 0 ||
                       strcmp(path, "/api/metrics/") == 0 ||
                       strcmp(path, "/peer/v1/metrics") == 0 ||
-                      strcmp(path, "/peer/v1/metrics/") == 0);
+                      strcmp(path, "/peer/v1/metrics/") == 0 ||
+                      strcmp(path, "/api/v1/metrics") == 0 ||
+                      strcmp(path, "/api/v1/metrics/") == 0);
     if (is_metrics && body) {
       /* resources=20 chars action leaf; metrics=18 — shrink in place */
       char *p = strstr(body, "\"action\":\"resources\"");
@@ -2390,19 +2397,27 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/livez") == 0 || strcmp(path, "/api/livez/") == 0 ||
                  strcmp(path, "/peer/v1/livez") == 0 ||
                  strcmp(path, "/peer/v1/livez/") == 0 ||
+                 strcmp(path, "/api/v1/livez") == 0 ||
+                 strcmp(path, "/api/v1/livez/") == 0 ||
                  strcmp(path, "/readyz") == 0 || strcmp(path, "/readyz/") == 0 ||
                  strcmp(path, "/api/readyz") == 0 || strcmp(path, "/api/readyz/") == 0 ||
                  strcmp(path, "/peer/v1/readyz") == 0 ||
                  strcmp(path, "/peer/v1/readyz/") == 0 ||
+                 strcmp(path, "/api/v1/readyz") == 0 ||
+                 strcmp(path, "/api/v1/readyz/") == 0 ||
                  strcmp(path, "/healthz") == 0 || strcmp(path, "/healthz/") == 0 ||
                  strcmp(path, "/api/healthz") == 0 ||
                  strcmp(path, "/api/healthz/") == 0 ||
                  strcmp(path, "/peer/v1/healthz") == 0 ||
                  strcmp(path, "/peer/v1/healthz/") == 0 ||
+                 strcmp(path, "/api/v1/healthz") == 0 ||
+                 strcmp(path, "/api/v1/healthz/") == 0 ||
                  strcmp(path, "/alive") == 0 || strcmp(path, "/alive/") == 0 ||
                  strcmp(path, "/api/alive") == 0 || strcmp(path, "/api/alive/") == 0 ||
                  strcmp(path, "/peer/v1/alive") == 0 ||
                  strcmp(path, "/peer/v1/alive/") == 0 ||
+                 strcmp(path, "/api/v1/alive") == 0 ||
+                 strcmp(path, "/api/v1/alive/") == 0 ||
                  strcmp(path, "/heartbeat") == 0 ||
                  strcmp(path, "/heartbeat/") == 0 ||
                  strcmp(path, "/api/heartbeat") == 0 ||
@@ -2426,7 +2441,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                      strcmp(path, "/api/readyz") == 0 ||
                      strcmp(path, "/api/readyz/") == 0 ||
                      strcmp(path, "/peer/v1/readyz") == 0 ||
-                     strcmp(path, "/peer/v1/readyz/") == 0);
+                     strcmp(path, "/peer/v1/readyz/") == 0 ||
+                     strcmp(path, "/api/v1/readyz") == 0 ||
+                     strcmp(path, "/api/v1/readyz/") == 0);
     int is_ping = (strcmp(path, "/ping") == 0 ||
                    strcmp(path, "/ping/") == 0 ||
                    strcmp(path, "/api/ping") == 0 ||
@@ -2439,15 +2456,21 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                     strcmp(path, "/api/livez") == 0 || strcmp(path, "/api/livez/") == 0 ||
                     strcmp(path, "/peer/v1/livez") == 0 ||
                     strcmp(path, "/peer/v1/livez/") == 0 ||
+                    strcmp(path, "/api/v1/livez") == 0 ||
+                    strcmp(path, "/api/v1/livez/") == 0 ||
                     strcmp(path, "/alive") == 0 || strcmp(path, "/alive/") == 0 ||
                     strcmp(path, "/api/alive") == 0 || strcmp(path, "/api/alive/") == 0 ||
                     strcmp(path, "/peer/v1/alive") == 0 ||
-                    strcmp(path, "/peer/v1/alive/") == 0);
+                    strcmp(path, "/peer/v1/alive/") == 0 ||
+                    strcmp(path, "/api/v1/alive") == 0 ||
+                    strcmp(path, "/api/v1/alive/") == 0);
     int is_healthz = (strcmp(path, "/healthz") == 0 || strcmp(path, "/healthz/") == 0 ||
                       strcmp(path, "/api/healthz") == 0 ||
                       strcmp(path, "/api/healthz/") == 0 ||
                       strcmp(path, "/peer/v1/healthz") == 0 ||
-                      strcmp(path, "/peer/v1/healthz/") == 0);
+                      strcmp(path, "/peer/v1/healthz/") == 0 ||
+                      strcmp(path, "/api/v1/healthz") == 0 ||
+                      strcmp(path, "/api/v1/healthz/") == 0);
     int is_heartbeat = (strcmp(path, "/heartbeat") == 0 ||
                         strcmp(path, "/heartbeat/") == 0 ||
                         strcmp(path, "/api/heartbeat") == 0 ||
@@ -2849,7 +2872,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get && (strcmp(path, "/uptime") == 0 || strcmp(path, "/uptime/") == 0 ||
                  strcmp(path, "/api/uptime") == 0 || strcmp(path, "/api/uptime/") == 0 ||
                  strcmp(path, "/peer/v1/uptime") == 0 ||
-                 strcmp(path, "/peer/v1/uptime/") == 0)) {
+                 strcmp(path, "/peer/v1/uptime/") == 0 ||
+                 strcmp(path, "/api/v1/uptime") == 0 ||
+                 strcmp(path, "/api/v1/uptime/") == 0)) {
     char body[640];
     char *ver = ng_json_escape(NG_VERSION);
     time_t now = time(NULL);
@@ -2874,7 +2899,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/capabilities") == 0 ||
                  strcmp(path, "/api/capabilities/") == 0 ||
                  strcmp(path, "/peer/v1/capabilities") == 0 ||
-                 strcmp(path, "/peer/v1/capabilities/") == 0)) {
+                 strcmp(path, "/peer/v1/capabilities/") == 0 ||
+                 strcmp(path, "/api/v1/capabilities") == 0 ||
+                 strcmp(path, "/api/v1/capabilities/") == 0)) {
     char body[1400];
     char *ver = ng_json_escape(NG_VERSION);
     int n = snprintf(body, sizeof body,
@@ -2908,7 +2935,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get && (strcmp(path, "/schema") == 0 || strcmp(path, "/schema/") == 0 ||
                  strcmp(path, "/api/schema") == 0 || strcmp(path, "/api/schema/") == 0 ||
                  strcmp(path, "/peer/v1/schema") == 0 ||
-                 strcmp(path, "/peer/v1/schema/") == 0)) {
+                 strcmp(path, "/peer/v1/schema/") == 0 ||
+                 strcmp(path, "/api/v1/schema") == 0 ||
+                 strcmp(path, "/api/v1/schema/") == 0)) {
     /* Grow with well-known action catalog; 2048 headroom tight at ~sbom (2026-08-10). */
     char body[3072];
     char *ver = ng_json_escape(NG_VERSION);
@@ -7016,6 +7045,27 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     free(req); close(cfd); return;
   }
 
+  /* P2P API share / exit node status (CubalC discovers; HTTP advertises). */
+  if (is_get && (strcmp(path, "/peer/v1/api-share") == 0 ||
+                 strcmp(path, "/peer/v1/api-share/") == 0 ||
+                 strcmp(path, "/api/api-share") == 0 ||
+                 strcmp(path, "/api/api-share/") == 0 ||
+                 strcmp(path, "/api/v1/api-share") == 0 ||
+                 strcmp(path, "/api/v1/api-share/") == 0 ||
+                 strcmp(path, "/peer/v1/exit") == 0 ||
+                 strcmp(path, "/peer/v1/exit/") == 0 ||
+                 strcmp(path, "/api/exit") == 0 ||
+                 strcmp(path, "/api/exit/") == 0)) {
+    char *body = ng_api_share_status_json(agent);
+    if (!body) {
+      http_peer_err(cfd, 500, "oom");
+      free(req); close(cfd); return;
+    }
+    http_response(cfd, 200, "application/json", body, strlen(body));
+    free(body);
+    free(req); close(cfd); return;
+  }
+
   /* Residual: /api/info and trailing slash 404 while health/jobs already
    * accept /api + slash aliases — mesh OpenAPI-ish probes hit not_found.
    * Residual: bare /hello 404 while /api/hello and /peer/v1/hello already info.
@@ -7033,8 +7083,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         && !ng_session_valid(session) && !session->login_pending)
       (void)ng_session_ensure(session);
     int signed_in = session && ng_session_valid(session);
-    /* Room for expanded dual-wire endpoints list (/api/* + control). */
-    char body[1536];
+    /* Room for expanded dual-wire endpoints list (/api/* + control + api-share). */
+    char body[2048];
+    char share_frag[512];
+    ng_api_share_info_json(agent, share_frag, sizeof share_frag);
     char *ver = ng_json_escape(NG_VERSION);
     char *md = ng_json_escape(agent && agent->model ? agent->model : "");
     char *wd = ng_json_escape(ng_workdir());
@@ -7044,6 +7096,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"service\":\"nanobot-peer\",\"version\":\"%s\","
       "\"signed_in\":%s,\"model\":\"%s\",\"workdir\":\"%s\","
       "\"pid\":%d,\"started\":%ld,\"jobs\":%d,\"jobs_keep\":%d,"
+      "%s,"
       "\"tools\":[\"prompt\",\"shell\"],"
       "\"endpoints\":["
       "\"/peer/v1/health\","
@@ -7061,7 +7114,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/peer/v1/jobs\","
       "\"/api/jobs\","
       "\"/peer/v1/control\","
-      "\"/api/control\""
+      "\"/api/control\","
+      "\"/peer/v1/api-share\","
+      "\"/api/api-share\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ver ? ver : "",
@@ -7070,7 +7125,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       wd ? wd : "",
       (int)(g_serve_pid ? g_serve_pid : getpid()),
       (long)g_serve_started,
-      jn, (int)NG_JOBS_KEEP);
+      jn, (int)NG_JOBS_KEEP,
+      share_frag);
     free(ver); free(md); free(wd);
     if (n < 0 || n >= (int)sizeof body) {
       http_peer_err(cfd, 500, "oom");
@@ -7083,7 +7139,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Control plane: shell / watcher / ui — persisted in $HOME/settings.
    * Residual: /api/control and trailing slash 404 (jobs/health already aliased). */
   if (is_get && (strcmp(path, "/peer/v1/control") == 0 || strcmp(path, "/peer/v1/control/") == 0 ||
-                 strcmp(path, "/api/control") == 0 || strcmp(path, "/api/control/") == 0)) {
+                 strcmp(path, "/api/control") == 0 || strcmp(path, "/api/control/") == 0 ||
+                 strcmp(path, "/api/v1/control") == 0 ||
+                 strcmp(path, "/api/v1/control/") == 0)) {
     char sp[640], wp[640];
     snprintf(sp, sizeof sp, "%s/shell_enabled", ng_workdir());
     snprintf(wp, sizeof wp, "%s/watcher_enabled", ng_workdir());
@@ -7585,7 +7643,10 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (is_get && (strcmp(path, "/peer/v1/jobs") == 0 || strcmp(path, "/peer/v1/job") == 0 ||
                  strcmp(path, "/peer/v1/jobs/") == 0 || strcmp(path, "/peer/v1/job/") == 0 ||
                  strcmp(path, "/api/jobs") == 0 || strcmp(path, "/api/job") == 0 ||
-                 strcmp(path, "/api/jobs/") == 0 || strcmp(path, "/api/job/") == 0)) {
+                 strcmp(path, "/api/jobs/") == 0 || strcmp(path, "/api/job/") == 0 ||
+                 strcmp(path, "/api/v1/jobs") == 0 || strcmp(path, "/api/v1/job") == 0 ||
+                 strcmp(path, "/api/v1/jobs/") == 0 ||
+                 strcmp(path, "/api/v1/job/") == 0)) {
     if (!require_peer_auth(cfd, req, 0)) { free(req); close(cfd); return; }
     char jdir[640];
     snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
@@ -7970,7 +8031,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Residual: mesh/HTTP probes GET /peer/v1/prompt|/api/prompt and got not_found
    * while OpenAPI lists POST only. Dual-wire plate: method POST + peer token. */
   if (is_get && (strcmp(path, "/peer/v1/prompt") == 0 || strcmp(path, "/peer/v1/prompt/") == 0 ||
-                 strcmp(path, "/api/prompt") == 0 || strcmp(path, "/api/prompt/") == 0)) {
+                 strcmp(path, "/api/prompt") == 0 || strcmp(path, "/api/prompt/") == 0 ||
+                 strcmp(path, "/api/v1/prompt") == 0 ||
+                 strcmp(path, "/api/v1/prompt/") == 0)) {
     static const char pr[] =
       "{"
       "\"schema\":\"nanobot.peer_http.v1\","
@@ -8013,7 +8076,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   /* Residual: mesh/HTTP probes GET /peer/v1/shell|/api/shell and got not_found
    * while OpenAPI lists POST only. Dual-wire plate: method POST + peer token. */
   if (is_get && (strcmp(path, "/peer/v1/shell") == 0 || strcmp(path, "/peer/v1/shell/") == 0 ||
-                 strcmp(path, "/api/shell") == 0 || strcmp(path, "/api/shell/") == 0)) {
+                 strcmp(path, "/api/shell") == 0 || strcmp(path, "/api/shell/") == 0 ||
+                 strcmp(path, "/api/v1/shell") == 0 ||
+                 strcmp(path, "/api/v1/shell/") == 0)) {
     static const char sh[] =
       "{"
       "\"schema\":\"nanobot.peer_http.v1\","
