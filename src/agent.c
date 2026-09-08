@@ -2060,3 +2060,140 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   free(mem_user);
   return final;
 }
+
+/* Build compact User:/Agent: transcript from memory/recent.jsonl (newest last). */
+static char *suggest_transcript_from_memory(void) {
+  char path[640];
+  size_t len = 0;
+  char *raw, *out = NULL, *p;
+  snprintf(path, sizeof path, "%s/memory/recent.jsonl", ng_workdir());
+  raw = ng_read_file(path, &len);
+  if (!raw || !raw[0]) {
+    free(raw);
+    return NULL;
+  }
+  p = raw;
+  while (*p) {
+    char *nl = strchr(p, '\n');
+    char line[512];
+    size_t n;
+    char *role, *content;
+    if (nl) {
+      n = (size_t)(nl - p);
+      if (n >= sizeof line) n = sizeof line - 1;
+      memcpy(line, p, n);
+      line[n] = 0;
+      p = nl + 1;
+    } else {
+      snprintf(line, sizeof line, "%s", p);
+      p += strlen(p);
+    }
+    role = ng_json_get_string(line, "role");
+    content = ng_json_get_string(line, "content");
+    if (role && content && content[0]) {
+      const char *lab = (!strcmp(role, "assistant")) ? "Agent" : "User";
+      char *next = NULL;
+      asprintf(&next, "%s%s%s: %.400s", out ? out : "", out ? "\n\n" : "", lab,
+               content);
+      free(out);
+      out = next;
+    }
+    free(role);
+    free(content);
+  }
+  free(raw);
+  return out;
+}
+
+char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
+                              const char *cwd) {
+  char *own_tr = NULL;
+  char *sys_esc, *user_esc, *body = NULL, *resp, *text;
+  char url[768];
+  const char *bearer = NULL;
+  char *tok_owned = NULL;
+  int grok;
+  const char *tr;
+  const char *wd;
+  if (!c || !c->base_url || !c->base_url[0])
+    return strdup("{\"schema\":\"nanobot.augogen.v1\",\"ok\":false,"
+                  "\"error\":\"no_base_url\",\"python\":0}");
+  tr = transcript;
+  if (!tr || !tr[0]) {
+    own_tr = suggest_transcript_from_memory();
+    tr = own_tr;
+  }
+  if (!tr || !tr[0]) {
+    free(own_tr);
+    return strdup("{\"schema\":\"nanobot.augogen.v1\",\"ok\":false,"
+                  "\"error\":\"no_transcript\",\"python\":0}");
+  }
+  wd = (cwd && cwd[0]) ? cwd : ng_workdir();
+  grok = is_grok_endpoint(c->base_url);
+  if (grok) {
+    if (!c->session || ng_session_ensure(c->session) != 0) {
+      free(own_tr);
+      return strdup("{\"schema\":\"nanobot.auth.v1\",\"ok\":false,"
+                    "\"error\":\"not_signed_in\",\"python\":0}");
+    }
+    bearer = ng_session_bearer(c->session);
+  } else {
+    tok_owned = ng_getenv_dup("NANOBOT_API_KEY");
+    if (!tok_owned) tok_owned = ng_getenv_dup("OPENAI_API_KEY");
+    if (!tok_owned) tok_owned = ng_getenv_dup("XAI_API_KEY");
+    bearer = tok_owned;
+  }
+
+  sys_esc = ng_json_escape(
+      "You predict the next line the USER will type into their coding agent.\n"
+      "You see a transcript. The last line is from the agent.\n"
+      "Write only that next user line, or NONE.\n\n"
+      "Predict what they would type, not what you think they should do.\n"
+      "A wrong line is worse than NONE.\n"
+      "Write NONE if the next line is long, new, or not obvious.\n"
+      "Write NONE after an error or a misunderstanding.\n\n"
+      "Never write a line the user already sent.\n"
+      "Never write filler, a question, or agent voice.\n"
+      "Never write a new idea they did not ask for.\n\n"
+      "If you write a line, use 2-12 words in their style.\n"
+      "Reply with only the line or NONE.");
+  {
+    char user[4096];
+    snprintf(user, sizeof user,
+             "CWD: %s\n\nTranscript:\n\n%.3000s\n\n"
+             "Predict the user's next message. Reply with ONLY the suggestion text.",
+             wd, tr);
+    user_esc = ng_json_escape(user);
+  }
+  asprintf(&body,
+           "{\"model\":\"%s\",\"messages\":["
+           "{\"role\":\"system\",\"content\":\"%s\"},"
+           "{\"role\":\"user\",\"content\":\"%s\"}],"
+           "\"stream\":false,\"max_tokens\":64,\"temperature\":0.2}",
+           c->model ? c->model : NG_DEFAULT_MODEL,
+           sys_esc ? sys_esc : "", user_esc ? user_esc : "");
+  free(sys_esc);
+  free(user_esc);
+  free(own_tr);
+  if (!body) {
+    free(tok_owned);
+    return strdup("{\"schema\":\"nanobot.augogen.v1\",\"ok\":false,"
+                  "\"error\":\"oom\",\"python\":0}");
+  }
+  snprintf(url, sizeof url, "%s/chat/completions", c->base_url);
+  resp = curl_post_json(url, bearer, body);
+  free(body);
+  free(tok_owned);
+  if (!resp)
+    return strdup("{\"schema\":\"nanobot.transport.v1\",\"ok\":false,"
+                  "\"error\":\"no_resp\",\"python\":0}");
+  if (grok && ng_cli_version_handle_error(resp)) {
+    /* one retry after version bump */
+    free(resp);
+    return ng_agent_suggest_prompt(c, transcript, cwd);
+  }
+  text = ng_json_message_content(resp);
+  free(resp);
+  if (!text) text = strdup("");
+  return text;
+}

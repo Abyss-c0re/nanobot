@@ -1,3 +1,14 @@
+## 0.5.5 — 2026-09-08
+
+### Grok Build 1.0 suggestPrompt (augogen)
+- CLI version floor `1.0.13` (installed Grok Build; cloned source crate 1.0.24)
+- New API: `POST /api/augogen` + `/peer/v1/augogen` (`generate|pending|vote|reject|apply|reset`)
+- Wire matches Grok Build `x.ai/suggestPrompt` (system prompt, sanitize, 2–12 words)
+- **Never auto-executes.** Pair vote: guide + oversee as one braincube; mesh may veto
+- MCP: `augogen_generate` · `augogen_pending` · `augogen_vote`
+- BrainCube `pair_vote` action + submodule 0.1.2-pair-vote
+- Docs: `docs/AUGOGEN.md`
+
 ## 0.5.4 — 2026-08-13
 
 ### P2P API share (exit node)

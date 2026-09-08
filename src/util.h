@@ -3,9 +3,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NG_VERSION "0.5.4"
-/* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*). */
-#define NG_CLI_VERSION_DEFAULT "0.1.220"
+#define NG_VERSION "0.5.5"
+/* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*).
+ * Grok Build 1.0.13 installed; cloned source crate is 1.0.24. */
+#define NG_CLI_VERSION_DEFAULT "1.0.13"
 #define NG_DEFAULT_PORT 8787
 #define NG_DEFAULT_BASE "https://cli-chat-proxy.grok.com/v1"
 #define NG_DEFAULT_MODEL "grok-4.5"

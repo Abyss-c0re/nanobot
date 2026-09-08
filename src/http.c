@@ -10,6 +10,7 @@
 #include "subagent.h"
 #include "ng_sched.h"
 #include "braincube_plugin.h"
+#include "augogen.h"
 #include <nanobot/crypto.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1380,7 +1381,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/ready\",\"/peer/v1/ready\",\"/api/ready\","
       "\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
       "\"/peer/v1/task\",\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/task\","
-      "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/subagents\"],"
+      "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/augogen\",\"/api/subagents\"],"
       "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
       "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
       "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}";
@@ -1410,7 +1411,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/peer/v1/jobs\",\"/api/jobs\",\"/peer/v1/control\",\"/api/control\","
       "\"/peer/v1/task\",\"/api/task\",\"/peer/v1/models\",\"/api/models\","
       "\"/api/settings\",\"/settings\",\"/api/backend\",\"/peer/v1/backend\","
-      "\"/api/auth\",\"/api/chat\",\"/api/braincube\",\"/api/subagents\","
+      "\"/api/auth\",\"/api/chat\",\"/api/braincube\",\"/api/augogen\",\"/api/subagents\","
       "\"/api/log\",\"/peer/v1/log\",\"/api/mcp/servers\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
@@ -2917,7 +2918,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"openapi\":true,"
         "\"metrics\":true,"
         "\"whoami\":true,"
-        "\"braincube\":true"
+        "\"braincube\":true,"
+        "\"augogen\":true"
       "},"
       "\"discovery\":["
         "\"/peer/v1/health\",\"/peer/v1/info\",\"/openapi.json\","
@@ -2952,7 +2954,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
         "\"nanobot.task.v1\","
         "\"nanobot.task_reminder.v1\","
         "\"nanobot.mcp.v1\","
-        "\"nanobot.braincell.v1\""
+        "\"nanobot.braincell.v1\","
+        "\"nanobot.augogen.v1\""
       "],"
       "\"actions\":["
         "\"health\",\"ready\",\"ping\",\"livez\",\"readyz\",\"healthz\","
@@ -7909,6 +7912,39 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     body = body ? body + 4 : "";
     {
       char *jb = ng_bc_handle_post(body);
+      http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+      free(jb);
+    }
+    free(req); close(cfd); return;
+  }
+
+  /* Augogen — Grok suggestPrompt next-step. Never auto-executes. Pair vote. */
+  if (is_get && (strcmp(path, "/peer/v1/augogen") == 0 ||
+                 strcmp(path, "/peer/v1/augogen/") == 0 ||
+                 strcmp(path, "/api/augogen") == 0 ||
+                 strcmp(path, "/api/augogen/") == 0 ||
+                 strcmp(path, "/peer/v1/suggest") == 0 ||
+                 strcmp(path, "/api/suggest") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    {
+      char *jb = ng_augogen_pending_json();
+      http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
+      free(jb);
+    }
+    free(req); close(cfd); return;
+  }
+  if (is_post && (strcmp(path, "/peer/v1/augogen") == 0 ||
+                  strcmp(path, "/peer/v1/augogen/") == 0 ||
+                  strcmp(path, "/api/augogen") == 0 ||
+                  strcmp(path, "/api/augogen/") == 0 ||
+                  strcmp(path, "/peer/v1/suggest") == 0 ||
+                  strcmp(path, "/api/suggest") == 0)) {
+    if (!require_peer_auth(cfd, req, 1)) { free(req); close(cfd); return; }
+    {
+      char *body = strstr(req, "\r\n\r\n");
+      char *jb;
+      body = body ? body + 4 : "";
+      jb = ng_augogen_handle(agent, body);
       http_response(cfd, 200, "application/json", jb ? jb : "{}", jb ? strlen(jb) : 2);
       free(jb);
     }

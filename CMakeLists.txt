@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(nanobot VERSION 0.5.4 LANGUAGES C)
+project(nanobot VERSION 0.5.5 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -55,6 +55,7 @@ add_library(nanobot_legacy STATIC
   src/hub.c
   src/braincube_plugin.c
   src/braincell.c
+  src/augogen.c
 )
 add_library(nanobot::legacy ALIAS nanobot_legacy)
 target_include_directories(nanobot_legacy

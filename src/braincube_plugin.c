@@ -1883,6 +1883,45 @@ char *ng_bc_handle_post(const char *json_body) {
 #endif
   }
 
+  if (!strcmp(action, "pair_vote") || !strcmp(action, "pair_confirm")) {
+#if NANOBOT_HAS_BRAINCUBE
+    char *text = ng_json_get_string(json_body, "text");
+    char *sug = ng_json_get_string(json_body, "suggestion");
+    const char *src = (text && text[0]) ? text : (sug && sug[0] ? sug : "");
+    lhlam_cube guide, oversee;
+    uint8_t sg[32], so[32];
+    int confirmed;
+    memset(sg, 0x17, sizeof sg);
+    memset(so, 0x0E, sizeof so);
+    sg[0] = 3;
+    so[0] = 9;
+    lhlam_cube_init(&guide, sg);
+    lhlam_cube_init(&oversee, so);
+    confirmed = lhlam_cube_pair_confirm_cstr(&guide, &oversee, src);
+    free(text);
+    free(sug);
+    free(action);
+    {
+      char *out = NULL;
+      asprintf(&out,
+               "{\"schema\":\"nanobot.braincube.v1\",\"ok\":true,"
+               "\"action\":\"pair_vote\",\"confirmed\":%s,"
+               "\"guide\":%d,\"oversee\":%d,\"auto_execute\":false,"
+               "\"python\":0}",
+               confirmed ? "true" : "false",
+               (int)guide.action_bias, (int)oversee.action_bias);
+      return out ? out
+                 : strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                          "\"error\":\"oom\",\"python\":0}");
+    }
+#else
+    free(action);
+    return strdup("{\"schema\":\"nanobot.braincube.v1\",\"ok\":false,"
+                  "\"action\":\"pair_vote\",\"error\":\"braincube_unavailable\","
+                  "\"auto_execute\":false,\"python\":0}");
+#endif
+  }
+
   if (!strcmp(action, "enable") || !strcmp(action, "disable")) {
     int on = !strcmp(action, "enable");
     pthread_mutex_lock(&g_mu);

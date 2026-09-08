@@ -24,6 +24,7 @@ Every continuous chain tick:
 5. **Loss** → blocked path still teaches; loop never ends.
 
 API: `POST /api/braincube` `{"action":"law"}` or `live` (field `law` in JSON).  
+Pair confirm: `POST /api/braincube` `{"action":"pair_vote","suggestion":"…"}` — guide + oversee must both vote 1. Never auto-executes.  
 Principle: **energy must flow**.
 
 ## Agent tools (MCP)

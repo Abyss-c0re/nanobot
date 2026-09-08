@@ -3,6 +3,7 @@
 #include "memory.h"
 #include "shell.h"
 #include "braincube_plugin.h"
+#include "augogen.h"
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -371,6 +372,52 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     return 0;
   }
 
+  if (strcmp(name, "augogen_generate") == 0 ||
+      strcmp(name, "suggest_prompt") == 0) {
+    char *tr = tool_arg(json, "transcript");
+    char *sug = tool_arg(json, "suggestion");
+    char *body = NULL, *resp = NULL;
+    char *tr_esc = ng_json_escape(tr ? tr : "");
+    char *sug_esc = ng_json_escape(sug ? sug : "");
+    asprintf(&body,
+             "{\"action\":\"generate\",\"transcript\":\"%s\",\"suggestion\":\"%s\"}",
+             tr_esc ? tr_esc : "", sug_esc ? sug_esc : "");
+    resp = ng_augogen_handle(agent, body ? body : "{\"action\":\"generate\"}");
+    free(body); free(tr); free(sug); free(tr_esc); free(sug_esc);
+    if (resp)
+      plate_result(out_result, resp, strstr(resp, "\"ok\":false") ? 1 : 0);
+    else
+      plate_result(out_result, mcp_err("unavailable"), 1);
+    free(name);
+    return 0;
+  }
+  if (strcmp(name, "augogen_pending") == 0) {
+    char *resp = ng_augogen_pending_json();
+    if (resp)
+      plate_result(out_result, resp, 0);
+    else
+      plate_result(out_result, mcp_err("unavailable"), 1);
+    free(name);
+    return 0;
+  }
+  if (strcmp(name, "augogen_vote") == 0) {
+    char *role = tool_arg(json, "role");
+    char *vote = tool_arg(json, "vote");
+    char *body = NULL, *resp = NULL;
+    char *role_esc = ng_json_escape(role && role[0] ? role : "mesh");
+    char *vote_esc = ng_json_escape(vote && vote[0] ? vote : "0");
+    asprintf(&body, "{\"action\":\"vote\",\"role\":\"%s\",\"vote\":\"%s\"}",
+             role_esc ? role_esc : "mesh", vote_esc ? vote_esc : "0");
+    resp = ng_augogen_handle(agent, body ? body : "{}");
+    free(body); free(role); free(vote); free(role_esc); free(vote_esc);
+    if (resp)
+      plate_result(out_result, resp, strstr(resp, "\"ok\":false") ? 1 : 0);
+    else
+      plate_result(out_result, mcp_err("unavailable"), 1);
+    free(name);
+    return 0;
+  }
+
   {
     char *esc = ng_json_escape(name);
     char *plate = NULL;
@@ -429,7 +476,19 @@ static const char *TOOLS_JSON =
   "\"description\":\"Supervise BrainCube: focus a sensor lane for ttl_sec (charge, free_ok, bump_L, …). Logs one-liner then purges bulky logs.\","
   "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
   "\"want\":{\"type\":\"string\"},\"ttl_sec\":{\"type\":\"string\"},\"note\":{\"type\":\"string\"}},"
-  "\"required\":[\"want\"]}}"
+  "\"required\":[\"want\"]}},"
+  "{\"name\":\"augogen_generate\","
+  "\"description\":\"Grok Build suggestPrompt: predict the next user line. Does NOT execute. Pair/mesh must vote to confirm.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"transcript\":{\"type\":\"string\"},"
+  "\"suggestion\":{\"type\":\"string\",\"description\":\"optional host-supplied line (still needs vote)\"}}}},"
+  "{\"name\":\"augogen_pending\","
+  "\"description\":\"Current augogen plate (pending/approved/rejected). auto_execute is always false.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},"
+  "{\"name\":\"augogen_vote\","
+  "\"description\":\"Pair/mesh vote on the pending next step. role=guide|oversee|mesh, vote=1|0. Confirm only when guide+oversee approve and mesh does not veto.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"role\":{\"type\":\"string\"},\"vote\":{\"type\":\"string\"}},\"required\":[\"vote\"]}}"
   "]}";
 
 int ng_mcp_stdio_run(ng_agent_cfg *agent) {

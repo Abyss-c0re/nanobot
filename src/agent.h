@@ -75,4 +75,10 @@ void ng_agent_apply_provider_policy(ng_agent_cfg *c);
 char *ng_agent_subagent_spawn(ng_agent_cfg *c, const char *type, const char *desc,
                               const char *prompt);
 
+/* Grok Build x.ai/suggestPrompt: one-shot next-user-line prediction.
+ * No tools. max_tokens 64. Returns malloc'd raw assistant text (or plate).
+ * transcript/cwd may be NULL (uses recent memory + workdir). */
+char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
+                              const char *cwd);
+
 #endif
