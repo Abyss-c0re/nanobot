@@ -1,0 +1,1 @@
+/home/voldemar/.grok/workflows/sync-nanobot.rhai

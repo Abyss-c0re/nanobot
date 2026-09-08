@@ -7,7 +7,7 @@ DOCKER_ARGS ?=
 
 ROOT := $(abspath .)
 .PHONY: all host native arm static shell-server clean clean-all maintain test test-mcp \
-	docker docker-fat wizard deploy-local deploy-ssh deploy-docker
+	docker docker-fat wizard deploy-local deploy-ssh deploy-docker sync
 
 all: host
 
@@ -35,6 +35,10 @@ test: host
 	"$(ROOT)/build/host/nanobot" --version
 	"$(ROOT)/build/host/nanobot" --help >/dev/null
 	@echo "test OK host"
+
+# Same playbook as saying "sync nanobot project" / /sync-nanobot
+sync:
+	bash /home/voldemar/.grok/skills/sync-nanobot/scripts/sync_nanobot.sh --sync
 
 test-mcp: host
 	@printf '%s' 'Content-Length: 120\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
