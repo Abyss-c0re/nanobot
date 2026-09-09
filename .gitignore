@@ -74,3 +74,4 @@ Docker/config.env
 Docker/bin/shell_server
 .agents/
 docs/ops/NANOBOT_LOOP_LAST.md
+state/
