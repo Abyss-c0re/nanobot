@@ -3,8 +3,9 @@
 #include "agent.h"
 
 /* Augogen — Grok Build x.ai/suggestPrompt compatibility.
- * Generates a logical next user line. NEVER auto-executes.
- * Confirm only after pair vote (guide + oversee) as one braincube.
+ * Full auto (default): generate → braincube pair-confirm → apply → enqueue run.
+ * Mesh vote 0 still vetoes. HOLD_FLASH=1. Forbidden: flash/wipe/cycle-stop.
+ * NANOBOT_AUGOGEN_AUTO=0 / settings AUGOGEN_AUTO=0 restores vote-only.
  * Schema: nanobot.augogen.v1
  */
 

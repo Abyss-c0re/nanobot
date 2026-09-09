@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NG_VERSION "0.5.5"
+#define NG_VERSION "0.5.6"
 /* Floor CLI version for proxy gate; runtime may auto-bump (see ng_cli_version_*).
  * Grok Build 1.0.13 installed; cloned source crate is 1.0.24. */
 #define NG_CLI_VERSION_DEFAULT "1.0.13"

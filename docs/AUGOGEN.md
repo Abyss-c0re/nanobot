@@ -1,7 +1,11 @@
 # Augogen — next-step suggestion (Grok Build compatible)
 
 Predicts the **next user line** after a turn. Tab-accept in Grok Build; here the
-**mesh votes**. The suggestion is never executed until guide + oversee approve.
+**mesh votes**, then **full auto** (default) applies and enqueues a prompt job.
+
+`NANOBOT_AUGOGEN_AUTO=0` or settings `AUGOGEN_AUTO=0` restores vote-only
+(no enqueue). Mesh vote `0` still vetoes. HOLD_FLASH=1. Suggestions that
+name flash/wipe/cycle-stop are rejected.
 
 ## Wire
 
@@ -15,12 +19,15 @@ POST /peer/v1/augogen
 {"action":"generate","transcript":"User: …\n\nAgent: …"}
 {"action":"vote","role":"guide|oversee|mesh","vote":"1"}
 {"action":"pending"}
-{"action":"apply"}   # only if confirmed — exposes next_prompt, does not run
+{"action":"apply"}   # confirmed: expose next_prompt; auto mode also enqueues run
+{"action":"auto"}    # generate + pair-confirm + apply + enqueue (same as generate when auto on)
+{"action":"mode","auto":"1"}  # persist AUGOGEN_AUTO
 {"action":"reject"}
 ```
 
-`auto_execute` is always `false`. `confirmed` is true only when both pair votes
-are 1 and mesh did not veto (mesh `0`). Apply never calls the agent.
+`auto_execute` is **true** when full auto is on (default). `confirmed` is true
+only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode
+then forks a `kind=prompt` job (`executed`, `job_id`). Vote-only never runs.
 
 ## Pair = one braincube
 

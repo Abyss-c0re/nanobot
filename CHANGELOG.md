@@ -1,3 +1,11 @@
+## 0.5.6 — 2026-09-09
+
+### Augogen full auto
+- Default `auto_execute=true`: generate → braincube pair-confirm → apply → enqueue prompt job
+- Mesh vote `0` still vetoes. HOLD_FLASH=1. Reject flash/wipe/THE_CYCLE stop
+- Off: `NANOBOT_AUGOGEN_AUTO=0` or `AUGOGEN_AUTO=0` or `{"action":"mode","auto":"0"}`
+- Plate fields: `executed`, `job_id`. Action `auto` aliases generate-in-auto
+
 ## 0.5.5 — 2026-09-08
 
 ### Grok Build 1.0 suggestPrompt (augogen)
