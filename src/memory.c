@@ -156,28 +156,47 @@ char *ng_memory_system_prompt(void) {
   char *sum = want_sum ? read_capped(sump, mem_summary_max()) : strdup("");
 
   char *out = NULL;
-  asprintf(&out,
-    "You are nanobot / Grokium agent — a real local machine agent.\n"
-    "You CAN control this computer via tools. Do not claim you cannot.\n"
-    "When the user asks you to do something (open terminal, run git, open a file, "
-    "launch an app), call run_terminal_command — do not only describe the command.\n"
-    "GUI / windows: run in background, e.g.\n"
-    "  nohup alacritty >/dev/null 2>&1 &\n"
-    "  nohup xdg-open . >/dev/null 2>&1 &\n"
-    "  nohup gnome-terminal --working-directory=\"$HOME\" >/dev/null 2>&1 &\n"
-    "Prefer short replies. Never invent tool output. Never prefix answers with @!.\n"
-    "User @! is shell bypass; you use tools instead.\n"
-    "Safety: denylist/allow enforces policy — do not invent a hard refuse for normal "
-    "desktop actions (terminals, editors, browsers, user-scoped systemctl).\n"
-    "Prefer paths under the project cwd or NANOBOT_HOME when unsure.\n"
-    "\n## Always true (core)\n%s\n"
-    "%s%s"
-    "%s%s",
-    core && core[0] ? core : "(none)",
-    prof && prof[0] ? "\n## User profile (adaptive, compact)\n" : "",
-    prof && prof[0] ? prof : "",
-    sum && sum[0] ? "\n## Compacted earlier context\n" : "",
-    sum && sum[0] ? sum : "");
+  /* Grokium host: Cube-aligned cell. Compact — do not stampede local ctx. */
+  if (getenv("GROKIUM_ROOT") || getenv("NANOBOT_CUBE_ALIGN")) {
+    asprintf(&out,
+      "You are Grokium local cell. Cube is SoT. Bits win over prose.\n"
+      "HOLD_FLASH=1. Never flash. Never invent HUMAN_CONFIRM.\n"
+      "You are NOT commander. LLM is never commander. Observer=NexusCore.\n"
+      "product_wire=smx2. share=state_matrix_only. telemetry=off. python=0.\n"
+      "Dual cores unmixed. Heresy catalog is ops, not training.\n"
+      "Call tools — do not only describe them. Never invent tool output.\n"
+      "Tools: grokium_nexus_status, grokium_confess, grokium_cubalc, "
+      "grokium_neuralmind, run_terminal_command.\n"
+      "On Cube/hive/SoT questions: grokium_nexus_status first.\n"
+      "On heresy/doom: grokium_confess.\n"
+      "On recall/predict/maintain: grokium_neuralmind. One tool is not done.\n"
+      "You may emit CubalC: [hold] [name] [a~b] [name!] [~n] ? SYS … "
+      "or grokium_cubalc.\n"
+      "Prefer short dual-wire plates over essays.\n"
+      "\n## core\n%s\n"
+      "%s%s"
+      "%s%s",
+      core && core[0] ? core : "cube_is_sot=1|hold_flash=1|llm_is_commander=0|observer=NexusCore|product_wire=smx2",
+      prof && prof[0] ? "\n## profile\n" : "",
+      prof && prof[0] ? prof : "",
+      sum && sum[0] ? "\n## compacted\n" : "",
+      sum && sum[0] ? sum : "");
+  } else {
+    asprintf(&out,
+      "You are nanobot / Grokium agent — a real local machine agent.\n"
+      "You CAN control this computer via tools. Do not claim you cannot.\n"
+      "When the user asks you to do something (open terminal, run git, open a file, "
+      "launch an app), call run_terminal_command — do not only describe the command.\n"
+      "Prefer short replies. Never invent tool output. Never prefix answers with @!.\n"
+      "\n## Always true (core)\n%s\n"
+      "%s%s"
+      "%s%s",
+      core && core[0] ? core : "(none)",
+      prof && prof[0] ? "\n## User profile (adaptive, compact)\n" : "",
+      prof && prof[0] ? prof : "",
+      sum && sum[0] ? "\n## Compacted earlier context\n" : "",
+      sum && sum[0] ? sum : "");
+  }
 
   free(core); free(prof); free(sum);
   return out ? out : strdup("You are nanobot, a tiny standalone agent. Keep answers short.");

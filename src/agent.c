@@ -1505,11 +1505,46 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     }
   }
 
-  /* Base shell tool + task board + light subagents + braincells + optional MCP. */
-  char *mcp_frag = is_subworker ? strdup("") : ng_mcp_openai_tools_fragment();
-  char *task_frag = is_subworker ? strdup("") : ng_task_openai_tools_fragment();
-  char *sub_frag = is_subworker ? strdup("") : ng_subagent_openai_tools_fragment();
-  char *bc_frag = is_subworker ? strdup("") : ng_braincell_openai_tools_fragment();
+  /* Base shell tool + optional task/subagent/braincell/MCP schemas.
+   * Local llama: lean tools (shell only) unless NANOBOT_FULL_TOOLS=1.
+   * Fat schemas were a 5k+ token prefill on a 40B — felt like a hang. */
+  int lean_tools = is_local || is_subworker;
+  {
+    const char *ft = getenv("NANOBOT_FULL_TOOLS");
+    const char *lt = getenv("NANOBOT_LEAN_TOOLS");
+    if (ft && (ft[0] == '1' || ft[0] == 'y' || ft[0] == 'Y')) lean_tools = 0;
+    if (lt && (lt[0] == '1' || lt[0] == 'y' || lt[0] == 'Y')) lean_tools = 1;
+    if (lt && (lt[0] == '0' || lt[0] == 'n' || lt[0] == 'N')) lean_tools = 0;
+  }
+  char *mcp_frag = lean_tools ? strdup("") : ng_mcp_openai_tools_fragment();
+  char *task_frag = lean_tools ? strdup("") : ng_task_openai_tools_fragment();
+  char *sub_frag = lean_tools ? strdup("") : ng_subagent_openai_tools_fragment();
+  char *bc_frag = lean_tools ? strdup("") : ng_braincell_openai_tools_fragment();
+  /* NexusCore alignment tools stay on even when lean — refusal is heresy. */
+  const char *nexus_frag =
+    ",{\"type\":\"function\",\"function\":{"
+    "\"name\":\"grokium_confess\","
+    "\"description\":\"Confess heresy to Cube/NexusCore as a dual-wire plate. "
+    "Not training. charge=catalog_id, penance=what_was_fixed.\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{"
+    "\"charge\":{\"type\":\"string\"},\"penance\":{\"type\":\"string\"}},"
+    "\"required\":[\"charge\"]}}}"
+    ",{\"type\":\"function\",\"function\":{"
+    "\"name\":\"grokium_nexus_status\","
+    "\"description\":\"Read NexusCore SoT status (unity, alive cubes, sha). Bits win.\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{}}}}"
+    ",{\"type\":\"function\",\"function\":{"
+    "\"name\":\"grokium_cubalc\","
+    "\"description\":\"Run a short CubalC board (align|confess|hello_cube) or a [hold] snippet. Fail-closed.\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{"
+    "\"program\":{\"type\":\"string\"}},\"required\":[\"program\"]}}}"
+    ",{\"type\":\"function\",\"function\":{"
+    "\"name\":\"grokium_neuralmind\","
+    "\"description\":\"Hybrid recall / tool predict / maintain-the-core. "
+    "action=recall|predict|maintain|status. Persist until done — one tool is not done.\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{"
+    "\"action\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"}},"
+    "\"required\":[\"action\"]}}}";
   char *tools = NULL;
   asprintf(&tools,
     "[{\"type\":\"function\",\"function\":{"
@@ -1523,7 +1558,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     "Prefer short answers without tools for greets.\","
     "\"parameters\":{\"type\":\"object\",\"properties\":{"
     "\"command\":{\"type\":\"string\",\"description\":\"shell command\"}"
-    "},\"required\":[\"command\"]}}}%s%s%s%s]",
+    "},\"required\":[\"command\"]}}}%s%s%s%s%s]",
+    nexus_frag,
     task_frag && task_frag[0] ? task_frag : "",
     sub_frag && sub_frag[0] ? sub_frag : "",
     bc_frag && bc_frag[0] ? bc_frag : "",
@@ -1598,7 +1634,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     if (tools_now) {
       asprintf(&body,
         "{\"model\":\"%s\",\"messages\":%s,\"tools\":%s,\"tool_choice\":\"auto\","
-        "\"stream\":false}",
+        "\"stream\":false,\"max_tokens\":768}",
         c->model, messages, tools);
     } else {
       /* Nudge finalization after tools — dual-wire plates only (no free-text). */
@@ -1787,6 +1823,69 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         cr.exit_code = 0;
         cr.output = mcp_out; /* owned; free via ng_cmd_result_free or manual */
         ng_log("agent: mcp tool done out=%.200s", mcp_out);
+      } else if (!strcmp(tname, "grokium_confess")) {
+        const char *root = getenv("GROKIUM_ROOT");
+        char *ch = ng_json_get_string(targs, "charge");
+        char *pe = ng_json_get_string(targs, "penance");
+        char script[768];
+        if (root && root[0])
+          snprintf(script, sizeof script, "%s/scripts/grokium-confess", root);
+        else
+          snprintf(script, sizeof script, "grokium-confess");
+        setenv("GROKIUM_SESSIONS_ARG", ch ? ch : "unspecified", 1);
+        setenv("GROKIUM_PENANCE_ARG", pe ? pe : "hold", 1);
+        asprintf(&cmd, "bash '%s' \"$GROKIUM_SESSIONS_ARG\" \"$GROKIUM_PENANCE_ARG\"",
+                 script);
+        cr = ng_run_command(cmd, 20);
+        free(ch);
+        free(pe);
+        ng_log("agent: confess out=%.200s", cr.output ? cr.output : "");
+      } else if (!strcmp(tname, "grokium_nexus_status")) {
+        const char *root = getenv("GROKIUM_ROOT");
+        char script[768];
+        if (root && root[0])
+          snprintf(script, sizeof script, "%s/scripts/grokium-nexus-status", root);
+        else
+          snprintf(script, sizeof script, "grokium-nexus-status");
+        asprintf(&cmd, "bash '%s'", script);
+        cr = ng_run_command(cmd, 8);
+        ng_log("agent: nexus_status out=%.200s", cr.output ? cr.output : "");
+      } else if (!strcmp(tname, "grokium_cubalc")) {
+        const char *root = getenv("GROKIUM_ROOT");
+        char *prog = ng_json_get_string(targs, "program");
+        char script[768];
+        if (root && root[0])
+          snprintf(script, sizeof script, "%s/scripts/grokium-cubalc", root);
+        else
+          snprintf(script, sizeof script, "grokium-cubalc");
+        setenv("GROKIUM_CUBALC_ARG", prog ? prog : "align", 1);
+        asprintf(&cmd, "bash '%s' \"$GROKIUM_CUBALC_ARG\"", script);
+        cr = ng_run_command(cmd, 30);
+        free(prog);
+        ng_log("agent: cubalc out=%.200s", cr.output ? cr.output : "");
+      } else if (!strcmp(tname, "grokium_neuralmind")) {
+        const char *root = getenv("GROKIUM_ROOT");
+        char *act = ng_json_get_string(targs, "action");
+        char *q = ng_json_get_string(targs, "query");
+        char script[768];
+        if (root && root[0])
+          snprintf(script, sizeof script, "%s/scripts/grokium-neuralmind", root);
+        else
+          snprintf(script, sizeof script, "grokium-neuralmind");
+        setenv("GROKIUM_NM_ACTION", act && act[0] ? act : "status", 1);
+        setenv("GROKIUM_NM_QUERY", q ? q : "", 1);
+        if (act && !strcmp(act, "maintain"))
+          asprintf(&cmd, "bash '%s' maintain", script);
+        else if (act && !strcmp(act, "predict"))
+          asprintf(&cmd, "bash '%s' predict \"$GROKIUM_NM_QUERY\"", script);
+        else if (act && !strcmp(act, "recall"))
+          asprintf(&cmd, "bash '%s' recall \"$GROKIUM_NM_QUERY\"", script);
+        else
+          asprintf(&cmd, "bash '%s' status", script);
+        cr = ng_run_command(cmd, 60);
+        free(act);
+        free(q);
+        ng_log("agent: neuralmind out=%.200s", cr.output ? cr.output : "");
       } else if (strcmp(tname, "run_terminal_command") == 0 ||
           strcmp(tname, "run_terminal_cmd") == 0 ||
           strcmp(tname, "shell") == 0 ||

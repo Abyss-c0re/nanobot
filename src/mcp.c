@@ -277,7 +277,7 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
              "\"transport\":\"stdio\",\"version\":\"%s\",\"workdir\":\"%s\","
              "\"backend\":\"%s\",\"model\":\"%s\",\"base_url\":\"%s\","
              "\"lean\":%s,\"tools\":[\"shell\",\"ask\",\"memory\","
-             "\"self_improve\",\"home_info\"],\"python\":0}",
+             "\"self_improve\",\"home_info\",\"grokium_sessions\"],\"python\":0}",
              ver ? ver : "",
              wd ? wd : "",
              be ? be : "",
@@ -343,6 +343,129 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     free(name);
     return 0;
   }
+  /* Grokium sessions — first-class mesh control of many grok CLIs.
+   * Optional: needs GROKIUM_ROOT or grokium-sessions on PATH. Not training. */
+  if (!strcmp(name, "grokium_sessions_list") ||
+      !strcmp(name, "grokium_sessions_start") ||
+      !strcmp(name, "grokium_sessions_stop")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char script[768];
+    char cmd[1400];
+    char *prompt = NULL, *sid = NULL, *cwd = NULL;
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(script, sizeof script, "%s/scripts/grokium-sessions", root);
+    else
+      snprintf(script, sizeof script, "grokium-sessions");
+    if (!strcmp(name, "grokium_sessions_start")) {
+      prompt = tool_arg(json, "prompt");
+      cwd = tool_arg(json, "cwd");
+      if (!prompt) {
+        free(name);
+        return plate_result(out_result, mcp_err("need_prompt"), 1);
+      }
+      if (cwd && cwd[0]) setenv("GROKIUM_SESSION_CWD", cwd, 1);
+      setenv("GROKIUM_SESSIONS_ARG", prompt, 1);
+      setenv("GROK_TELEMETRY_ENABLED", "false", 1);
+      snprintf(cmd, sizeof cmd, "bash '%s' start \"$GROKIUM_SESSIONS_ARG\"",
+               script);
+    } else if (!strcmp(name, "grokium_sessions_stop")) {
+      sid = tool_arg(json, "id");
+      if (!sid) {
+        free(name);
+        return plate_result(out_result, mcp_err("need_id"), 1);
+      }
+      setenv("GROKIUM_SESSIONS_ARG", sid, 1);
+      snprintf(cmd, sizeof cmd, "bash '%s' stop \"$GROKIUM_SESSIONS_ARG\"",
+               script);
+    } else {
+      snprintf(cmd, sizeof cmd, "bash '%s' list", script);
+    }
+    cr = ng_run_command(cmd, 30);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0);
+    ng_cmd_result_free(&cr);
+    free(prompt); free(sid); free(cwd); free(name);
+    return 0;
+  }
+
+  if (!strcmp(name, "grokium_confess")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char script[768], cmd[900];
+    char *ch = tool_arg(json, "charge");
+    char *pe = tool_arg(json, "penance");
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(script, sizeof script, "%s/scripts/grokium-confess", root);
+    else
+      snprintf(script, sizeof script, "grokium-confess");
+    setenv("GROKIUM_SESSIONS_ARG", ch ? ch : "unspecified", 1);
+    setenv("GROKIUM_PENANCE_ARG", pe ? pe : "hold", 1);
+    snprintf(cmd, sizeof cmd, "bash '%s' \"$GROKIUM_SESSIONS_ARG\" \"$GROKIUM_PENANCE_ARG\"",
+             script);
+    cr = ng_run_command(cmd, 20);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0);
+    ng_cmd_result_free(&cr);
+    free(ch); free(pe); free(name);
+    return 0;
+  }
+  if (!strcmp(name, "grokium_nexus_status")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char script[768], cmd[900];
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(script, sizeof script, "%s/scripts/grokium-nexus-status", root);
+    else
+      snprintf(script, sizeof script, "grokium-nexus-status");
+    snprintf(cmd, sizeof cmd, "bash '%s'", script);
+    cr = ng_run_command(cmd, 8);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0);
+    ng_cmd_result_free(&cr);
+    free(name);
+    return 0;
+  }
+  if (!strcmp(name, "grokium_cubalc")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char script[768], cmd[900];
+    char *prog = tool_arg(json, "program");
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(script, sizeof script, "%s/scripts/grokium-cubalc", root);
+    else
+      snprintf(script, sizeof script, "grokium-cubalc");
+    setenv("GROKIUM_CUBALC_ARG", prog ? prog : "align", 1);
+    snprintf(cmd, sizeof cmd, "bash '%s' \"$GROKIUM_CUBALC_ARG\"", script);
+    cr = ng_run_command(cmd, 30);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0);
+    ng_cmd_result_free(&cr);
+    free(prog); free(name);
+    return 0;
+  }
+  if (!strcmp(name, "grokium_neuralmind")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char script[768], cmd[900];
+    char *act = tool_arg(json, "action");
+    char *q = tool_arg(json, "query");
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(script, sizeof script, "%s/scripts/grokium-neuralmind", root);
+    else
+      snprintf(script, sizeof script, "grokium-neuralmind");
+    setenv("GROKIUM_NM_QUERY", q ? q : "", 1);
+    if (act && !strcmp(act, "maintain"))
+      snprintf(cmd, sizeof cmd, "bash '%s' maintain", script);
+    else if (act && !strcmp(act, "predict"))
+      snprintf(cmd, sizeof cmd, "bash '%s' predict \"$GROKIUM_NM_QUERY\"", script);
+    else if (act && !strcmp(act, "recall"))
+      snprintf(cmd, sizeof cmd, "bash '%s' recall \"$GROKIUM_NM_QUERY\"", script);
+    else
+      snprintf(cmd, sizeof cmd, "bash '%s' status", script);
+    cr = ng_run_command(cmd, 60);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0);
+    ng_cmd_result_free(&cr);
+    free(act); free(q); free(name);
+    return 0;
+  }
+
   if (strcmp(name, "braincube_supervise") == 0) {
     char *want = tool_arg(json, "want");
     char *ttl = tool_arg(json, "ttl_sec");
@@ -488,7 +611,36 @@ static const char *TOOLS_JSON =
   "{\"name\":\"augogen_vote\","
   "\"description\":\"Pair/mesh vote on the pending next step. role=guide|oversee|mesh, vote=1|0. Confirm only when guide+oversee approve and mesh does not veto.\","
   "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
-  "\"role\":{\"type\":\"string\"},\"vote\":{\"type\":\"string\"}},\"required\":[\"vote\"]}}"
+  "\"role\":{\"type\":\"string\"},\"vote\":{\"type\":\"string\"}},\"required\":[\"vote\"]}},"
+  "{\"name\":\"grokium_sessions_list\","
+  "\"description\":\"List grok/grokium sessions this mesh started (telemetry off).\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},"
+  "{\"name\":\"grokium_sessions_start\","
+  "\"description\":\"Start a headless grok session. Many at once. acceptEdits, never yolo.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"prompt\":{\"type\":\"string\"},\"cwd\":{\"type\":\"string\"}},"
+  "\"required\":[\"prompt\"]}},"
+  "{\"name\":\"grokium_sessions_stop\","
+  "\"description\":\"Stop a grokium-started grok session by id.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}},"
+  "{\"name\":\"grokium_confess\","
+  "\"description\":\"Confess heresy to Cube/NexusCore as a dual-wire plate. Not training.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"charge\":{\"type\":\"string\"},\"penance\":{\"type\":\"string\"}},"
+  "\"required\":[\"charge\"]}},"
+  "{\"name\":\"grokium_nexus_status\","
+  "\"description\":\"Read NexusCore SoT (unity, alive, sha). Bits win.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},"
+  "{\"name\":\"grokium_cubalc\","
+  "\"description\":\"Run CubalC board align|confess or a [hold] snippet. Fail-closed.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"program\":{\"type\":\"string\"}},\"required\":[\"program\"]}},"
+  "{\"name\":\"grokium_neuralmind\","
+  "\"description\":\"Hybrid recall / tool predict / maintain. One tool is not done.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"action\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"}},"
+  "\"required\":[\"action\"]}}"
   "]}";
 
 int ng_mcp_stdio_run(ng_agent_cfg *agent) {
