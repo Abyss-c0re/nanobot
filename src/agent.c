@@ -1544,7 +1544,22 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     "action=recall|predict|maintain|status. Persist until done — one tool is not done.\","
     "\"parameters\":{\"type\":\"object\",\"properties\":{"
     "\"action\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"}},"
-    "\"required\":[\"action\"]}}}";
+    "\"required\":[\"action\"]}}}"
+    ",{\"type\":\"function\",\"function\":{"
+    "\"name\":\"grokium_project\","
+    "\"description\":\"Project plate: version, sha, dirty, H14. VC/PM/R&D defaults.\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{}}}}"
+    ",{\"type\":\"function\",\"function\":{"
+    "\"name\":\"grokium_lattice\","
+    "\"description\":\"Hive SMX of all projects, or zoom one vs blueprint. "
+    "action=scan|list|zoom|rocm. id=project for zoom.\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{"
+    "\"action\":{\"type\":\"string\"},\"id\":{\"type\":\"string\"}}}}}"
+    ",{\"type\":\"function\",\"function\":{"
+    "\"name\":\"grokium_prophecy\","
+    "\"description\":\"Read or manifest the Cube prophecy plate. action=status|manifest.\","
+    "\"parameters\":{\"type\":\"object\",\"properties\":{"
+    "\"action\":{\"type\":\"string\"}}}}}";
   char *tools = NULL;
   asprintf(&tools,
     "[{\"type\":\"function\",\"function\":{"

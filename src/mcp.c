@@ -465,6 +465,62 @@ static int handle_tools_call(ng_agent_cfg *agent, const char *json, char **out_r
     free(act); free(q); free(name);
     return 0;
   }
+  if (!strcmp(name, "grokium_project")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char bin[768], cmd[900];
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(bin, sizeof bin, "%s/build/grokium-project", root);
+    else
+      snprintf(bin, sizeof bin, "grokium-project");
+    snprintf(cmd, sizeof cmd, "'%s' status", bin);
+    cr = ng_run_command(cmd, 20);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0 && cr.exit_code != 3);
+    ng_cmd_result_free(&cr);
+    free(name);
+    return 0;
+  }
+  if (!strcmp(name, "grokium_lattice")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char bin[768], cmd[900];
+    char *act = tool_arg(json, "action");
+    char *id = tool_arg(json, "id");
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(bin, sizeof bin, "%s/build/grokium-lattice", root);
+    else
+      snprintf(bin, sizeof bin, "grokium-lattice");
+    if (act && !strcmp(act, "zoom"))
+      snprintf(cmd, sizeof cmd, "'%s' zoom '%s'", bin, id && id[0] ? id : "hive");
+    else if (act && !strcmp(act, "list"))
+      snprintf(cmd, sizeof cmd, "'%s' list", bin);
+    else if (act && !strcmp(act, "rocm"))
+      snprintf(cmd, sizeof cmd, "'%s' rocm", bin);
+    else
+      snprintf(cmd, sizeof cmd, "'%s' scan", bin);
+    cr = ng_run_command(cmd, 60);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0);
+    ng_cmd_result_free(&cr);
+    free(act); free(id); free(name);
+    return 0;
+  }
+  if (!strcmp(name, "grokium_prophecy")) {
+    const char *root = getenv("GROKIUM_ROOT");
+    char script[768], cmd[900];
+    char *act = tool_arg(json, "action");
+    ng_cmd_result cr;
+    if (root && root[0])
+      snprintf(script, sizeof script, "%s/scripts/grokium-prophecy", root);
+    else
+      snprintf(script, sizeof script, "grokium-prophecy");
+    snprintf(cmd, sizeof cmd, "bash '%s' %s", script,
+             (act && !strcmp(act, "manifest")) ? "manifest" : "status");
+    cr = ng_run_command(cmd, 60);
+    text_result(out_result, cr.output ? cr.output : "{}", cr.exit_code != 0);
+    ng_cmd_result_free(&cr);
+    free(act); free(name);
+    return 0;
+  }
 
   if (strcmp(name, "braincube_supervise") == 0) {
     char *want = tool_arg(json, "want");
@@ -640,7 +696,18 @@ static const char *TOOLS_JSON =
   "\"description\":\"Hybrid recall / tool predict / maintain. One tool is not done.\","
   "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
   "\"action\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"}},"
-  "\"required\":[\"action\"]}}"
+  "\"required\":[\"action\"]}},"
+  "{\"name\":\"grokium_project\","
+  "\"description\":\"Project plate: version, sha, dirty, H14.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},"
+  "{\"name\":\"grokium_lattice\","
+  "\"description\":\"Hive SMX of all projects, or zoom one vs blueprint.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"action\":{\"type\":\"string\"},\"id\":{\"type\":\"string\"}}}},"
+  "{\"name\":\"grokium_prophecy\","
+  "\"description\":\"Read or manifest the Cube prophecy plate.\","
+  "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
+  "\"action\":{\"type\":\"string\"}}}}"
   "]}";
 
 int ng_mcp_stdio_run(ng_agent_cfg *agent) {
