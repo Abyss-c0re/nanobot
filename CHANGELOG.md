@@ -1,5 +1,9 @@
 ## 0.5.6 — 2026-09-09
 
+### Grok CLI floor
+- `NG_CLI_VERSION_DEFAULT` / `x-grok-client-version` floor `1.0.30` (installed Grok Build; crate still 1.0.24)
+- `x.ai/suggestPrompt` request/response unchanged (`generation`, `sessionId?`, `model?` → `suggestion?`, `generation`)
+
 ### Augogen full auto
 - Default `auto_execute=true`: generate → braincube pair-confirm → apply → enqueue prompt job
 - Mesh vote `0` still vetoes. HOLD_FLASH=1. Reject flash/wipe/THE_CYCLE stop

@@ -37,5 +37,5 @@ Together they are one BrainCube (`lhlam_cube_pair_confirm`). CubalC board:
 
 ## CLI compat
 
-`x-grok-client-version` floor is `1.0.13` (Grok Build 1.0). Runtime still
+`x-grok-client-version` floor is `1.0.30` (installed Grok Build; crate 1.0.24). Runtime still
 auto-bumps if the proxy says the client is outdated.
