@@ -288,6 +288,7 @@ int main(int argc, char **argv) {
   /* Peer listener always up. Browser login only for Grok cloud backend. */
   if (force_login && need_browser) {
     ng_session_clear(&session);
+    ng_session_clear_pending();
     fprintf(stderr, "  --login: open /activate after server starts\n");
   } else if (need_browser && ng_session_valid(&session)) {
     if (ng_session_ensure(&session) != 0)

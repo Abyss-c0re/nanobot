@@ -23,8 +23,10 @@ void ng_session_clear(ng_session *s) {
   free(s->device_code);
   memset(s, 0, sizeof *s);
   s->poll_interval = 5;
-  /* Clear secret pending file when fully wiping session (e.g. force reconnect). */
-  ng_session_clear_pending();
+  /* Memory only. ng_session_free() runs on every CLI exit, including
+   * --auth-start / --auth-status / --auth-poll. Unlinking device_login
+   * here deleted the browser device code before approval was exchanged.
+   * Force-login, denial, expiry, and success call ng_session_clear_pending(). */
 }
 void ng_session_free(ng_session *s) { ng_session_clear(s); }
 

@@ -854,8 +854,10 @@ int main(int argc, char **argv) {
       const char *poll_error = NULL;
       if (auth_start) {
         if (auth_force || !ng_session_valid(&session)) {
-          if (auth_force) ng_session_clear(&session);
-          else ng_session_load_pending(&session);
+          if (auth_force) {
+            ng_session_clear(&session);
+            ng_session_clear_pending();
+          } else ng_session_load_pending(&session);
           if (!session.login_pending || auth_force) {
             if (ng_session_start_device_login(&session) != 0) {
               /* Dual-wire deny — machine token only (no free-text network essay). */
@@ -875,9 +877,10 @@ int main(int argc, char **argv) {
         poll_state = ng_session_valid(&session) ? "signed_in"
           : (session.login_pending ? "pending" : "none");
       }
-      if (auth_poll || (auth_status && session.login_pending)) {
-        /* Always reload pending so a fresh CLI process sees device_login
-         * sealed by --auth-start (same home). Browser may be on another device. */
+      if (auth_poll || auth_status) {
+        /* Reload device_login on every status/poll. A fresh process has
+         * login_pending=0 in memory; skipping the load reported logged-out
+         * and the following ng_session_free() used to delete the code. */
         (void)ng_session_load_pending(&session);
         if (!session.login_pending || !session.device_code) {
           if (ng_session_valid(&session)) {
@@ -1035,6 +1038,7 @@ int main(int argc, char **argv) {
     print_cli_err("login", "auth_disabled", "rebuild_with_NANOBOT_ENABLE_AUTH=1");
 #else
     ng_session_clear(&session);
+    ng_session_clear_pending();
     (void)ng_session_start_device_login(&session);
     /* Dual-wire auth plate — peer poll owns the rest (no free-text essay). */
     print_auth_json(&session, &agent, "pending", NULL);

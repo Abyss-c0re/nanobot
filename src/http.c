@@ -1691,7 +1691,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     if (force || !ng_session_valid(session)) {
       if (force) {
-        ng_session_clear(session); /* also clears device_login secret file */
+        ng_session_clear(session);
+        ng_session_clear_pending();
       } else {
         /* Resume pending device login from secure file (fork-safe). */
         ng_session_load_pending(session);
