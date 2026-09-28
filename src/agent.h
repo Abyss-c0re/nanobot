@@ -8,6 +8,8 @@ typedef struct {
   char *model;
   int max_turns;
   int timeout_sec;
+  /* Grok only: low|medium|high|xhigh. NULL omits reasoning_effort. */
+  char *reasoning_effort;
 } ng_agent_cfg;
 
 void ng_agent_cfg_init(ng_agent_cfg *c);
@@ -35,6 +37,8 @@ char *ng_agent_fetch_models_json(ng_agent_cfg *c);
 char *ng_agent_models_ids_json(const char *models_body);
 /* Set model id (and optional base) and save env. */
 void ng_agent_select_model(ng_agent_cfg *c, const char *model);
+/* 0 = set or cleared. -1 = not a known tier. Empty/default/off clears. */
+int ng_agent_set_reasoning_effort(ng_agent_cfg *c, const char *effort);
 
 /* Stream chunks of assistant text (CLI real-time). May be called 0+ times. */
 typedef void (*ng_stream_fn)(void *userdata, const char *chunk, size_t n);

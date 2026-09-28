@@ -71,7 +71,7 @@ void ng_agent_cfg_init(ng_agent_cfg *c) {
 }
 
 void ng_agent_cfg_free(ng_agent_cfg *c) {
-  free(c->base_url); free(c->model);
+  free(c->base_url); free(c->model); free(c->reasoning_effort);
   memset(c, 0, sizeof *c);
 }
 
@@ -81,11 +81,27 @@ void ng_agent_load_env(ng_agent_cfg *c, const char *env_path) {
     if (b) { free(c->base_url); c->base_url = b; }
     char *m = ng_slurp_env_file(env_path, "NANOBOT_MODEL");
     if (m) { free(c->model); c->model = m; }
+    char *e = ng_slurp_env_file(env_path, "NANOBOT_REASONING_EFFORT");
+    if (e) {
+      if (ng_agent_set_reasoning_effort(c, e) != 0) {
+        free(c->reasoning_effort);
+        c->reasoning_effort = NULL;
+      }
+      free(e);
+    }
   }
   char *b2 = ng_getenv_dup("NANOBOT_BASE_URL");
   if (b2) { free(c->base_url); c->base_url = b2; }
   char *m2 = ng_getenv_dup("NANOBOT_MODEL");
   if (m2) { free(c->model); c->model = m2; }
+  char *e2 = ng_getenv_dup("NANOBOT_REASONING_EFFORT");
+  if (e2) {
+    if (ng_agent_set_reasoning_effort(c, e2) != 0) {
+      free(c->reasoning_effort);
+      c->reasoning_effort = NULL;
+    }
+    free(e2);
+  }
 }
 
 static int is_grok_endpoint(const char *url) {
@@ -134,13 +150,21 @@ int ng_agent_save_env(const ng_agent_cfg *c) {
   if (!c || !c->base_url) return -1;
   char path[640];
   snprintf(path, sizeof path, "%s/env", ng_workdir());
-  char buf[1024];
+  char extra[96];
+  extra[0] = 0;
+  if (c->reasoning_effort && c->reasoning_effort[0]) {
+    snprintf(extra, sizeof extra, "NANOBOT_REASONING_EFFORT=%s\n",
+             c->reasoning_effort);
+  }
+  char buf[1280];
   int n = snprintf(buf, sizeof buf,
     "# written by nanobot\n"
     "NANOBOT_BASE_URL=%s\n"
-    "NANOBOT_MODEL=%s\n",
+    "NANOBOT_MODEL=%s\n"
+    "%s",
     c->base_url,
-    c->model ? c->model : "");
+    c->model ? c->model : "",
+    extra);
   if (n < 0 || n >= (int)sizeof buf) return -1;
   return ng_write_file(path, buf, (size_t)n);
 }
@@ -485,6 +509,33 @@ void ng_agent_select_model(ng_agent_cfg *c, const char *model) {
   free(c->model);
   c->model = strdup(model);
   ng_agent_save_env(c);
+}
+
+int ng_agent_set_reasoning_effort(ng_agent_cfg *c, const char *effort) {
+  if (!c) return -1;
+  if (!effort || !effort[0] || !strcmp(effort, "default") ||
+      !strcmp(effort, "off") || !strcmp(effort, "none")) {
+    free(c->reasoning_effort);
+    c->reasoning_effort = NULL;
+    return 0;
+  }
+  if (strcmp(effort, "low") && strcmp(effort, "medium") &&
+      strcmp(effort, "high") && strcmp(effort, "xhigh"))
+    return -1;
+  char *n = strdup(effort);
+  if (!n) return -1;
+  free(c->reasoning_effort);
+  c->reasoning_effort = n;
+  return 0;
+}
+
+static char *effort_json_frag(const ng_agent_cfg *c, int grok) {
+  char *out = NULL;
+  if (!grok || !c || !c->reasoning_effort || !c->reasoning_effort[0])
+    return strdup("");
+  if (asprintf(&out, ",\"reasoning_effort\":\"%s\"", c->reasoning_effort) < 0 || !out)
+    return strdup("");
+  return out;
 }
 
 /* Emit structured SSE event for clients (tool / thinking). Prefix 0x1e for http layer. */
@@ -1605,6 +1656,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   if (ng_task_is_open() && max_turns < hard_max)
     max_turns = hard_max;
   int task_reminders = 0;
+  if (grok && c->reasoning_effort && c->reasoning_effort[0])
+    ng_log("agent: reasoning_effort=%s", c->reasoning_effort);
 
   for (int turn = 0; turn < max_turns; turn++) {
     if (grok) {
@@ -1647,10 +1700,14 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       tools_now = 0; /* forced stop approaching hard ceiling */
     char *body = NULL;
     if (tools_now) {
-      asprintf(&body,
-        "{\"model\":\"%s\",\"messages\":%s,\"tools\":%s,\"tool_choice\":\"auto\","
-        "\"stream\":false,\"max_tokens\":768}",
-        c->model, messages, tools);
+      {
+        char *ef = effort_json_frag(c, grok);
+        asprintf(&body,
+          "{\"model\":\"%s\"%s,\"messages\":%s,\"tools\":%s,\"tool_choice\":\"auto\","
+          "\"stream\":false,\"max_tokens\":768}",
+          c->model, ef ? ef : "", messages, tools);
+        free(ef);
+      }
     } else {
       /* Nudge finalization after tools — dual-wire plates only (no free-text). */
       if (last_tool_out && (turn >= max_turns - 1 || !open_task)) {
@@ -1675,9 +1732,13 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         size_t upl = user_prompt ? strlen(user_prompt) : 0;
         if (upl > 0 && upl < 48) max_tok = 512;
         else if (upl < 200) max_tok = 1024;
-        asprintf(&body,
-          "{\"model\":\"%s\",\"messages\":%s,\"stream\":%s,\"max_tokens\":%d}",
-          c->model, messages, want_stream ? "true" : "false", max_tok);
+        {
+          char *ef = effort_json_frag(c, grok);
+          asprintf(&body,
+            "{\"model\":\"%s\"%s,\"messages\":%s,\"stream\":%s,\"max_tokens\":%d}",
+            c->model, ef ? ef : "", messages, want_stream ? "true" : "false", max_tok);
+          free(ef);
+        }
       }
     }
 
@@ -1708,9 +1769,13 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         return final;
       }
       free(streamed);
-      asprintf(&body,
-        "{\"model\":\"%s\",\"messages\":%s,\"stream\":false}",
-        c->model, messages);
+      {
+        char *ef = effort_json_frag(c, grok);
+        asprintf(&body,
+          "{\"model\":\"%s\"%s,\"messages\":%s,\"stream\":false}",
+          c->model, ef ? ef : "", messages);
+        free(ef);
+      }
       ng_log("agent: stream empty — fallback non-stream");
       resp = curl_post_json(url, bearer, body);
       free(body);
@@ -2279,13 +2344,18 @@ char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
              wd, tr);
     user_esc = ng_json_escape(user);
   }
-  asprintf(&body,
-           "{\"model\":\"%s\",\"messages\":["
-           "{\"role\":\"system\",\"content\":\"%s\"},"
-           "{\"role\":\"user\",\"content\":\"%s\"}],"
-           "\"stream\":false,\"max_tokens\":64,\"temperature\":0.2}",
-           c->model ? c->model : NG_DEFAULT_MODEL,
-           sys_esc ? sys_esc : "", user_esc ? user_esc : "");
+  {
+    char *ef = effort_json_frag(c, grok);
+    asprintf(&body,
+             "{\"model\":\"%s\"%s,\"messages\":["
+             "{\"role\":\"system\",\"content\":\"%s\"},"
+             "{\"role\":\"user\",\"content\":\"%s\"]},"
+             "\"stream\":false,\"max_tokens\":64,\"temperature\":0.2}",
+             c->model ? c->model : NG_DEFAULT_MODEL,
+             ef ? ef : "",
+             sys_esc ? sys_esc : "", user_esc ? user_esc : "");
+    free(ef);
+  }
   free(sys_esc);
   free(user_esc);
   free(own_tr);

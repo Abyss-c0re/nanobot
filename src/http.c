@@ -1834,6 +1834,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     asprintf(&out,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"%s\","
       "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+      "\"reasoning_effort\":\"%s\","
       "\"needs_browser\":%s,\"signed_in\":%s,"
       "\"subagents\":%s,\"subagents_max\":%d,\"llm_serial\":%s,"
       "\"settings\":\"%s\","
@@ -1842,6 +1843,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       bk ? bk : "",
       be ? be : "",
       me ? me : "",
+      agent->reasoning_effort ? agent->reasoning_effort : "",
       ng_agent_needs_browser_session(agent) ? "true" : "false",
       (ng_agent_needs_browser_session(agent) && session && ng_session_valid(session))
         ? "true" : (ng_agent_needs_browser_session(agent) ? "false" : "true"),
@@ -1871,6 +1873,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     char *base = ng_json_get_string(body, "base_url");
     if (!base) base = ng_json_get_string(body, "base");
     char *model = ng_json_get_string(body, "model");
+    char *effort = ng_json_get_string(body, "reasoning_effort");
+    if (!effort) effort = ng_json_get_string(body, "effort");
+    if (effort && ng_agent_set_reasoning_effort(agent, effort) != 0) {
+      free(backend); free(base); free(model); free(effort);
+      http_peer_err(cfd, 400, "bad_reasoning_effort");
+      free(req); close(cfd); return;
+    }
     /* Optional light policy keys (subagents / serial LLM) */
     char *sa = ng_json_get_string(body, "subagents");
     if (!sa) sa = ng_json_get_string(body, "SUBAGENTS");
@@ -1886,7 +1895,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     if (serial) { ng_settings_set("LLM_SERIAL", serial); policy_only = 1; }
     if (maxctx) { ng_settings_set("MAX_CTX_CHARS", maxctx); policy_only = 1; }
     free(sa); free(samax); free(serial); free(maxctx);
-    if (!backend && !base && !(model && model[0])) {
+    if (!backend && !base && !(model && model[0]) && !effort) {
       if (policy_only) {
         if (agent) ng_agent_apply_provider_policy(agent);
         free(backend); free(base); free(model);
@@ -1929,12 +1938,14 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     asprintf(&out,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"settings\","
       "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+      "\"reasoning_effort\":\"%s\","
       "\"needs_browser\":%s,\"signed_in\":%s,"
       "\"subagents\":%s,\"subagents_max\":%d,\"llm_serial\":%s,"
       NG_PEER_HTTP_DUAL_WIRE "}",
       bk ? bk : "",
       be ? be : "",
       me ? me : "",
+      agent->reasoning_effort ? agent->reasoning_effort : "",
       ng_agent_needs_browser_session(agent) ? "true" : "false",
       (ng_agent_needs_browser_session(agent) && session && ng_session_valid(session))
         ? "true" : (ng_agent_needs_browser_session(agent) ? "false" : "true"),
@@ -1943,7 +1954,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       ng_llm_sched_enabled() ? "true" : "false");
     http_response(cfd, 200, "application/json", out ? out : "{}", out ? strlen(out) : 2);
     free(out); free(be); free(me); free(bk);
-    free(backend); free(base); free(model);
+    free(backend); free(base); free(model); free(effort);
     free(req); close(cfd); return;
   }
 
