@@ -141,6 +141,7 @@ static void print_ready_plate(const ng_agent_cfg *agent, const char *auth_import
           "\"max_children\":%d,\"out_max\":%zu,\"log_max\":%zu,"
           "\"braincube\":%s,\"continuous\":%s,"
           "\"backend\":\"%s\",\"base_url\":\"%s\",\"model\":\"%s\","
+          "\"reasoning_effort\":\"%s\","
           "\"auth_import\":\"%s\","
           "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
           "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
@@ -149,7 +150,9 @@ static void print_ready_plate(const ng_agent_cfg *agent, const char *auth_import
           ng_http_max_children(), ng_out_max(), ng_log_max(),
           ng_bc_available() ? "true" : "false",
           ng_bc_continuous() ? "true" : "false", be ? be : "unknown",
-          base ? base : "", model ? model : "", ai ? ai : "none");
+          base ? base : "", model ? model : "",
+          (agent && agent->reasoning_effort) ? agent->reasoning_effort : "",
+          ai ? ai : "none");
   free(ver);
   free(be);
   free(base);
@@ -250,7 +253,7 @@ static void usage(const char *argv0) {
           "\"version\":\"%s\","
           "\"content\":\"meta_only\","
           "\"commands\":\"-p|--help|--version|--login|--auth-status|"
-          "--auth-start|--auth-poll|--offline|--base-url|--model|--models|"
+          "--auth-start|--auth-poll|--offline|--base-url|--model|--effort|--models|"
           "--mcp|--mcp-list|--mcp-call|--order|--port|--lan|--hub|"
           "--port-out|--www|--home\","
           "\"mcp\":%d,\"auth\":%d,\"peer\":%d,\"hub\":%d,\"shell\":%d,"
@@ -482,6 +485,7 @@ int main(int argc, char **argv) {
   char *oneshot = NULL;
   const char *cli_base = NULL;
   const char *cli_model = NULL;
+  const char *cli_effort = NULL;
   const char *www_root = getenv("NANOBOT_WWW");
   static char home_buf[640];
   static char www_buf[640];
@@ -547,6 +551,8 @@ int main(int argc, char **argv) {
       cli_base = argv[++i];
     } else if (strcmp(argv[i], "--model") == 0 && i + 1 < argc) {
       cli_model = argv[++i];
+    } else if ((strcmp(argv[i], "--effort") == 0 || strcmp(argv[i], "--reasoning-effort") == 0) && i + 1 < argc) {
+      cli_effort = argv[++i];
     } else if (strcmp(argv[i], "--models") == 0 || strcmp(argv[i], "models") == 0) {
       list_models = 1;
     } else if ((strcmp(argv[i], "--port") == 0 || strcmp(argv[i], "--port-in") == 0) &&
@@ -810,6 +816,27 @@ int main(int argc, char **argv) {
   else if (cli_model) {
     free(agent.model);
     agent.model = strdup(cli_model);
+  }
+
+  if (cli_effort) {
+    if (!ng_agent_is_grok_backend(&agent)) {
+      print_cli_err("effort", "grok_only", "low|medium|high|xhigh|default");
+      ng_session_free(&session);
+      ng_agent_cfg_free(&agent);
+      return 2;
+    }
+    if (ng_agent_set_reasoning_effort(&agent, cli_effort) != 0) {
+      print_cli_err("effort", "bad_reasoning_effort", "low|medium|high|xhigh|default");
+      ng_session_free(&session);
+      ng_agent_cfg_free(&agent);
+      return 2;
+    }
+    if (ng_agent_save_env(&agent) != 0) {
+      print_cli_err("effort", "save_failed", "NANOBOT_HOME/env");
+      ng_session_free(&session);
+      ng_agent_cfg_free(&agent);
+      return 2;
+    }
   }
 
   int need_browser = ng_agent_needs_browser_session(&agent);
