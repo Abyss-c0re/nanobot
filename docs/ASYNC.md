@@ -197,7 +197,7 @@ Connection: close
 Access-Control-Allow-Origin: *
 ```
 
-There is no `Content-Length`. The first frame is:
+The accepted client socket has `TCP_NODELAY` set, so each small SSE write leaves without waiting for a full segment. There is no `Content-Length`. The first frame is:
 
 ```text
 event: open

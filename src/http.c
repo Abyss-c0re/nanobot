@@ -23,6 +23,7 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -9188,6 +9189,11 @@ int ng_http_serve(ng_http_cfg *cfg) {
       }
       ng_log("accept: %s", strerror(errno));
       break;
+    }
+    /* Small SSE writes must not wait for a full TCP segment. */
+    {
+      int one = 1;
+      (void)setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
     }
 
     /* Refresh tokens + pending device login from secure files (fork-safe).
