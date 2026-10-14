@@ -89,6 +89,7 @@
 - **runs:** a run event stream writes an SSE comment ping about once a second while it waits, and ends when that ping fails, so a quiet closed client does not keep the worker for the rest of the window.
 - **runs:** abort kills a shell already inside `ng_run_command`, then the run finishes aborted.
 - **runs:** a shell that fills the capture cap keeps polling abort and the deadline, and the child is reaped when it exits.
+- **runs:** a shell pipe that reads EOF reaps an exited child and keeps its status. A child that is still running is left running.
 - **runs:** compaction policy (`max_refills`, `keep_tail`, `keep_head`, `shrink_at`, `preemptive`) and token caps (`max_tokens`, `context_tokens`) are per run and via `NANOBOT_MAX_TOKENS`, `NANOBOT_CONTEXT_TOKENS`, `NANOBOT_COMPACT_REFILLS`, `NANOBOT_COMPACT_KEEP_TAIL`. Unset refills stay at 3.
 - **chore(portability):** strip product/OS hardcodes and branding from core C, comments, and docs (config-only personal ACL, gate mirror, shared secrets); host wrappers plant platform paths
 - **feat(task):** internal tools `task_plan` / `task_start` / `task_step_done` / `task_done` / `task_block` / `task_status`; open tasks self-remind each turn until done or blocked (hard max turns)

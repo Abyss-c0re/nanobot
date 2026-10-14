@@ -423,6 +423,8 @@ A shell command that has entered `ng_run_command` is killed when the live run's 
 
 When captured output reaches `ng_out_max`, the wait loop keeps those bytes. Later pipe data is read one chunk at a time, and the loop returns to the abort hook and the deadline. The child is reaped when it has exited. Filling the capture cap is not a kill by itself.
 
+When the pipe reads EOF, the wait loop calls `waitpid` once with `WNOHANG`. An exited child is reaped and its status is kept. A child that is still running is left running, and the captured output is returned. That path does not signal the process group.
+
 `g_live_streamed` is cleared in `ng_run_execute` only. A nested `ng_agent_run` does not clear it, so a parent that already streamed tokens is not tokenized again at the end.
 
 ## Concurrency

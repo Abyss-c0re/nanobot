@@ -664,7 +664,16 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
           len += (size_t)n;
           buf[len] = 0;
         }
-      } else if (n == 0) break;
+      } else if (n == 0) {
+        /* Writer closed. Reap once if the child has exited. A live child stays. */
+        int st = 0;
+        pid_t w = waitpid(pid, &st, WNOHANG);
+        if (w == pid) {
+          if (WIFEXITED(st)) r.exit_code = WEXITSTATUS(st);
+          else r.exit_code = 128 + (WIFSIGNALED(st) ? WTERMSIG(st) : 1);
+        }
+        break;
+      }
     }
     int st;
     pid_t w = waitpid(pid, &st, WNOHANG);

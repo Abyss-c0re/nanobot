@@ -598,6 +598,35 @@ static void test_shell_cap_abort(void) {
   ng_cmd_result_free(&cr);
 }
 
+static void test_shell_eof_reap(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  struct timespec a, b;
+  struct sigaction sa, old;
+  long ms;
+  ng_cmd_result cr;
+  expect(mkdtemp(home) != NULL, "eof home");
+  ng_set_workdir(home);
+  ng_shell_set_stop(NULL);
+  memset(&sa, 0, sizeof sa);
+  sa.sa_handler = cap_alarm;
+  sigaction(SIGALRM, &sa, &old);
+  alarm(4);
+  cr = ng_run_command("exit 42", 5);
+  alarm(0);
+  expect(cr.exit_code == 42, "eof reap keeps the status");
+  ng_cmd_result_free(&cr);
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  alarm(4);
+  cr = ng_run_command("sleep 2 >/dev/null 2>&1 &", 5);
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  alarm(0);
+  sigaction(SIGALRM, &old, NULL);
+  ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+  expect(cr.exit_code == 0, "a background shell still returns its status");
+  expect(ms < 1500, "a background shell returns before the child finishes");
+  ng_cmd_result_free(&cr);
+}
+
 static void test_tail_ping(void) {
   char home[] = "/tmp/nanobot-run-XXXXXX";
   char *id;
@@ -632,6 +661,7 @@ int main(void) {
   test_shell_abort_kills();
   test_shell_cap_deadline();
   test_shell_cap_abort();
+  test_shell_eof_reap();
   test_tail_ping();
   test_hub_closed_client();
   if (fails) {
