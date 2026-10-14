@@ -137,6 +137,36 @@ static void test_control(void) {
   expect(status && strstr(status, "local-model") && strstr(status, "1234"), "status shows limits");
   free(status);
   {
+    char mp[700];
+    char *meta;
+    char *p;
+    unsigned long long ticks = 0;
+    unsigned long long fake;
+    FILE *mf;
+    snprintf(mp, sizeof mp, "%s/runs/%s/meta.json", ng_workdir(), id);
+    meta = ng_read_file(mp, NULL);
+    p = meta ? strstr(meta, "\"start_ticks\":") : NULL;
+    expect(p != NULL, "start time stored");
+    if (p != NULL)
+      ticks = strtoull(strchr(p, ':') + 1, NULL, 10);
+    expect(ticks > 0, "start time nonzero");
+    fake = ticks == 1 ? 2 : 1;
+    mf = fopen(mp, "w");
+    expect(mf != NULL, "reuse meta");
+    if (mf) {
+      fprintf(mf,
+              "{\"schema\":\"nanobot.run.v1\",\"ok\":true,\"action\":\"run\","
+              "\"id\":\"%s\",\"status\":\"running\",\"pid\":%d,\"start_ticks\":%llu,"
+              "\"error\":\"\",\"python\":0}\n",
+              id, (int)getpid(), fake);
+      fclose(mf);
+    }
+    status = ng_run_status_json(id);
+    expect(status && strstr(status, "\"alive\":false"), "reused pid is not alive");
+    free(status);
+    free(meta);
+  }
+  {
     pid_t z;
     int st = 0;
     char mp[700];

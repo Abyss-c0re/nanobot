@@ -79,7 +79,8 @@
 - **runs:** a plate whose own `ok` is true stays HTTP 200. A nested `run_not_found` inside a list or events body does not change that status.
 - **runs:** event records are read whole up to the escaped text cap. A longer line is dropped instead of being streamed as a cut JSON object. Event names are capped at 240 bytes.
 - **runs:** each accepted client socket sets `TCP_NODELAY`, so SSE frames are not held for a full TCP segment.
-- **runs:** `alive` is false when `/proc/<pid>/stat` shows state `Z`. A missing stat file keeps the `kill(pid, 0)` result. A reused pid still counts as alive.
+- **runs:** `alive` is false when `/proc/<pid>/stat` shows state `Z`. A missing stat file keeps the `kill(pid, 0)` result.
+- **runs:** a stored `start_ticks` value that differs from `/proc/<pid>/stat` makes `alive` false, so a reused pid is not a live worker. A missing start time keeps the kill result.
 - **runs:** compaction policy (`max_refills`, `keep_tail`, `keep_head`, `shrink_at`, `preemptive`) and token caps (`max_tokens`, `context_tokens`) are per run and via `NANOBOT_MAX_TOKENS`, `NANOBOT_CONTEXT_TOKENS`, `NANOBOT_COMPACT_REFILLS`, `NANOBOT_COMPACT_KEEP_TAIL`. Unset refills stay at 3.
 - **chore(portability):** strip product/OS hardcodes and branding from core C, comments, and docs (config-only personal ACL, gate mirror, shared secrets); host wrappers plant platform paths
 - **feat(task):** internal tools `task_plan` / `task_start` / `task_step_done` / `task_done` / `task_block` / `task_status`; open tasks self-remind each turn until done or blocked (hard max turns)

@@ -155,7 +155,7 @@ The child closes the client socket, calls `ng_run_execute`, frees the reply and 
 }
 ```
 
-`alive` is `kill(pid, 0) == 0` and the process is not a zombie. State `Z` in `/proc/<pid>/stat` (the character after the last `)`) is not alive. If that file cannot be read, the kill result stands. A reused pid still counts as alive. `status` stays `running` until the worker writes `done`, `aborted`, or `error`. A dead pid does not rewrite the status to orphan.
+`alive` is `kill(pid, 0) == 0`, the process is not a zombie, and a stored start time still matches. State `Z` in `/proc/<pid>/stat` (the character after the last `)`) is not alive. `start_ticks` is field 22 of that file, in clock ticks, written when the run is marked running. When it is present and the live value differs, the pid was reused and `alive` is false. A missing `start_ticks`, or an unreadable stat file, keeps the kill result for that check. `status` stays `running` until the worker writes `done`, `aborted`, or `error`. A dead pid does not rewrite the status to orphan.
 
 Missing id: HTTP 404, `"error":"run_not_found"`. Illegal id: HTTP 400, `"error":"bad_id"`. Other methods: `405`, `Allow: GET, HEAD, OPTIONS`.
 

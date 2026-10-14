@@ -89,6 +89,22 @@ static int json_int(const char *json, const char *key, int def) {
   return atoi(p + 1);
 }
 
+static unsigned long long json_u64(const char *json, const char *key,
+                                   unsigned long long def) {
+  char pat[64];
+  const char *p;
+  if (!json || !key) return def;
+  snprintf(pat, sizeof pat, "\"%s\"", key);
+  p = strstr(json, pat);
+  if (!p) return def;
+  p = strchr(p, ':');
+  if (!p) return def;
+  p++;
+  while (*p == ' ' || *p == '\t') p++;
+  if (*p < '0' || *p > '9') return def;
+  return strtoull(p, NULL, 10);
+}
+
 static int write_text(const char *path, const char *text) {
   if (!text) text = "";
   return ng_write_file(path, text, strlen(text));
@@ -138,7 +154,8 @@ static char *limits_json(const ng_run_limits *lim) {
   return out;
 }
 
-static int write_meta(const char *id, const char *status, int pid, const char *error) {
+static int write_meta(const char *id, const char *status, int pid,
+                      unsigned long long start_ticks, const char *error) {
   char path[700];
   char *esc;
   char *body = NULL;
@@ -147,9 +164,9 @@ static int write_meta(const char *id, const char *status, int pid, const char *e
   esc = ng_json_escape(error ? error : "");
   if (asprintf(&body,
                "{\"schema\":\"nanobot.run.v1\",\"ok\":true,\"action\":\"run\","
-               "\"id\":\"%s\",\"status\":\"%s\",\"pid\":%d,\"error\":\"%s\","
-               "\"python\":0}\n",
-               id, status, pid, esc ? esc : "") < 0)
+               "\"id\":\"%s\",\"status\":\"%s\",\"pid\":%d,\"start_ticks\":%llu,"
+               "\"error\":\"%s\",\"python\":0}\n",
+               id, status, pid, start_ticks, esc ? esc : "") < 0)
     body = NULL;
   free(esc);
   if (!body) return -1;
@@ -257,7 +274,7 @@ char *ng_run_create(const char *prompt, const ng_run_limits *limits,
   if (path_join(path, sizeof path, dir, "/filter.json") != 0) return NULL;
   if (write_text(path, filter_json && filter_json[0] ? filter_json : "{\"rules\":[]}") != 0)
     return NULL;
-  if (write_meta(id, "queued", 0, "") != 0) return NULL;
+  if (write_meta(id, "queued", 0, 0, "") != 0) return NULL;
   return strdup(id);
 }
 
@@ -315,9 +332,42 @@ void ng_run_close(ng_run *run) {
 
 const char *ng_run_id(const ng_run *run) { return run ? run->id : ""; }
 
+/* Field 22 of /proc/<pid>/stat, the start time in clock ticks. 0 if unread. */
+static unsigned long long pid_start_ticks(int pid) {
+  char path[64];
+  char buf[512];
+  FILE *fp;
+  size_t n;
+  char *p;
+  int i;
+  unsigned long long ticks;
+  if (pid <= 0) return 0;
+  snprintf(path, sizeof path, "/proc/%d/stat", pid);
+  fp = fopen(path, "r");
+  if (!fp) return 0;
+  n = fread(buf, 1, sizeof buf - 1, fp);
+  fclose(fp);
+  if (n == 0) return 0;
+  buf[n] = 0;
+  p = strrchr(buf, ')');
+  if (!p || p[1] != ' ') return 0;
+  p += 2;
+  for (i = 1; i < 20; i++) {
+    while (*p == ' ') p++;
+    if (!*p) return 0;
+    while (*p && *p != ' ') p++;
+  }
+  while (*p == ' ') p++;
+  if (*p < '0' || *p > '9') return 0;
+  ticks = strtoull(p, NULL, 10);
+  return ticks;
+}
+
 int ng_run_mark_running(ng_run *run) {
+  int pid;
   if (!run) return -1;
-  return write_meta(run->id, "running", (int)getpid(), "");
+  pid = (int)getpid();
+  return write_meta(run->id, "running", pid, pid_start_ticks(pid), "");
 }
 
 /* kill(pid, 0) succeeds for a zombie. State Z is the corpse. */
@@ -583,7 +633,7 @@ int ng_run_finish(ng_run *run, const char *status, const char *error) {
   if (status && (!strcmp(status, "done") || !strcmp(status, "aborted") ||
                  !strcmp(status, "error")))
     st = status;
-  return write_meta(run->id, st, (int)getpid(), error);
+  return write_meta(run->id, st, (int)getpid(), pid_start_ticks((int)getpid()), error);
 }
 
 static int looks_like_edit(const char *tool, const char *args, const char *output) {
@@ -756,7 +806,12 @@ char *ng_run_status_json(const char *id) {
   status = ng_json_get_string(meta, "status");
   err = ng_json_get_string(meta, "error");
   pid = json_int(meta, "pid", 0);
-  if (pid > 0 && kill((pid_t)pid, 0) == 0 && !pid_is_zombie(pid)) alive = 1;
+  if (pid > 0 && kill((pid_t)pid, 0) == 0 && !pid_is_zombie(pid)) {
+    unsigned long long stored = json_u64(meta, "start_ticks", 0);
+    unsigned long long live = pid_start_ticks(pid);
+    /* Missing start time, or an unreadable stat, keeps the kill result. */
+    if (stored == 0 || live == 0 || live == stored) alive = 1;
+  }
   run = ng_run_open(id);
   if (run) {
     seq = run->seq;
