@@ -11,5 +11,6 @@ Technical reference (still human-facing).
 | [MODULES.md](MODULES.md) | library split |
 | [PLATFORM.md](PLATFORM.md) | portability notes |
 | [LIMITS.md](LIMITS.md) | lean mode limits |
+| [ASYNC.md](ASYNC.md) | async runs, filters, compaction, HTTP control |
 
 Install: [../INSTALL.md](../INSTALL.md). Security: [../SECURITY.md](../SECURITY.md).
