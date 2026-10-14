@@ -44,7 +44,8 @@ void ng_session_clear_pending(void);
 /* True if access_token present and not expired (with 60s skew) */
 int ng_session_valid(const ng_session *s);
 
-/* Ensure valid token: refresh if needed. Returns 0 on success. */
+/* Ensure valid token: refresh if needed. Returns 0 on success.
+ * A failed refresh still succeeds while the access token is unexpired. */
 int ng_session_ensure(ng_session *s);
 
 /* Import access/refresh from Grok Build CLI (~/.grok/auth.json) if present.

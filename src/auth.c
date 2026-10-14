@@ -899,6 +899,13 @@ int ng_session_ensure(ng_session *s) {
   /* Soft-expired access: refresh (JWT often ~30m; not "lost login"). */
   if (s->refresh_token && s->refresh_token[0]) {
     if (session_refresh_token_once(s) == 0) return 0;
+    /* Refresh failed. The 60s skew already treats a still-live token as due.
+     * Keep using it until the real expiry. */
+    if (s->access_token && s->access_token[0] &&
+        s->expires_at && time(NULL) < s->expires_at) {
+      ng_log("auth: refresh failed — access token still valid, using cached");
+      return 0;
+    }
   } else if (s->access_token && s->access_token[0] && !s->expires_at) {
     return 0; /* unknown expiry */
   } else if (!s->refresh_token || !s->refresh_token[0]) {

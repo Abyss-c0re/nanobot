@@ -820,13 +820,13 @@ int main(int argc, char **argv) {
 
   if (cli_effort) {
     if (!ng_agent_is_grok_backend(&agent)) {
-      print_cli_err("effort", "grok_only", "low|medium|high|xhigh|default");
+      print_cli_err("effort", "grok_only", "tier_or_catalog");
       ng_session_free(&session);
       ng_agent_cfg_free(&agent);
       return 2;
     }
     if (ng_agent_set_reasoning_effort(&agent, cli_effort) != 0) {
-      print_cli_err("effort", "bad_reasoning_effort", "low|medium|high|xhigh|default");
+      print_cli_err("effort", "bad_reasoning_effort", "tier_or_catalog");
       ng_session_free(&session);
       ng_agent_cfg_free(&agent);
       return 2;

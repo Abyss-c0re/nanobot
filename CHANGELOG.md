@@ -67,6 +67,13 @@
 
 ## Unreleased
 
+- **wire:** CLI floor `NG_CLI_VERSION_DEFAULT` / `x-grok-client-version` is `1.0.52` (installed Grok Build; the public crate may lag). Product version stays 0.5.6. Runtime auto-bump is unchanged.
+- **wire:** every cli-chat-proxy call sends `x-grok-client-identifier` (default `nanobot`, then `NANOBOT_CLIENT_NAME`, then `GROK_CLIENT_NAME`) and `x-authenticateresponse: authenticate-response`.
+- **wire:** suggestPrompt transcript packer uses a 24000-character budget and a 1500-character cap on older turns. The user-message JSON object is closed. Request and response fields are unchanged.
+- **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
+- **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
+- **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.
+- **wire:** a provider context-overflow error compacts the message array locally, at most three refills in a row, then returns `compact_stop`.
 - **chore(portability):** strip product/OS hardcodes and branding from core C, comments, and docs (config-only personal ACL, gate mirror, shared secrets); host wrappers plant platform paths
 - **feat(task):** internal tools `task_plan` / `task_start` / `task_step_done` / `task_done` / `task_block` / `task_status`; open tasks self-remind each turn until done or blocked (hard max turns)
 - **feat(http):** `POST /api/chat` with `"stream":true` returns SSE (`text/event-stream`) deltas via `ng_agent_run_ex` for real-time typing clients

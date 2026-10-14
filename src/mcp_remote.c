@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "mcp_remote.h"
 #include "util.h"
+#include "wire_compat.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,7 +73,7 @@ static char *mcp_err(const char *error) {
 /* HTTP JSON-RPC POST via curl; captures optional Mcp-Session-Id response header. */
 static char *mcp_http_post(const char *url, const char *auth_hdr,
                            const char *session_id, const char *body,
-                           char **out_session) {
+                           char **out_session, int timeout_sec, int rpc_id) {
   if (out_session) *out_session = NULL;
   if (!url || !url[0] || !body) return mcp_err("bad_request");
 
@@ -103,7 +104,11 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
   }
   close(hfd);
 
+  int tsec = timeout_sec > 0 ? timeout_sec : 25;
+  char tmax[16];
   char dataarg[700];
+  if (tsec > 180) tsec = 180;
+  snprintf(tmax, sizeof tmax, "%d", tsec);
   snprintf(dataarg, sizeof dataarg, "@%s", reqp);
   char authline[1700] = {0};
   if (auth_hdr && auth_hdr[0]) {
@@ -129,7 +134,7 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
     argv[a++] = "curl";
     argv[a++] = "-sS";
     argv[a++] = "--max-time";
-    argv[a++] = "25";
+    argv[a++] = tmax;
     argv[a++] = "--connect-timeout";
     argv[a++] = "8";
     argv[a++] = "-D";
@@ -185,6 +190,26 @@ static char *mcp_http_post(const char *url, const char *auth_hdr,
   char *raw = ng_read_file(outp, NULL);
   char *cerr = ng_read_file(errp, NULL);
   unlink(outp); unlink(errp);
+  {
+    int timed_out = (WIFEXITED(st) && WEXITSTATUS(st) == 28) ||
+                    (cerr && (strstr(cerr, "timed out") || strstr(cerr, "Timeout")));
+    if (timed_out && rpc_id > 0) {
+      char note[192];
+      char *ign;
+      ng_log("mcp: timeout rpc_id=%d — notifications/cancelled", rpc_id);
+      snprintf(note, sizeof note,
+               "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\","
+               "\"params\":{\"requestId\":%d,\"reason\":\"timeout\"}}",
+               rpc_id);
+      ign = mcp_http_post(url, auth_hdr, session_id, note, NULL, 3, 0);
+      free(ign);
+    }
+    if (timed_out) {
+      free(raw);
+      free(cerr);
+      return mcp_err("timeout");
+    }
+  }
   if ((!raw || !raw[0]) && cerr && cerr[0]) {
     /* Log curl stderr free-text; never surface it on the product wire. */
     ng_log("mcp: curl stderr: %.200s", cerr);
@@ -234,13 +259,35 @@ typedef struct {
   char *name;
   char *url;
   char *auth;
+  char *token_file; /* re-read every request; not cached */
+  int timeout_ms;
   int enabled;
 } mcp_srv;
 
 static void free_srv(mcp_srv *s) {
   if (!s) return;
-  free(s->id); free(s->name); free(s->url); free(s->auth);
+  free(s->id); free(s->name); free(s->url); free(s->auth); free(s->token_file);
   memset(s, 0, sizeof *s);
+}
+
+static int srv_timeout_sec(const mcp_srv *s) {
+  int sec;
+  if (!s || s->timeout_ms <= 0) return 25;
+  sec = s->timeout_ms / 1000;
+  if (sec < 1) sec = 1;
+  if (sec > 180) sec = 180;
+  return sec;
+}
+
+/* Fresh bearer each call. File wins when it reads; static auth is the fallback. */
+static char *srv_auth(const mcp_srv *s) {
+  if (s && s->token_file && s->token_file[0]) {
+    char *tok = ng_mcp_read_bearer_file(s->token_file);
+    if (tok) return tok;
+    ng_log("mcp: bearer_token_file unreadable");
+  }
+  if (s && s->auth && s->auth[0]) return strdup(s->auth);
+  return NULL;
 }
 
 /* Parse up to max servers from config */
@@ -282,6 +329,17 @@ static int parse_servers(mcp_srv *arr, int max) {
     e->url = jstr(obj, "url");
     e->auth = jstr(obj, "auth");
     if (!e->auth) e->auth = jstr(obj, "authorization");
+    e->token_file = jstr(obj, "bearer_token_file");
+    if (!e->token_file) e->token_file = jstr(obj, "token_file");
+    {
+      const char *tm = strstr(obj, "\"toolTimeoutMs\"");
+      e->timeout_ms = 0;
+      if (tm) {
+        tm = strchr(tm, ':');
+        if (tm) e->timeout_ms = atoi(tm + 1);
+        if (e->timeout_ms < 0) e->timeout_ms = 0;
+      }
+    }
     e->enabled = json_bool_default(obj, "enabled", 1);
     if (!e->id || !e->id[0]) {
       free(e->id);
@@ -332,25 +390,39 @@ int ng_mcp_servers_save_raw(const char *json_body) {
   return rc;
 }
 
-static char *initialize_and_list(const char *url, const char *auth, char **sess_out) {
-  if (sess_out) *sess_out = NULL;
+static char *initialize_and_list(const mcp_srv *s, char **sess_out) {
   char *init_params =
     "{\"protocolVersion\":\"2024-11-05\","
     "\"capabilities\":{},"
     "\"clientInfo\":{\"name\":\"nanobot\",\"version\":\"" NG_VERSION "\"}}";
-  char *init_req = rpc_body(1, "initialize", init_params);
+  char *init_req;
   char *sess = NULL;
-  char *init_resp = mcp_http_post(url, auth, NULL, init_req, &sess);
+  char *init_resp;
+  char *note;
+  char *note_resp;
+  char *list_req;
+  char *list_resp;
+  char *auth;
+  int tsec;
+  if (sess_out) *sess_out = NULL;
+  if (!s || !s->url || !s->url[0]) return mcp_err("bad_request");
+  tsec = srv_timeout_sec(s);
+  auth = srv_auth(s);
+  init_req = rpc_body(1, "initialize", init_params);
+  init_resp = mcp_http_post(s->url, auth, NULL, init_req, &sess, tsec, 1);
   free(init_req);
-  /* keep session for list */
-  char *note = strdup(
+  free(auth);
+  auth = srv_auth(s);
+  note = strdup(
     "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}");
-  char *note_resp = mcp_http_post(url, auth, sess, note, NULL);
-  free(note); free(note_resp);
+  note_resp = mcp_http_post(s->url, auth, sess, note, NULL, tsec, 0);
+  free(note); free(note_resp); free(auth);
 
-  char *list_req = rpc_body(2, "tools/list", "{}");
-  char *list_resp = mcp_http_post(url, auth, sess, list_req, NULL);
+  auth = srv_auth(s);
+  list_req = rpc_body(2, "tools/list", "{}");
+  list_resp = mcp_http_post(s->url, auth, sess, list_req, NULL, tsec, 2);
   free(list_req);
+  free(auth);
   if (sess_out) *sess_out = sess;
   else free(sess);
 
@@ -364,31 +436,36 @@ static char *initialize_and_list(const char *url, const char *auth, char **sess_
 }
 
 char *ng_mcp_server_probe(const char *id, const char *url_override, const char *auth_header) {
-  char *url = NULL;
-  char *auth = NULL;
-  char *name = NULL;
+  mcp_srv one;
+  memset(&one, 0, sizeof one);
   if (url_override && url_override[0]) {
-    url = strdup(url_override);
-    auth = auth_header && auth_header[0] ? strdup(auth_header) : NULL;
-    name = strdup(id && id[0] ? id : "adhoc");
+    one.url = strdup(url_override);
+    one.auth = auth_header && auth_header[0] ? strdup(auth_header) : NULL;
+    one.id = strdup(id && id[0] ? id : "adhoc");
+    one.name = strdup(one.id ? one.id : "adhoc");
   } else if (id && id[0]) {
     mcp_srv arr[16];
     int n = parse_servers(arr, 16);
     for (int i = 0; i < n; i++) {
       if (arr[i].id && !strcmp(arr[i].id, id)) {
-        url = arr[i].url ? strdup(arr[i].url) : NULL;
-        auth = arr[i].auth ? strdup(arr[i].auth) : NULL;
-        name = arr[i].name ? strdup(arr[i].name) : strdup(id);
+        free_srv(&one);
+        one.id = arr[i].id ? strdup(arr[i].id) : NULL;
+        one.name = arr[i].name ? strdup(arr[i].name) : strdup(id);
+        one.url = arr[i].url ? strdup(arr[i].url) : NULL;
+        one.auth = arr[i].auth ? strdup(arr[i].auth) : NULL;
+        one.token_file = arr[i].token_file ? strdup(arr[i].token_file) : NULL;
+        one.timeout_ms = arr[i].timeout_ms;
+        one.enabled = arr[i].enabled;
       }
       free_srv(&arr[i]);
     }
   }
-  if (!url) {
-    free(auth); free(name);
+  if (!one.url) {
+    free_srv(&one);
     return mcp_err("server_not_found");
   }
   char *sess = NULL;
-  char *list = initialize_and_list(url, auth, &sess);
+  char *list = initialize_and_list(&one, &sess);
   /* count tools roughly */
   int tools = 0;
   if (list) {
@@ -396,9 +473,9 @@ char *ng_mcp_server_probe(const char *id, const char *url_override, const char *
     while ((p = strstr(p, "\"name\"")) != NULL) { tools++; p += 6; }
     /* overcounts a bit; fine for probe UI */
   }
-  char *esc_id = ng_json_escape(id && id[0] ? id : "adhoc");
-  char *esc_url = ng_json_escape(url);
-  char *esc_name = ng_json_escape(name ? name : "");
+  char *esc_id = ng_json_escape(one.id && one.id[0] ? one.id : "adhoc");
+  char *esc_url = ng_json_escape(one.url);
+  char *esc_name = ng_json_escape(one.name ? one.name : "");
   char *esc_body = ng_json_escape(list ? list : "");
   char *out = NULL;
   int ok = list && !strstr(list, "\"error\"") && strstr(list, "tools");
@@ -412,7 +489,7 @@ char *ng_mcp_server_probe(const char *id, const char *url_override, const char *
            ok ? "true" : "false", esc_id ? esc_id : "adhoc",
            esc_name ? esc_name : "", esc_url ? esc_url : "",
            sess ? "true" : "false", tools, esc_body ? esc_body : "");
-  free(list); free(sess); free(url); free(auth); free(name);
+  free(list); free(sess); free_srv(&one);
   free(esc_id); free(esc_url); free(esc_name); free(esc_body);
   return out ? out : mcp_err("oom");
 }
@@ -468,10 +545,13 @@ static char *mcp_call_server(const char *server_id, const char *tool,
   memset(&copy, 0, sizeof copy);
   for (int i = 0; i < n; i++) {
     if (arr[i].id && server_id && !strcmp(arr[i].id, server_id) && arr[i].enabled) {
+      free_srv(&copy);
       copy.id = arr[i].id ? strdup(arr[i].id) : NULL;
       copy.name = arr[i].name ? strdup(arr[i].name) : NULL;
       copy.url = arr[i].url ? strdup(arr[i].url) : NULL;
       copy.auth = arr[i].auth ? strdup(arr[i].auth) : NULL;
+      copy.token_file = arr[i].token_file ? strdup(arr[i].token_file) : NULL;
+      copy.timeout_ms = arr[i].timeout_ms;
       copy.enabled = 1;
       hit = &copy;
     }
@@ -497,15 +577,21 @@ static char *mcp_call_server(const char *server_id, const char *tool,
     return mcp_err("need_tool_name");
   }
   char *sess = NULL;
+  int tsec = srv_timeout_sec(hit);
+  char *auth = NULL;
   /* initialize for session */
   char *init_params =
     "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},"
     "\"clientInfo\":{\"name\":\"nanobot\",\"version\":\"" NG_VERSION "\"}}";
   char *init_req = rpc_body(1, "initialize", init_params);
-  char *init_resp = mcp_http_post(hit->url, hit->auth, NULL, init_req, &sess);
+  auth = srv_auth(hit);
+  char *init_resp = mcp_http_post(hit->url, auth, NULL, init_req, &sess, tsec, 1);
+  free(auth);
   free(init_req); free(init_resp);
   char *note = strdup("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}");
-  char *nr = mcp_http_post(hit->url, hit->auth, sess, note, NULL);
+  auth = srv_auth(hit);
+  char *nr = mcp_http_post(hit->url, auth, sess, note, NULL, tsec, 0);
+  free(auth);
   free(note); free(nr);
 
   const char *args = (arguments_json && arguments_json[0]) ? arguments_json : "{}";
@@ -549,10 +635,19 @@ static char *mcp_call_server(const char *server_id, const char *tool,
   free(esc_tool);
   char *req = rpc_body(3, "tools/call", params);
   free(params);
-  char *resp = mcp_http_post(hit->url, hit->auth, sess, req, NULL);
+  auth = srv_auth(hit);
+  char *resp = mcp_http_post(hit->url, auth, sess, req, NULL, tsec, 3);
+  free(auth);
   free(req); free(sess); free(args_owned); free_srv(&copy);
 
   if (!resp) return mcp_err("tools_call_empty");
+  {
+    char *structured = ng_mcp_extract_tool_result(resp);
+    if (structured) {
+      free(resp);
+      return structured;
+    }
+  }
   /* prefer text content extraction */
   char *text = jstr(resp, "text");
   if (!text) {
@@ -601,7 +696,7 @@ static char *mcp_list_all(void) {
     if (arr[i].enabled) {
       enabled++;
       char *sess = NULL;
-      char *list = initialize_and_list(arr[i].url, arr[i].auth, &sess);
+      char *list = initialize_and_list(&arr[i], &sess);
       free(sess);
       if (list && !strstr(list, "\"schema\":\"nanobot.mcp.v1\"") &&
           (!strstr(list, "\"error\"") || strstr(list, "\"result\"")))
@@ -670,14 +765,20 @@ char *ng_mcp_try_tool(const char *name, const char *args_json) {
     const char *sep = strstr(rest, "__");
     if (!sep) return NULL;
     size_t sl = (size_t)(sep - rest);
-    char server[64];
-    if (sl >= sizeof server) sl = sizeof server - 1;
+    char *server;
+    const char *tool;
+    char *arguments;
+    char *r;
+    if (sl > 240) return mcp_err("server_id_too_long");
+    server = malloc(sl + 1);
+    if (!server) return mcp_err("oom");
     memcpy(server, rest, sl);
     server[sl] = 0;
-    const char *tool = sep + 2;
-    char *arguments = extract_arg(args_json, "arguments");
+    tool = sep + 2;
+    arguments = extract_arg(args_json, "arguments");
     if (!arguments && args_json && args_json[0] == '{') arguments = strdup(args_json);
-    char *r = mcp_call_server(server, tool, arguments);
+    r = mcp_call_server(server, tool, arguments);
+    free(server);
     free(arguments);
     return r;
   }

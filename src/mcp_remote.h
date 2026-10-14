@@ -4,6 +4,10 @@
 /* Outbound MCP client: this process connects TO remote MCP servers.
  * Config: $NANOBOT_HOME/mcp_servers.json
  * Transports: HTTP JSON-RPC (POST) + optional SSE body.
+ * Per server: bearer_token_file or token_file (re-read every request;
+ * static auth is the fallback) and toolTimeoutMs (milliseconds, clamped).
+ * tools/call prefers structuredContent. A curl timeout sends
+ * notifications/cancelled, then a timeout plate.
  */
 
 /* Full servers array JSON for clients (malloc'd). */

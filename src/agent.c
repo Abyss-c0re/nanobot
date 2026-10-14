@@ -5,6 +5,7 @@
 #include "shell.h"
 #include "task.h"
 #include "util.h"
+#include "wire_compat.h"
 #include "provider.h"
 #include "ng_sched.h"
 #include "subagent.h"
@@ -250,7 +251,9 @@ static char *curl_post_json_unlocked(const char *url, const char *bearer, const 
   char ua[96];
   snprintf(ua, sizeof ua, "User-Agent: %s", ng_cli_user_agent());
   char verhdr[80];
+  char idhdr[96];
   snprintf(verhdr, sizeof verhdr, "x-grok-client-version: %s", ng_cli_version());
+  snprintf(idhdr, sizeof idhdr, "x-grok-client-identifier: %s", ng_client_identifier());
   int grok = is_grok_endpoint(url);
 
   pid_t p2 = fork();
@@ -284,7 +287,11 @@ static char *curl_post_json_unlocked(const char *url, const char *bearer, const 
       argv[a++] = "-H";
       argv[a++] = "x-grok-client-surface: cli";
       argv[a++] = "-H";
+      argv[a++] = "x-authenticateresponse: authenticate-response";
+      argv[a++] = "-H";
       argv[a++] = verhdr;
+      argv[a++] = "-H";
+      argv[a++] = idhdr;
       argv[a++] = "-H";
       argv[a++] = ua;
     } else {
@@ -349,7 +356,9 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
   char ua[96];
   snprintf(ua, sizeof ua, "User-Agent: %s", ng_cli_user_agent());
   char verhdr[80];
+  char idhdr[96];
   snprintf(verhdr, sizeof verhdr, "x-grok-client-version: %s", ng_cli_version());
+  snprintf(idhdr, sizeof idhdr, "x-grok-client-identifier: %s", ng_client_identifier());
 
   pid_t p2 = fork();
   if (p2 < 0) {
@@ -379,7 +388,11 @@ static char *curl_get_url(const char *url, const char *bearer, int grok_headers)
       argv[a++] = "-H";
       argv[a++] = "x-grok-client-surface: cli";
       argv[a++] = "-H";
+      argv[a++] = "x-authenticateresponse: authenticate-response";
+      argv[a++] = "-H";
       argv[a++] = verhdr;
+      argv[a++] = "-H";
+      argv[a++] = idhdr;
       argv[a++] = "-H";
       argv[a++] = ua;
     } else {
@@ -512,17 +525,16 @@ void ng_agent_select_model(ng_agent_cfg *c, const char *model) {
 }
 
 int ng_agent_set_reasoning_effort(ng_agent_cfg *c, const char *effort) {
+  char canon[40];
+  char *n;
   if (!c) return -1;
-  if (!effort || !effort[0] || !strcmp(effort, "default") ||
-      !strcmp(effort, "off") || !strcmp(effort, "none")) {
+  if (ng_effort_canon(effort, canon, sizeof canon) != 0) return -1;
+  if (!canon[0]) {
     free(c->reasoning_effort);
     c->reasoning_effort = NULL;
     return 0;
   }
-  if (strcmp(effort, "low") && strcmp(effort, "medium") &&
-      strcmp(effort, "high") && strcmp(effort, "xhigh"))
-    return -1;
-  char *n = strdup(effort);
+  n = strdup(canon);
   if (!n) return -1;
   free(c->reasoning_effort);
   c->reasoning_effort = n;
@@ -896,7 +908,9 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   char ua[96];
   snprintf(ua, sizeof ua, "User-Agent: %s", ng_cli_user_agent());
   char verhdr[80];
+  char idhdr[96];
   snprintf(verhdr, sizeof verhdr, "x-grok-client-version: %s", ng_cli_version());
+  snprintf(idhdr, sizeof idhdr, "x-grok-client-identifier: %s", ng_client_identifier());
   int grok = is_grok_endpoint(url);
 
   pid_t p2 = fork();
@@ -936,7 +950,11 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
       argv[a++] = "-H";
       argv[a++] = "x-grok-client-surface: cli";
       argv[a++] = "-H";
+      argv[a++] = "x-authenticateresponse: authenticate-response";
+      argv[a++] = "-H";
       argv[a++] = verhdr;
+      argv[a++] = "-H";
+      argv[a++] = idhdr;
       argv[a++] = "-H";
       argv[a++] = ua;
     } else {
@@ -1330,6 +1348,33 @@ static char *run_shell_direct(ng_agent_cfg *c, const char *cmd) {
   return out ? out : strdup("");
 }
 
+static char *compact_stop_plate(int refills) {
+  char *s = NULL;
+  if (refills < 0) refills = 0;
+  if (refills > 3) refills = 3;
+  if (asprintf(&s,
+               "{\"schema\":\"nanobot.compact.v1\",\"ok\":false,"
+               "\"error\":\"compact_stop\",\"refills\":%d,\"python\":0}",
+               refills) < 0 || !s)
+    return strdup("{\"schema\":\"nanobot.compact.v1\",\"ok\":false,"
+                  "\"error\":\"compact_stop\",\"python\":0}");
+  return s;
+}
+
+/* 1 = shrunk, retry this turn. -1 = stop. 0 = not a context-length error. */
+static int try_compact_retry(char **messages, int *refills, const char *resp) {
+  char *shrunk;
+  if (!messages || !refills || !ng_resp_is_context_overflow(resp)) return 0;
+  if (*refills >= 3) return -1;
+  shrunk = ng_messages_compact(*messages, *refills + 1);
+  if (!shrunk) return -1;
+  free(*messages);
+  *messages = shrunk;
+  (*refills)++;
+  ng_log("agent: context overflow compact refill %d", *refills);
+  return 1;
+}
+
 char *ng_agent_run(ng_agent_cfg *c, const char *user_prompt) {
   return ng_agent_run_ex(c, user_prompt, 0, NULL, NULL);
 }
@@ -1649,6 +1694,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   char *final = NULL;
   char *last_tool_out = NULL; /* fallback text if model never speaks */
   int version_retries = 0;
+  int compact_refills = 0;
   int max_turns = c->max_turns > 0 ? c->max_turns : ng_max_turns();
   if (max_turns < 2) max_turns = 2;
   /* Open tasks get extra turns and hard ceiling so multi-step work can finish. */
@@ -1756,6 +1802,17 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       free(body);
       body = NULL;
       if (streamed && streamed[0]) {
+        int cr = try_compact_retry(&messages, &compact_refills, streamed);
+        if (cr == 1) {
+          free(streamed);
+          turn--;
+          continue;
+        }
+        if (cr < 0) {
+          free(streamed);
+          free(messages); free(last_tool_out); free(tools); free(mem_user);
+          return compact_stop_plate(compact_refills);
+        }
         final = streamed;
         live_streamed = 1;
         free(messages);
@@ -1840,6 +1897,18 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         free(resp);
         turn--;
         continue;
+      }
+      {
+        int cr = try_compact_retry(&messages, &compact_refills, resp);
+        if (cr == 1) {
+          free(resp);
+          turn--;
+          continue;
+        }
+        if (cr < 0) {
+          free(resp); free(messages); free(last_tool_out); free(tools); free(mem_user);
+          return compact_stop_plate(compact_refills);
+        }
       }
       if (tools_now && (strstr(resp, "tool") || strstr(resp, "tools") ||
                         strstr(resp, "unknown field") || strstr(resp, "not supported"))) {
@@ -2047,6 +2116,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         ng_cmd_result_free(&cr);
       }
       free(resp);
+      compact_refills = 0;
       /* Prefer a presentation turn next if budget is tight; grow for long work */
       if (turn >= max_turns - 2 && max_turns < hard_max) {
         max_turns += 4;
@@ -2058,6 +2128,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
     final = ng_json_message_content(resp);
     if (final && final[0]) {
+      compact_refills = 0;
       /* Cosplay tool_call in *content* (not tool_calls JSON) — never leave
        * unexecuted markup as the user reply. Promote to real shell tool. */
       char *cos_name = NULL, *cos_cmd = NULL;
@@ -2240,11 +2311,19 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
   return final;
 }
 
-/* Build compact User:/Agent: transcript from memory/recent.jsonl (newest last). */
+/* Build compact User:/Agent: transcript from memory/recent.jsonl (newest last).
+ * Budget and per-message caps match Grok Build prompt_suggest. */
 static char *suggest_transcript_from_memory(void) {
   char path[640];
   size_t len = 0;
-  char *raw, *out = NULL, *p;
+  char *raw, *p;
+  char *roles_store[128];
+  char *texts_store[128];
+  const char *roles[128];
+  const char *texts[128];
+  int n = 0;
+  int i;
+  char *out;
   snprintf(path, sizeof path, "%s/memory/recent.jsonl", ng_workdir());
   raw = ng_read_file(path, &len);
   if (!raw || !raw[0]) {
@@ -2252,35 +2331,71 @@ static char *suggest_transcript_from_memory(void) {
     return NULL;
   }
   p = raw;
-  while (*p) {
+  while (*p && n < 128) {
     char *nl = strchr(p, '\n');
-    char line[512];
-    size_t n;
+    size_t ln = nl ? (size_t)(nl - p) : strlen(p);
+    char *line = malloc(ln + 1);
     char *role, *content;
-    if (nl) {
-      n = (size_t)(nl - p);
-      if (n >= sizeof line) n = sizeof line - 1;
-      memcpy(line, p, n);
-      line[n] = 0;
-      p = nl + 1;
-    } else {
-      snprintf(line, sizeof line, "%s", p);
-      p += strlen(p);
-    }
+    if (!line) break;
+    memcpy(line, p, ln);
+    line[ln] = 0;
+    p = nl ? nl + 1 : p + ln;
     role = ng_json_get_string(line, "role");
     content = ng_json_get_string(line, "content");
+    free(line);
     if (role && content && content[0]) {
-      const char *lab = (!strcmp(role, "assistant")) ? "Agent" : "User";
-      char *next = NULL;
-      asprintf(&next, "%s%s%s: %.400s", out ? out : "", out ? "\n\n" : "", lab,
-               content);
-      free(out);
-      out = next;
+      if (n == 128) {
+        free(role);
+        free(content);
+        break;
+      }
+      roles_store[n] = role;
+      texts_store[n] = content;
+      roles[n] = role;
+      texts[n] = content;
+      n++;
+    } else {
+      free(role);
+      free(content);
     }
-    free(role);
-    free(content);
+  }
+  /* File can be longer than 128 lines. Keep the newest 128. */
+  if (*p) {
+    while (*p) {
+      char *nl = strchr(p, '\n');
+      size_t ln = nl ? (size_t)(nl - p) : strlen(p);
+      char *line = malloc(ln + 1);
+      char *role, *content;
+      if (!line) break;
+      memcpy(line, p, ln);
+      line[ln] = 0;
+      p = nl ? nl + 1 : p + ln;
+      role = ng_json_get_string(line, "role");
+      content = ng_json_get_string(line, "content");
+      free(line);
+      if (role && content && content[0]) {
+        free(roles_store[0]);
+        free(texts_store[0]);
+        memmove(roles_store, roles_store + 1, (size_t)(n - 1) * sizeof *roles_store);
+        memmove(texts_store, texts_store + 1, (size_t)(n - 1) * sizeof *texts_store);
+        roles_store[n - 1] = role;
+        texts_store[n - 1] = content;
+      } else {
+        free(role);
+        free(content);
+      }
+    }
+    for (i = 0; i < n; i++) {
+      roles[i] = roles_store[i];
+      texts[i] = texts_store[i];
+    }
   }
   free(raw);
+  out = ng_suggest_pack_turns(roles, texts, n);
+  for (i = 0; i < n; i++) {
+    free(roles_store[i]);
+    free(texts_store[i]);
+  }
   return out;
 }
 
@@ -2308,6 +2423,17 @@ char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
                   "\"error\":\"no_transcript\",\"python\":0}");
   }
   wd = (cwd && cwd[0]) ? cwd : ng_workdir();
+  {
+    char *packed = ng_suggest_pack_text(tr);
+    if (!packed) {
+      free(own_tr);
+      return strdup("{\"schema\":\"nanobot.augogen.v1\",\"ok\":false,"
+                    "\"error\":\"no_transcript\",\"python\":0}");
+    }
+    free(own_tr);
+    own_tr = packed;
+    tr = own_tr;
+  }
   grok = is_grok_endpoint(c->base_url);
   if (grok) {
     if (!c->session || ng_session_ensure(c->session) != 0) {
@@ -2337,19 +2463,21 @@ char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
       "If you write a line, use 2-12 words in their style.\n"
       "Reply with only the line or NONE.");
   {
-    char user[4096];
-    snprintf(user, sizeof user,
-             "CWD: %s\n\nTranscript:\n\n%.3000s\n\n"
-             "Predict the user's next message. Reply with ONLY the suggestion text.",
-             wd, tr);
-    user_esc = ng_json_escape(user);
+    char *user = NULL;
+    if (asprintf(&user,
+                 "CWD: %s\n\nTranscript:\n\n%s\n\n"
+                 "Predict the user's next message. Reply with ONLY the suggestion text.",
+                 wd, tr) < 0)
+      user = NULL;
+    user_esc = user ? ng_json_escape(user) : NULL;
+    free(user);
   }
   {
     char *ef = effort_json_frag(c, grok);
     asprintf(&body,
              "{\"model\":\"%s\"%s,\"messages\":["
              "{\"role\":\"system\",\"content\":\"%s\"},"
-             "{\"role\":\"user\",\"content\":\"%s\"]},"
+             "{\"role\":\"user\",\"content\":\"%s\"}],"
              "\"stream\":false,\"max_tokens\":64,\"temperature\":0.2}",
              c->model ? c->model : NG_DEFAULT_MODEL,
              ef ? ef : "",

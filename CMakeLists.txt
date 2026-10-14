@@ -41,6 +41,7 @@ endif()
 
 add_library(nanobot_legacy STATIC
   src/util.c
+  src/wire_compat.c
   src/shell.c
   src/shell_gate.c
   src/auth.c
@@ -92,6 +93,7 @@ add_subdirectory(apps/nanobot)
 if(NANOBOT_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests/crypto)
+  add_subdirectory(tests/wire)
 endif()
 
 message(STATUS "nanobot: MCP=${NANOBOT_ENABLE_MCP} AUTH=${NANOBOT_ENABLE_AUTH} PEER=${NANOBOT_ENABLE_PEER} HUB=${NANOBOT_ENABLE_HUB} SHELL=${NANOBOT_ENABLE_SHELL} PROVIDERS=${NANOBOT_ENABLE_PROVIDERS} BRAINCUBE=${NANOBOT_HAS_BRAINCUBE}")

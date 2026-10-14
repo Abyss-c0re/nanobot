@@ -8,7 +8,8 @@ typedef struct {
   char *model;
   int max_turns;
   int timeout_sec;
-  /* Grok only: low|medium|high|xhigh. NULL omits reasoning_effort. */
+  /* Grok only. Canonical token (low|medium|high|xhigh or another catalog id).
+   * NULL omits reasoning_effort. */
   char *reasoning_effort;
 } ng_agent_cfg;
 
@@ -37,7 +38,8 @@ char *ng_agent_fetch_models_json(ng_agent_cfg *c);
 char *ng_agent_models_ids_json(const char *models_body);
 /* Set model id (and optional base) and save env. */
 void ng_agent_select_model(ng_agent_cfg *c, const char *model);
-/* 0 = set or cleared. -1 = not a known tier. Empty/default/off clears. */
+/* 0 = set or cleared. -1 = rejected token. Empty/default/off/none clears.
+ * Case is folded (xHigh → xhigh). Other catalog tokens pass through lowercased. */
 int ng_agent_set_reasoning_effort(ng_agent_cfg *c, const char *effort);
 
 /* Stream chunks of assistant text (CLI real-time). May be called 0+ times. */
