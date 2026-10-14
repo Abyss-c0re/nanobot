@@ -12,5 +12,6 @@ Technical reference (still human-facing).
 | [PLATFORM.md](PLATFORM.md) | portability notes |
 | [LIMITS.md](LIMITS.md) | lean mode limits |
 | [ASYNC.md](ASYNC.md) | async runs, filters, compaction, HTTP control |
+| [AUGOGEN.md](AUGOGEN.md) | self-prompt, pair vote, hive motive rank |
 
 Install: [../INSTALL.md](../INSTALL.md). Security: [../SECURITY.md](../SECURITY.md).

@@ -59,6 +59,7 @@ add_library(nanobot_legacy STATIC
   src/braincube_plugin.c
   src/braincell.c
   src/augogen.c
+  src/motive.c
 )
 add_library(nanobot::legacy ALIAS nanobot_legacy)
 target_include_directories(nanobot_legacy

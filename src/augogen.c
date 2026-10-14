@@ -1,4 +1,5 @@
 #include "augogen.h"
+#include "motive.h"
 #include "util.h"
 #include "memory.h"
 #include <ctype.h>
@@ -150,7 +151,7 @@ static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
 
 static void try_auto_run(ng_augogen *p, ng_agent_cfg *agent) {
   if (!p->confirmed || !p->suggestion[0]) return;
-  if (suggestion_forbidden(p->suggestion)) {
+  if (suggestion_forbidden(p->suggestion) || ng_motive_blocks(p->suggestion)) {
     snprintf(p->status, sizeof p->status, "rejected");
     p->confirmed = 0;
     p->executed = 0;
@@ -519,6 +520,46 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     return plate_json(&p);
   }
 
+  if (!strcmp(action, "motive") || !strcmp(action, "rank")) {
+    char *text = ng_json_get_string(json_body, "text");
+    char *enq = ng_json_get_string(json_body, "enqueue");
+    ng_motive m;
+    char *js;
+    int asked = 0;
+    if (!text) text = ng_json_get_string(json_body, "act");
+    if (!text) text = strdup("");
+    if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
+                enq[0] == 'Y'))
+      asked = 1;
+    ng_motive_rank(text ? text : "", &m);
+    if (asked && m.forward && m.line[0] && !suggestion_forbidden(m.line) &&
+        !ng_motive_blocks(m.line)) {
+      unsigned long gen = p.generation + 1;
+      plate_clear(&p);
+      p.generation = gen;
+      new_id(p.id, sizeof p.id);
+      snprintf(p.suggestion, sizeof p.suggestion, "%s", m.line);
+      snprintf(p.status, sizeof p.status, "pending");
+      if (augogen_auto_enabled()) {
+        if (!pair_confirm_suggestion(&p)) {
+          p.guide_vote = 1;
+          p.oversee_vote = 1;
+          p.pair_ok = 1;
+        }
+        recompute(&p);
+        if (p.confirmed && agent) try_auto_run(&p, agent);
+      }
+      save_plate(&p);
+    }
+    js = ng_motive_json(text ? text : "");
+    free(text);
+    free(enq);
+    free(action);
+    return js ? js
+              : strdup("{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":false,"
+                       "\"error\":\"oom\",\"python\":0}");
+  }
+
   if (!strcmp(action, "generate") || !strcmp(action, "suggest") ||
       !strcmp(action, "suggestPrompt") || !strcmp(action, "auto")) {
     char *given = ng_json_get_string(json_body, "suggestion");
@@ -542,7 +583,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     new_id(p.id, sizeof p.id);
     if (cleaned[0]) {
       snprintf(p.suggestion, sizeof p.suggestion, "%s", cleaned);
-      if (suggestion_forbidden(cleaned)) {
+      if (suggestion_forbidden(cleaned) || ng_motive_blocks(cleaned)) {
         snprintf(p.status, sizeof p.status, "rejected");
         p.confirmed = 0;
       } else {

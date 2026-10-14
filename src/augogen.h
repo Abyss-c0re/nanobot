@@ -11,7 +11,9 @@
 
 #define NG_AUGOGEN_SCHEMA "nanobot.augogen.v1"
 
-/* Handle POST JSON (action=generate|pending|vote|reject|apply|reset).
+/* Handle POST JSON (action=generate|pending|vote|reject|apply|reset|motive).
+ * motive ranks eight concepts and a heresy cascade. enqueue=1 stores a
+ * forward line. Auto runs it only when an agent is present.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */
 char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body);

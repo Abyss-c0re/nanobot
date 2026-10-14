@@ -23,7 +23,23 @@ POST /peer/v1/augogen
 {"action":"auto"}    # generate + pair-confirm + apply + enqueue (same as generate when auto on)
 {"action":"mode","auto":"1"}  # persist AUGOGEN_AUTO
 {"action":"reject"}
+{"action":"motive","text":"…","enqueue":"1"}  # hybrid rank; enqueue stores a forward line
 ```
+
+## Motive
+
+`action` `motive` (alias `rank`) answers `nanobot.motive.v1`.
+
+The ranker holds eight concepts on the stack (192-byte norm, 24 tokens, no heap).
+Score is token overlap plus a 64-bit sketch distance. A priority cascade names
+the plate first. Plates `purge_intent` and `protect_flow` block storage and
+auto-run. `hold_flash`, `forbid_live`, and `bake_rom` return a remedy line and
+do not enqueue. Other plates are forward: with `enqueue` `1` the line is stored
+as the pending suggestion. Full auto runs it only when the caller passed an
+agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) stores the line and leaves it pending.
+
+A peer sends that line to another peer with `POST /peer/v1/prompt`. The CubalC
+board `programs/motive_rank.cubalc` is the same eight-step flow in the language.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode

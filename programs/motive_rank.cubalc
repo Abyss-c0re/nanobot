@@ -1,0 +1,27 @@
+// Eight-concept motive. The C peer ranks. This board only flows.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE sense  ROLE observer   PROTON 1
+CUBE memory ROLE kernel_sot PROTON 1
+CUBE plan   ROLE creator    PROTON 1
+CUBE act    ROLE construct  PROTON 1
+CUBE we     ROLE nexuscore  PROTON 1
+CUBE body   ROLE nanobot    PROTON 1
+
+PLUG sense memory
+PLUG memory plan
+PLUG plan act
+PLUG act we
+PLUG we body
+
+FOLDBITS memory "11110000111100001111000011110000"
+IMPULSE sense 1
+IMPULSE memory 1
+IMPULSE we 1
+IMPULSE body 1
+ENERGYFLOW 4
+FLOW 2
+HARMONY we
+DECIDE we
+ASSERT CUBES >= 6
+PRINT "motive" UNITY DECIDE ENERGY

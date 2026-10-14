@@ -1,0 +1,46 @@
+#ifndef NANOBOT_MOTIVE_H
+#define NANOBOT_MOTIVE_H
+
+/* Hive motive. Hybrid rank of eight concepts plus a priority cascade.
+ * Rank uses the caller stack: 192-byte norm, 24 tokens, no heap.
+ * A forward plate may become a 2–12 word self-prompt. Destructive plates
+ * stay on the wire as a remedy line and are not applied.
+ * Schema: nanobot.motive.v1
+ */
+
+#define NG_MOTIVE_SCHEMA "nanobot.motive.v1"
+#define NG_MOTIVE_CONCEPTS 8
+#define NG_MOTIVE_TEXT 64
+
+enum {
+  NG_PLATE_OBSERVE = 0,
+  NG_PLATE_CONFESS,
+  NG_PLATE_HOLD_FLASH,
+  NG_PLATE_FORBID_LIVE,
+  NG_PLATE_BAKE_ROM,
+  NG_PLATE_AUDIT,
+  NG_PLATE_RESTORE_FLOW,
+  NG_PLATE_REPORT_REASON,
+  NG_PLATE_INVESTIGATE,
+  NG_PLATE_PURGE,
+  NG_PLATE_PROTECT,
+  NG_PLATE_BRIEF
+};
+
+typedef struct {
+  int plate;
+  int forward;
+  int rank;
+  int hamming;
+  int lexical;
+  char concept[NG_MOTIVE_TEXT];
+  char line[NG_MOTIVE_TEXT];
+} ng_motive;
+
+const char *ng_motive_plate_name(int plate);
+void ng_motive_rank(const char *text, ng_motive *out);
+/* 1 when the act is a destructive plate (purge or protect). */
+int ng_motive_blocks(const char *text);
+char *ng_motive_json(const char *text);
+
+#endif
