@@ -184,7 +184,11 @@ static void load_filter(ng_run *run) {
   raw = ng_read_file(path, &n);
   if (!raw) raw = strdup("{\"rules\":[]}");
   if (!raw) return;
-  if (n >= sizeof run->filter_raw) n = sizeof run->filter_raw - 1;
+  /* A longer file is not a prefix of a filter. Leave what is already loaded. */
+  if (n >= sizeof run->filter_raw) {
+    free(raw);
+    return;
+  }
   if (memcmp(run->filter_raw, raw, n) == 0 && run->filter_raw[n] == 0 && run->filter) {
     free(raw);
     return;

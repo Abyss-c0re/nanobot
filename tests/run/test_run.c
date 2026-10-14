@@ -275,10 +275,58 @@ static void test_long_record(void) {
   free(id);
 }
 
+static void test_oversize_filter(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  char *id;
+  ng_run *run;
+  char path[700];
+  FILE *fp;
+  char *events;
+  const char *head = "{\"rules\":[{\"op\":\"redact\",\"match\":\"sekret\",\"with\":\"";
+  const char *tail = "\"}]}";
+  size_t pad;
+  size_t i;
+  expect(mkdtemp(home) != NULL, "filter home");
+  ng_set_workdir(home);
+  id = ng_run_create("filter cap", NULL, NULL);
+  expect(id != NULL, "filter create");
+  if (!id) return;
+  run = ng_run_open(id);
+  expect(run != NULL, "filter open");
+  snprintf(path, sizeof path, "%s/runs/%s/filter.json", ng_workdir(), id);
+  pad = 8191 - strlen(head) - strlen(tail);
+  fp = fopen(path, "w");
+  expect(fp != NULL, "oversize filter");
+  if (fp) {
+    fputs(head, fp);
+    for (i = 0; i < pad; i++) fputc('P', fp);
+    fputs(tail, fp);
+    fputc('Z', fp);
+    fclose(fp);
+  }
+  expect(ng_run_emit(run, "token", "", "see sekret") == 1, "oversize emit");
+  events = ng_run_events_json(id, -1, 10);
+  expect(events && strstr(events, "sekret"), "oversize file leaves the loaded filter");
+  free(events);
+  fp = fopen(path, "w");
+  expect(fp != NULL, "fitting filter");
+  if (fp) {
+    fputs("{\"rules\":[{\"op\":\"redact\",\"match\":\"sekret\",\"with\":\"QQQ\"}]}", fp);
+    fclose(fp);
+  }
+  expect(ng_run_emit(run, "token", "", "see sekret") == 1, "fitting emit");
+  events = ng_run_events_json(id, -1, 10);
+  expect(events && strstr(events, "QQQ"), "fitting file is parsed");
+  free(events);
+  ng_run_close(run);
+  free(id);
+}
+
 int main(void) {
   test_routes();
   test_control();
   test_long_record();
+  test_oversize_filter();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;

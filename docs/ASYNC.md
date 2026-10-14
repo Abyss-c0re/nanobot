@@ -267,7 +267,7 @@ Rules apply to event kinds `token`, `thinking`, `tool_result`, and `code_change`
 
 A needle split across chunks is held when it is a strict prefix of a drop or redact match. The carry buffer is 160 bytes, which holds a 127-byte prefix of a 128-byte needle. `ng_run_emit` of a non-streaming kind flushes that carry in the same call. `ng_run_flush` writes a held token prefix and a held thinking prefix as their own events at the end of a normal stream and after an intercept. Abort does not flush, so a partial needle stays held.
 
-`filter.json` is compared to the bytes cached on the open run (`filter_raw`, 8192 bytes). A changed file is parsed again. A broken file falls back to a pass-through filter.
+`filter.json` is compared to the bytes cached on the open run (`filter_raw`, 8192 bytes). A changed file that fits is parsed again. A longer file is not parsed, so the filter already loaded stays. A broken file that fits falls back to a pass-through filter.
 
 Create accepts the same filter object. `NULL`, `{}`, and `{"rules":[]}` pass every byte through.
 
