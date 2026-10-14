@@ -192,15 +192,16 @@ static void jobs_mark_orphans(const char *jdir) {
     ng_log("jobs: marked %d orphan running/queued after restart", marked);
 }
 
-static void send_all(int fd, const char *data, size_t n) {
+/* 0 when every byte was written. -1 when the client is gone. */
+static int send_all(int fd, const char *data, size_t n) {
   while (n) {
     ssize_t w = write(fd, data, n);
-    if (w < 0) {
-      if (errno == EINTR) continue;
-      return;
-    }
-    data += w; n -= (size_t)w;
+    if (w < 0 && errno == EINTR) continue;
+    if (w <= 0) return -1;
+    data += w;
+    n -= (size_t)w;
   }
+  return 0;
 }
 
 /* SSE chat stream helper — top-level (not nested) for portable C compilers.
@@ -840,12 +841,13 @@ typedef struct {
   int fd;
 } run_sse_ud;
 
-static void run_sse_line(void *ud, const char *line) {
+static int run_sse_line(void *ud, const char *line) {
   run_sse_ud *u = ud;
-  if (!u || !line) return;
-  send_all(u->fd, "data: ", 6);
-  send_all(u->fd, line, strlen(line));
-  send_all(u->fd, "\n\n", 2);
+  if (!u || !line) return 0;
+  if (send_all(u->fd, "data: ", 6) != 0) return -1;
+  if (send_all(u->fd, line, strlen(line)) != 0) return -1;
+  if (send_all(u->fd, "\n\n", 2) != 0) return -1;
+  return 0;
 }
 
 /* File-backed async runs. 1 = this request was answered. */
@@ -1044,13 +1046,15 @@ static int handle_runs(int cfd, const char *req, const char *path, int is_get,
                   "Connection: close\r\n"
                   "Access-Control-Allow-Origin: *\r\n"
                   "\r\n");
-    if (hn > 0 && hn < (int)sizeof hdr) send_all(cfd, hdr, (size_t)hn);
+    if (hn > 0 && hn < (int)sizeof hdr && send_all(cfd, hdr, (size_t)hn) != 0)
+      return 1;
     on = snprintf(open, sizeof open,
                   "event: open\ndata: {\"schema\":\"nanobot.run.v1\",\"ok\":true,"
                   "\"action\":\"stream_open\",\"id\":\"%s\",\"since\":%ld,"
                   "\"python\":0}\n\n",
                   id, since);
-    if (on > 0 && on < (int)sizeof open) send_all(cfd, open, (size_t)on);
+    if (on > 0 && on < (int)sizeof open && send_all(cfd, open, (size_t)on) != 0)
+      return 1;
     ud.fd = cfd;
     ng_run_tail(id, since, 20000, run_sse_line, &ud);
     {

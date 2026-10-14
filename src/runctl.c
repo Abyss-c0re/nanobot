@@ -1044,7 +1044,10 @@ int ng_run_tail(const char *id, long since, int timeout_ms, ng_run_line_fn fn, v
         if (rr < 0 || line[0] != '{') continue;
         seq = line_seq(line);
         if (cursor >= 0 && seq <= cursor) continue;
-        fn(ud, line);
+        if (fn(ud, line) != 0) {
+          fclose(fp);
+          return delivered + 1;
+        }
         if (seq > cursor) cursor = seq;
         delivered++;
         saw = 1;

@@ -97,10 +97,12 @@ char *ng_run_list_json(void);
 int ng_run_is_route(const char *path, char *id, size_t idsz, char *action,
                     size_t asz, long *since);
 
-typedef void (*ng_run_line_fn)(void *ud, const char *line);
+/* 0 keeps tailing. Non-zero stops the tail. The run worker is untouched. */
+typedef int (*ng_run_line_fn)(void *ud, const char *line);
 
 /* Deliver events with seq > since. timeout_ms 0 reads once.
- * Stops early when the run status is done, aborted, or error.
+ * Stops early when the run status is done, aborted, or error,
+ * or when the line callback returns non-zero.
  * Returns the number of lines delivered.
  */
 int ng_run_tail(const char *id, long since, int timeout_ms, ng_run_line_fn fn,

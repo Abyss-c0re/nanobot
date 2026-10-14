@@ -205,7 +205,7 @@ data: {"schema":"nanobot.run.v1","ok":true,"action":"stream_open","id":"RUN_ID",
 
 ```
 
-Each later log line is `data: <json>\n\n` via `run_sse_line`. `ng_run_tail` polls every 50 ms, delivers lines with `seq` greater than the cursor, and returns when the run is `done`, `aborted`, or `error` and no new line was seen on that pass, or when 20000 ms have elapsed. The handler then writes:
+Each later log line is `data: <json>\n\n` via `run_sse_line`. `ng_run_tail` polls every 50 ms, delivers lines with `seq` greater than the cursor, and returns when the run is `done`, `aborted`, or `error` and no new line was seen on that pass, when a write to the client fails, or when 20000 ms have elapsed. A failed header or open-frame write returns before the tail starts. The run worker keeps going. The handler then writes:
 
 ```text
 event: bye
@@ -760,10 +760,10 @@ The longest matching prefix is tested in the order `/api/v1/runs`, `/peer/v1/run
 ### `ng_run_line_fn`
 
 ```c
-typedef void (*ng_run_line_fn)(void *ud, const char *line);
+typedef int (*ng_run_line_fn)(void *ud, const char *line);
 ```
 
-Callback for one event line with the trailing newline removed. `ng_run_tail` does not allocate the line. The pointer is valid only for the duration of the call.
+Callback for one event line with the trailing newline removed. Return 0 to keep tailing. Return non-zero to stop the tail. The run worker is a different process and stays up. `ng_run_tail` does not allocate the line. The pointer is valid only for the duration of the call.
 
 ### `ng_run_tail`
 
@@ -774,7 +774,7 @@ int ng_run_tail(const char *id, long since, int timeout_ms, ng_run_line_fn fn,
 
 Delivers events with `seq` greater than `since`. Each callback line is one whole record. `timeout_ms` 0 reads once. A positive timeout polls every 50 ms. Returns the number of lines delivered. Returns 0 when the id is illegal or `fn` is NULL.
 
-Stops when a pass sees no new line and `ng_run_status_json` contains `"status":"done"`, `"status":"aborted"`, or `"status":"error"`. A missing run is not terminal, so the HTTP handler checks for `run_not_found` before calling tail.
+Stops when the callback returns non-zero, and the line that reported the stop is included in the count. Stops when a pass sees no new line and `ng_run_status_json` contains `"status":"done"`, `"status":"aborted"`, or `"status":"error"`. A missing run is not terminal, so the HTTP handler checks for `run_not_found` before calling tail.
 
 ### `ng_run_apply`
 
@@ -947,10 +947,10 @@ Loads the status plate. Returns 1 and sends it when the plate is NULL or contain
 #### `run_sse_line`
 
 ```c
-static void run_sse_line(void *ud, const char *line);
+static int run_sse_line(void *ud, const char *line);
 ```
 
-`ng_run_line_fn` adapter. Writes `data: `, the line, and `\n\n` to `ud->fd`. NULL `ud` or `line` returns. `send_all` stops on a write error, so a disconnected client ends the tail's writes without aborting the agent.
+`ng_run_line_fn` adapter. Writes `data: `, the line, and `\n\n` to `ud->fd`. NULL `ud` or `line` returns 0. Returns -1 when `send_all` fails, which stops the tail. The run worker is not aborted.
 
 #### `handle_runs`
 

@@ -25,10 +25,18 @@ static void expect(int cond, const char *msg) {
   }
 }
 
-static void on_line(void *ud, const char *line) {
+static int on_line(void *ud, const char *line) {
   int *n = ud;
   (void)line;
   (*n)++;
+  return 0;
+}
+
+static int stop_line(void *ud, const char *line) {
+  int *n = ud;
+  (void)line;
+  (*n)++;
+  return -1;
 }
 
 static void test_routes(void) {
@@ -471,12 +479,37 @@ static void test_hub_closed_client(void) {
   waitpid(pid, NULL, 0);
 }
 
+static void test_tail_stop(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  char *id;
+  ng_run *run;
+  int lines = 0;
+  expect(mkdtemp(home) != NULL, "stop home");
+  ng_set_workdir(home);
+  id = ng_run_create("tail stop", NULL, NULL);
+  expect(id != NULL, "stop create");
+  if (!id) return;
+  run = ng_run_open(id);
+  expect(run != NULL, "stop open");
+  if (!run) {
+    free(id);
+    return;
+  }
+  expect(ng_run_emit(run, "token", "", "one") == 1, "stop emit one");
+  expect(ng_run_emit(run, "token", "", "two") == 1, "stop emit two");
+  ng_run_close(run);
+  expect(ng_run_tail(id, -1, 5000, stop_line, &lines) == 1, "tail stops after a failed write");
+  expect(lines == 1, "second record stays unread");
+  free(id);
+}
+
 int main(void) {
   test_routes();
   test_control();
   test_long_record();
   test_oversize_filter();
   test_list_newest();
+  test_tail_stop();
   test_hub_closed_client();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);

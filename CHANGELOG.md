@@ -85,6 +85,7 @@
 - **runs:** a `filter.json` longer than the 8192-byte cache is left unparsed, so the filter already loaded stays.
 - **runs:** the run list keeps at most 32 status plates, chosen as the runs whose events file was modified most recently.
 - **hub:** an events stream ends when a write to the client fails, so a closed client does not keep the child for the hour.
+- **runs:** a run event stream ends when a write to the client fails, so a closed client does not keep the worker for the rest of the 20 second window.
 - **runs:** compaction policy (`max_refills`, `keep_tail`, `keep_head`, `shrink_at`, `preemptive`) and token caps (`max_tokens`, `context_tokens`) are per run and via `NANOBOT_MAX_TOKENS`, `NANOBOT_CONTEXT_TOKENS`, `NANOBOT_COMPACT_REFILLS`, `NANOBOT_COMPACT_KEEP_TAIL`. Unset refills stay at 3.
 - **chore(portability):** strip product/OS hardcodes and branding from core C, comments, and docs (config-only personal ACL, gate mirror, shared secrets); host wrappers plant platform paths
 - **feat(task):** internal tools `task_plan` / `task_start` / `task_step_done` / `task_done` / `task_block` / `task_status`; open tasks self-remind each turn until done or blocked (hard max turns)
