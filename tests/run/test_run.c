@@ -1,6 +1,7 @@
 #include "agent.h"
 #include "hub_local.h"
 #include "runctl.h"
+#include "shell.h"
 #include "util.h"
 
 #include <arpa/inet.h>
@@ -510,6 +511,26 @@ static void test_tail_stop(void) {
   free(id);
 }
 
+static int shell_stop_now(void) { return 1; }
+
+static void test_shell_abort_kills(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  struct timespec a, b;
+  long ms;
+  ng_cmd_result cr;
+  expect(mkdtemp(home) != NULL, "shell home");
+  ng_set_workdir(home);
+  ng_shell_set_stop(shell_stop_now);
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  cr = ng_run_command("sleep 30", 5);
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  ng_shell_set_stop(NULL);
+  ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+  expect(cr.exit_code == 130, "abort kills the shell");
+  expect(ms < 1500, "killed shell does not wait out the timeout");
+  ng_cmd_result_free(&cr);
+}
+
 static void test_tail_ping(void) {
   char home[] = "/tmp/nanobot-run-XXXXXX";
   char *id;
@@ -541,6 +562,7 @@ int main(void) {
   test_oversize_filter();
   test_list_newest();
   test_tail_stop();
+  test_shell_abort_kills();
   test_tail_ping();
   test_hub_closed_client();
   if (fails) {

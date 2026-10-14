@@ -27,6 +27,12 @@ static int g_live_streamed;
 
 static void live_restore(ng_run **slot) { g_live = slot ? *slot : NULL; }
 
+/* 1 when this live run's control file is abort. Pause and intercept stay put. */
+static int shell_stop_on_abort(void) {
+  if (!g_live) return 0;
+  return ng_run_poll(g_live, 0) == 1;
+}
+
 /* 0 continue, 1 abort, 3 intercept. Pause waits here. */
 static int ng_agent_live_cut(void) {
   int p;
@@ -1634,6 +1640,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                                int stream_final, ng_stream_fn on_delta, void *userdata) {
   ng_run *saved_live __attribute__((cleanup(live_restore), unused)) = g_live;
   g_live = c ? c->live : NULL;
+  ng_shell_set_stop(shell_stop_on_abort);
   int has_image = (image_b64 && image_b64[0])
                || (images_json && images_json[0] == '[' && strstr(images_json, "base64"));
   if ((!user_prompt || !user_prompt[0]) && !has_image) {
@@ -1658,8 +1665,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     }
     /* lightweight memory of shell for context */
     if (r) ng_memory_record_exchange(user_prompt, r);
-    /* A shell already inside ng_run_command is not killed. Abort still wins
-     * once that command returns. */
+    /* Abort kills a shell already inside ng_run_command.
+     * This check records the abort plate once that call returns. */
     if (g_live && ng_agent_live_cut() == 1) {
       ng_run_emit(g_live, "abort", "", "aborted");
       free(r);

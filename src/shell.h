@@ -9,6 +9,10 @@ typedef struct {
 
 /* Run command via /bin/sh -c with timeout; allowlist optional (NULL = permissive but blocks some patterns) */
 ng_cmd_result ng_run_command(const char *command, int timeout_sec);
+/* While a command runs, fn is polled. Non-zero kills that process group.
+ * NULL clears the hook. The hook is not used for the deny and approval paths.
+ */
+void ng_shell_set_stop(int (*fn)(void));
 /* Run after password approval — still hard-denies floor/denylist. */
 ng_cmd_result ng_run_command_approved(const char *command, int timeout_sec);
 void ng_cmd_result_free(ng_cmd_result *r);

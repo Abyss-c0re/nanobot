@@ -419,7 +419,7 @@ Intercept mid-stream flushes held tokens, keeps the partial assistant text, appe
 
 Pause while an SSE line is being processed stops the reader inside `ng_run_poll` until resume or abort. Curl can block on a full pipe until the reader continues.
 
-A shell command that has entered `ng_run_command` runs until it exits. Abort before that call returns the abort plate and does not start the command. Abort after the command has started is recorded when the command returns: the tool result is emitted, then the run finishes `aborted`. The same is true of a model `run_terminal_command` that is already inside the shell; the next turn boundary sees the control file.
+A shell command that has entered `ng_run_command` is killed when the live run's control file is `abort`. The wait loop polls that file, then `SIGKILL`s the shell process group and returns. Abort before that call returns the abort plate and does not start the command. After the killed command returns, the tool result is emitted, then the run finishes `aborted`. The same stop hook covers a model `run_terminal_command` that is already inside the shell. Pause and intercept do not kill the shell.
 
 `g_live_streamed` is cleared in `ng_run_execute` only. A nested `ng_agent_run` does not clear it, so a parent that already streamed tokens is not tokenized again at the end.
 

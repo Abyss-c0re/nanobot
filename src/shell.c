@@ -399,6 +399,12 @@ void ng_cmd_result_free(ng_cmd_result *r) {
   r->output = NULL;
 }
 
+static int (*g_shell_stop)(void);
+
+void ng_shell_set_stop(int (*fn)(void)) {
+  g_shell_stop = fn;
+}
+
 int ng_shell_is_enabled(void) {
   char path[640];
   snprintf(path, sizeof path, "%s/shell_enabled", ng_workdir());
@@ -585,6 +591,7 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
     }
     _exit(127);
   }
+  setpgid(pid, pid);
   close(pipefd[1]);
 
   size_t cap = 4096, len = 0;
@@ -600,7 +607,14 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
 
   time_t deadline = time(NULL) + timeout_sec;
   int timed_out = 0;
+  int stopped = 0;
   while (1) {
+    if (g_shell_stop && g_shell_stop()) {
+      stopped = 1;
+      kill(-pid, SIGKILL);
+      kill(pid, SIGKILL);
+      break;
+    }
     if (time(NULL) > deadline) {
       timed_out = 1;
       /* Residual: kill(sh) left hung adb children under mesh pulls. */
@@ -658,11 +672,15 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
     }
   }
   close(pipefd[0]);
-  if (timed_out) {
+  if (timed_out || stopped) {
     waitpid(pid, NULL, 0);
-    r.exit_code = 124;
-    char *nb = realloc(buf, len + 64);
-    if (nb) { buf = nb; strcat(buf, "\n[nanobot: timeout]\n"); }
+    if (timed_out) {
+      r.exit_code = 124;
+      char *nb = realloc(buf, len + 64);
+      if (nb) { buf = nb; strcat(buf, "\n[nanobot: timeout]\n"); }
+    } else {
+      r.exit_code = 130;
+    }
   }
   r.output = buf ? buf : strdup("");
   return r;
