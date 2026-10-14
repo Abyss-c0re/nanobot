@@ -1645,6 +1645,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
   /* Direct shell: @! command  (offline, no LLM, works without an LLM) */
   if (!has_image && strncmp(user_prompt, "@!", 2) == 0) {
+    if (g_live && ng_agent_live_cut() == 1) {
+      ng_run_emit(g_live, "abort", "", "aborted");
+      return abort_plate();
+    }
     if (g_live) ng_run_emit(g_live, "tool_call", "shell", user_prompt + 2);
     char *r = run_shell_direct(c, user_prompt + 2);
     if (g_live) {
