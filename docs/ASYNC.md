@@ -155,7 +155,7 @@ The child closes the client socket, calls `ng_run_execute`, frees the reply and 
 }
 ```
 
-`alive` is `kill(pid, 0) == 0`. That is true for a live worker, a zombie that has not been reaped, and a pid that the kernel has reused. `status` stays `running` until the worker writes `done`, `aborted`, or `error`. A dead pid does not rewrite the status to orphan.
+`alive` is `kill(pid, 0) == 0` and the process is not a zombie. State `Z` in `/proc/<pid>/stat` (the character after the last `)`) is not alive. If that file cannot be read, the kill result stands. A reused pid still counts as alive. `status` stays `running` until the worker writes `done`, `aborted`, or `error`. A dead pid does not rewrite the status to orphan.
 
 Missing id: HTTP 404, `"error":"run_not_found"`. Illegal id: HTTP 400, `"error":"bad_id"`. Other methods: `405`, `Allow: GET, HEAD, OPTIONS`.
 

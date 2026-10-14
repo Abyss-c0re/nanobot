@@ -320,6 +320,26 @@ int ng_run_mark_running(ng_run *run) {
   return write_meta(run->id, "running", (int)getpid(), "");
 }
 
+/* kill(pid, 0) succeeds for a zombie. State Z is the corpse. */
+static int pid_is_zombie(int pid) {
+  char path[64];
+  char buf[512];
+  FILE *fp;
+  size_t n;
+  char *rp;
+  if (pid <= 0) return 0;
+  snprintf(path, sizeof path, "/proc/%d/stat", pid);
+  fp = fopen(path, "r");
+  if (!fp) return 0;
+  n = fread(buf, 1, sizeof buf - 1, fp);
+  fclose(fp);
+  if (n == 0) return 0;
+  buf[n] = 0;
+  rp = strrchr(buf, ')');
+  if (!rp || rp[1] != ' ' || rp[2] == 0) return 0;
+  return rp[2] == 'Z';
+}
+
 static int append_event(ng_run *run, const char *kind, const char *name, const char *text) {
   char path[700];
   char *ne = NULL;
@@ -736,7 +756,7 @@ char *ng_run_status_json(const char *id) {
   status = ng_json_get_string(meta, "status");
   err = ng_json_get_string(meta, "error");
   pid = json_int(meta, "pid", 0);
-  if (pid > 0 && kill((pid_t)pid, 0) == 0) alive = 1;
+  if (pid > 0 && kill((pid_t)pid, 0) == 0 && !pid_is_zombie(pid)) alive = 1;
   run = ng_run_open(id);
   if (run) {
     seq = run->seq;

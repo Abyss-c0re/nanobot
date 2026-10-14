@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 static int fails;
@@ -135,6 +136,46 @@ static void test_control(void) {
          "status alive");
   expect(status && strstr(status, "local-model") && strstr(status, "1234"), "status shows limits");
   free(status);
+  {
+    pid_t z;
+    int st = 0;
+    char mp[700];
+    FILE *mf;
+    z = fork();
+    expect(z >= 0, "zombie fork");
+    if (z == 0) _exit(0);
+    if (z > 0) {
+      int spun = 0;
+      while (spun < 50) {
+        char sb[256];
+        FILE *sf;
+        char *rp;
+        snprintf(mp, sizeof mp, "/proc/%d/stat", (int)z);
+        sf = fopen(mp, "r");
+        if (!sf) break;
+        rp = fgets(sb, sizeof sb, sf) ? strrchr(sb, ')') : NULL;
+        fclose(sf);
+        if (rp && rp[1] == ' ' && rp[2] == 'Z') break;
+        usleep(1000);
+        spun++;
+      }
+      snprintf(mp, sizeof mp, "%s/runs/%s/meta.json", ng_workdir(), id);
+      mf = fopen(mp, "w");
+      expect(mf != NULL, "zombie meta");
+      if (mf) {
+        fprintf(mf,
+                "{\"schema\":\"nanobot.run.v1\",\"ok\":true,\"action\":\"run\","
+                "\"id\":\"%s\",\"status\":\"running\",\"pid\":%d,\"error\":\"\","
+                "\"python\":0}\n",
+                id, (int)z);
+        fclose(mf);
+      }
+      status = ng_run_status_json(id);
+      expect(status && strstr(status, "\"alive\":false"), "zombie is not alive");
+      free(status);
+      waitpid(z, &st, 0);
+    }
+  }
   lines = 0;
   expect(ng_run_tail(id, 0, 0, on_line, &lines) >= 1, "tail reads one pass");
   expect(ng_run_finish(run, "aborted", "aborted") == 0, "finish");
