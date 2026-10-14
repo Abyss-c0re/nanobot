@@ -401,6 +401,23 @@ int ng_run_emit(ng_run *run, const char *kind, const char *name, const char *tex
   return rc;
 }
 
+int ng_run_flush(ng_run *run) {
+  char *tail = NULL;
+  int rc;
+  if (!run) return -1;
+  load_filter(run);
+  rc = ng_stream_filter_flush(run->filter, "token", run->token_carry, &run->token_n,
+                             RUN_CARRY, &tail);
+  if (rc == 1 && tail && tail[0]) append_event(run, "token", "", tail);
+  free(tail);
+  tail = NULL;
+  rc = ng_stream_filter_flush(run->filter, "thinking", run->think_carry,
+                             &run->think_n, RUN_CARRY, &tail);
+  if (rc == 1 && tail && tail[0]) append_event(run, "thinking", "", tail);
+  free(tail);
+  return 0;
+}
+
 static int read_control(const ng_run *run, char *buf, size_t n) {
   char path[700];
   FILE *fp;

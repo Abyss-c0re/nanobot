@@ -51,6 +51,9 @@ int ng_run_mark_running(ng_run *run);
  */
 int ng_run_emit(ng_run *run, const char *kind, const char *name, const char *text);
 
+/* Write a held token or thinking prefix as its own event. */
+int ng_run_flush(ng_run *run);
+
 /* 0 continue, 1 abort, 2 still paused, 3 intercept text is waiting.
  * wait_ms 0 checks once. wait_ms < 0 waits until the run is not paused.
  * Abort wins over intercept. Intercept wins over pause.

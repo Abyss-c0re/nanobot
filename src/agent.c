@@ -6,6 +6,7 @@
 #include "task.h"
 #include "util.h"
 #include "wire_compat.h"
+#include "runctl.h"
 #include "provider.h"
 #include "ng_sched.h"
 #include "subagent.h"
@@ -14,9 +15,31 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+
+/* Restored on every return from ng_agent_run_attachments. */
+static ng_run *g_live;
+static int g_stream_cut;
+static int g_live_streamed;
+
+static void live_restore(ng_run **slot) { g_live = slot ? *slot : NULL; }
+
+/* 0 continue, 1 abort, 3 intercept. Pause waits here. */
+static int ng_agent_live_cut(void) {
+  int p;
+  if (!g_live) return 0;
+  p = ng_run_poll(g_live, 0);
+  if (p == 2) p = ng_run_poll(g_live, -1);
+  return p;
+}
+
+static char *abort_plate(void) {
+  return strdup("{\"schema\":\"nanobot.run.v1\",\"ok\":false,"
+                "\"error\":\"aborted\",\"python\":0}");
+}
 
 /* Nested subagent workers: no further spawning (keep robot light). */
 static char *subagent_run_adapter(void *cfg, const char *prompt) {
@@ -69,6 +92,29 @@ void ng_agent_cfg_init(ng_agent_cfg *c) {
   c->model = strdup(NG_DEFAULT_MODEL);
   c->max_turns = ng_max_turns();
   c->timeout_sec = ng_cmd_timeout_sec();
+  c->compact_keep_head = -1;
+  c->compact_shrink_at = 1800;
+  c->compact_max_refills = 3;
+  c->compact_keep_tail = 2;
+}
+
+static int env_int(const char *env_path, const char *key, int *out) {
+  char *v = NULL;
+  int set = 0;
+  if (!out || !key) return 0;
+  if (env_path) v = ng_slurp_env_file(env_path, key);
+  if (v && v[0]) {
+    *out = atoi(v);
+    set = 1;
+  }
+  free(v);
+  v = ng_getenv_dup(key);
+  if (v && v[0]) {
+    *out = atoi(v);
+    set = 1;
+  }
+  free(v);
+  return set;
 }
 
 void ng_agent_cfg_free(ng_agent_cfg *c) {
@@ -102,6 +148,37 @@ void ng_agent_load_env(ng_agent_cfg *c, const char *env_path) {
       c->reasoning_effort = NULL;
     }
     free(e2);
+  }
+  {
+    int v = 0;
+    int refills = 0, tail = 0;
+    int refills_set, tail_set;
+    if (env_int(env_path, "NANOBOT_MAX_TOKENS", &v)) {
+      if (v < 0) v = 0;
+      if (v > 128000) v = 128000;
+      c->max_tokens = v;
+    }
+    if (env_int(env_path, "NANOBOT_CONTEXT_TOKENS", &v)) {
+      if (v < 0) v = 0;
+      c->context_tokens = v;
+    }
+    refills_set = env_int(env_path, "NANOBOT_COMPACT_REFILLS", &refills);
+    tail_set = env_int(env_path, "NANOBOT_COMPACT_KEEP_TAIL", &tail);
+    if (refills_set || tail_set) {
+      c->compact_explicit = 1;
+      if (refills_set) {
+        if (refills < 0) refills = 0;
+        if (refills > 8) refills = 8;
+        c->compact_max_refills = refills;
+      } else if (c->compact_max_refills <= 0) {
+        c->compact_max_refills = 3;
+      }
+      if (tail_set) {
+        if (tail < 1) tail = 1;
+        if (tail > 8) tail = 8;
+        c->compact_keep_tail = tail;
+      }
+    }
   }
 }
 
@@ -669,7 +746,8 @@ static char *stream_dedupe_final(char *acc) {
   return acc;
 }
 
-static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
+static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud,
+                                  pid_t curl_pid) {
   char *acc = strdup("");
   size_t acc_len = 0;
   size_t n_events = 0;
@@ -679,6 +757,7 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
   /* Hard caps: runaway proxies / model loops must not spam UI or pin llama. */
   const size_t MAX_EVENTS = 8000;
   const size_t MAX_EMITS = 4000;
+  g_stream_cut = 0;
   if (!acc) return NULL;
   char line[8192];
   while (fgets(line, sizeof line, fp)) {
@@ -687,7 +766,13 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
     int is_snapshot = 0;
     size_t pl, al;
     const char *emit = NULL;
+    int cutc = ng_agent_live_cut();
 
+    if (cutc == 1 || cutc == 3) {
+      g_stream_cut = cutc;
+      if (curl_pid > 0) kill(curl_pid, SIGTERM);
+      break;
+    }
     if (spam_stop) {
       /* Drain remainder of SSE without emitting — free llama sooner. */
       continue;
@@ -732,6 +817,9 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
         const char *st = getenv("NANOBOT_SHOW_THINKING");
         int show = st && (st[0] == '1' || st[0] == 'y' || st[0] == 'Y' ||
                           st[0] == 't');
+        if (g_live) {
+          if (ng_run_emit(g_live, "thinking", "", think) > 0) g_live_streamed = 1;
+        }
         if (show) {
           char *esc = ng_json_escape(think);
           char *ev = NULL;
@@ -854,11 +942,16 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
       free(piece);
       break;
     }
-    if (on_delta) on_delta(ud, emit, pl);
+    if (g_live) {
+      if (ng_run_emit(g_live, "token", "", emit) > 0) g_live_streamed = 1;
+    } else if (on_delta) {
+      on_delta(ud, emit, pl);
+    }
     {
       char *n = realloc(acc, acc_len + pl + 1);
       if (!n) {
         free(piece);
+        if (g_live && g_stream_cut == 0) ng_run_flush(g_live);
         return stream_dedupe_final(acc);
       }
       memcpy(n + acc_len, emit, pl + 1);
@@ -873,6 +966,7 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
       spam_stop = 1;
     }
   }
+  if (g_live && g_stream_cut == 0) ng_run_flush(g_live);
   return stream_dedupe_final(acc);
 }
 
@@ -880,6 +974,7 @@ static char *consume_sse_stream(FILE *fp, ng_stream_fn on_delta, void *ud) {
  * fleet/hub peers cannot stampede llama while tokens are in flight. */
 static char *curl_post_json_stream(const char *url, const char *bearer, const char *body,
                                    ng_stream_fn on_delta, void *ud) {
+  g_stream_cut = 0;
   ng_llm_sched_acquire();
 
   char tmpl[640];
@@ -972,13 +1067,31 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   FILE *fp = fdopen(pipefd[0], "r");
   char *acc = NULL;
   if (fp) {
-    acc = consume_sse_stream(fp, on_delta, ud);
+    acc = consume_sse_stream(fp, on_delta, ud, p2);
     fclose(fp);
   } else {
     close(pipefd[0]);
   }
   int st = 0;
-  if (waitpid(p2, &st, 0) < 0) {
+  if (g_stream_cut) {
+    int i, reaped = 0;
+    for (i = 0; i < 25; i++) {
+      if (waitpid(p2, &st, WNOHANG) != 0) {
+        reaped = 1;
+        break;
+      }
+      usleep(20000);
+    }
+    if (!reaped) {
+      kill(p2, SIGKILL);
+      if (waitpid(p2, &st, 0) < 0) {
+        unlink(tmpl);
+        free(acc);
+        ng_llm_sched_release();
+        return g_stream_cut == 1 ? abort_plate() : NULL;
+      }
+    }
+  } else if (waitpid(p2, &st, 0) < 0) {
     unlink(tmpl);
     free(acc);
     ng_llm_sched_release();
@@ -986,6 +1099,10 @@ static char *curl_post_json_stream(const char *url, const char *bearer, const ch
   }
   unlink(tmpl);
   ng_llm_sched_release();
+  if (g_stream_cut == 1) {
+    free(acc);
+    return abort_plate();
+  }
   if (!acc || !acc[0]) {
     free(acc);
     /* fallback: empty stream — caller may retry non-stream */
@@ -1351,7 +1468,7 @@ static char *run_shell_direct(ng_agent_cfg *c, const char *cmd) {
 static char *compact_stop_plate(int refills) {
   char *s = NULL;
   if (refills < 0) refills = 0;
-  if (refills > 3) refills = 3;
+  if (refills > 8) refills = 8;
   if (asprintf(&s,
                "{\"schema\":\"nanobot.compact.v1\",\"ok\":false,"
                "\"error\":\"compact_stop\",\"refills\":%d,\"python\":0}",
@@ -1361,17 +1478,136 @@ static char *compact_stop_plate(int refills) {
   return s;
 }
 
+/* Historical callers stay at 3. Explicit 0 disables another refill. */
+static int compact_limit(const ng_agent_cfg *c) {
+  int n;
+  if (!c || !c->compact_explicit) return 3;
+  if (c->compact_max_refills <= 0) return 0;
+  n = c->compact_max_refills;
+  if (n > 8) n = 8;
+  return n;
+}
+
+static void compact_policy_fill(const ng_agent_cfg *c, ng_compact_policy *pol,
+                                int refill) {
+  int lim = compact_limit(c);
+  memset(pol, 0, sizeof *pol);
+  pol->refill = refill < 1 ? 1 : refill;
+  if (!c || !c->compact_explicit) {
+    pol->max_refills = 3;
+    pol->keep_tail = 2;
+    pol->keep_head = -1;
+    pol->shrink_at = 1800;
+    return;
+  }
+  pol->max_refills = lim > 0 ? lim : 1;
+  pol->keep_tail = c->compact_keep_tail;
+  pol->keep_head = c->compact_keep_head;
+  pol->shrink_at = c->compact_shrink_at;
+}
+
+static int reply_max_tokens(const ng_agent_cfg *c, const char *user_prompt) {
+  int max_tok;
+  size_t upl;
+  if (c && c->max_tokens > 0) {
+    max_tok = c->max_tokens;
+    if (max_tok > 128000) max_tok = 128000;
+    return max_tok;
+  }
+  max_tok = 2048;
+  upl = user_prompt ? strlen(user_prompt) : 0;
+  if (upl > 0 && upl < 48) max_tok = 512;
+  else if (upl < 200) max_tok = 1024;
+  return max_tok;
+}
+
+static int append_role_text(char **messages, const char *role, const char *text) {
+  char *esc;
+  char *nmsg = NULL;
+  size_t ml;
+  if (!messages || !*messages || !role) return -1;
+  ml = strlen(*messages);
+  if (ml && (*messages)[ml - 1] == ']') (*messages)[ml - 1] = 0;
+  esc = ng_json_escape(text ? text : "");
+  if (asprintf(&nmsg, "%s,{\"role\":\"%s\",\"content\":\"%s\"}]",
+               *messages, role, esc ? esc : "") < 0)
+    nmsg = NULL;
+  free(esc);
+  if (!nmsg) return -1;
+  free(*messages);
+  *messages = nmsg;
+  return 0;
+}
+
+static void live_emit_text(ng_run *run, const char *text) {
+  const char *p;
+  if (!run || !text || !text[0]) return;
+  for (p = text; *p;) {
+    size_t n = 0;
+    char tmp[241];
+    while (p[n] && n < 240) n++;
+    memcpy(tmp, p, n);
+    tmp[n] = 0;
+    if (ng_run_emit(run, "token", "", tmp) > 0) g_live_streamed = 1;
+    p += n;
+  }
+  ng_run_flush(run);
+}
+
 /* 1 = shrunk, retry this turn. -1 = stop. 0 = not a context-length error. */
-static int try_compact_retry(char **messages, int *refills, const char *resp) {
+static int try_compact_retry(const ng_agent_cfg *c, char **messages, int *refills,
+                             const char *resp) {
   char *shrunk;
+  ng_compact_policy pol;
+  char note[64];
+  int lim;
   if (!messages || !refills || !ng_resp_is_context_overflow(resp)) return 0;
-  if (*refills >= 3) return -1;
-  shrunk = ng_messages_compact(*messages, *refills + 1);
-  if (!shrunk) return -1;
+  lim = compact_limit(c);
+  if (*refills >= lim) {
+    if (g_live) ng_run_emit(g_live, "compact", "", "stop");
+    return -1;
+  }
+  compact_policy_fill(c, &pol, *refills + 1);
+  shrunk = ng_messages_compact_ex(*messages, &pol);
+  if (!shrunk) {
+    if (g_live) ng_run_emit(g_live, "compact", "", "stop");
+    return -1;
+  }
   free(*messages);
   *messages = shrunk;
   (*refills)++;
+  snprintf(note, sizeof note, "refill %d", *refills);
+  if (g_live) ng_run_emit(g_live, "compact", "", note);
   ng_log("agent: context overflow compact refill %d", *refills);
+  return 1;
+}
+
+/* 1 = shrunk once. -1 = over the context estimate and refills are exhausted.
+ * 0 = nothing to do, or this array cannot get smaller. */
+static int maybe_preempt_compact(ng_agent_cfg *c, char **messages, int *refills) {
+  ng_compact_policy pol;
+  char *shrunk;
+  char note[64];
+  size_t est;
+  int lim;
+  if (!c || !messages || !*messages || !refills) return 0;
+  if (!c->compact_preemptive || c->context_tokens <= 0) return 0;
+  est = strlen(*messages) / 4;
+  if (est <= (size_t)c->context_tokens) return 0;
+  lim = compact_limit(c);
+  if (lim <= 0 || *refills >= lim) {
+    if (g_live) ng_run_emit(g_live, "compact", "", "stop");
+    return -1;
+  }
+  compact_policy_fill(c, &pol, *refills + 1);
+  shrunk = ng_messages_compact_ex(*messages, &pol);
+  if (!shrunk) return 0;
+  free(*messages);
+  *messages = shrunk;
+  (*refills)++;
+  snprintf(note, sizeof note, "preemptive %d", *refills);
+  if (g_live) ng_run_emit(g_live, "compact", "", note);
+  ng_log("agent: preemptive compact refill %d est=%zu", *refills, est);
   return 1;
 }
 
@@ -1396,6 +1632,8 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                                const char *image_b64, const char *image_mime,
                                const char *images_json,
                                int stream_final, ng_stream_fn on_delta, void *userdata) {
+  ng_run *saved_live __attribute__((cleanup(live_restore), unused)) = g_live;
+  g_live = c ? c->live : NULL;
   int has_image = (image_b64 && image_b64[0])
                || (images_json && images_json[0] == '[' && strstr(images_json, "base64"));
   if ((!user_prompt || !user_prompt[0]) && !has_image) {
@@ -1407,7 +1645,13 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
 
   /* Direct shell: @! command  (offline, no LLM, works without an LLM) */
   if (!has_image && strncmp(user_prompt, "@!", 2) == 0) {
+    if (g_live) ng_run_emit(g_live, "tool_call", "shell", user_prompt + 2);
     char *r = run_shell_direct(c, user_prompt + 2);
+    if (g_live) {
+      ng_run_emit(g_live, "tool_result", "shell", r ? r : "");
+      ng_run_note_code(g_live, "shell", user_prompt + 2, r);
+      g_live_streamed = 1;
+    }
     /* lightweight memory of shell for context */
     if (r) ng_memory_record_exchange(user_prompt, r);
     return r;
@@ -1706,6 +1950,25 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     ng_log("agent: reasoning_effort=%s", c->reasoning_effort);
 
   for (int turn = 0; turn < max_turns; turn++) {
+    {
+      int cut = ng_agent_live_cut();
+      if (g_live) ng_run_apply(c, g_live);
+      if (cut == 1) {
+        ng_run_emit(g_live, "abort", "", "aborted");
+        free(messages); free(last_tool_out); free(tools); free(mem_user);
+        return abort_plate();
+      }
+      if (cut == 3 && g_live) {
+        char *note = ng_run_take_intercept(g_live);
+        ng_run_emit(g_live, "intercept", "", note ? note : "");
+        if (append_role_text(&messages, "user", note ? note : "") != 0) {
+          free(note);
+          free(messages); free(last_tool_out); free(tools); free(mem_user);
+          return strdup("oom building messages");
+        }
+        free(note);
+      }
+    }
     if (grok) {
       if (ng_session_ensure(c->session) != 0) {
         free(messages); free(last_tool_out); free(tools); free(mem_user);
@@ -1744,14 +2007,23 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     int tools_now = use_tools && (turn < max_turns - 1 || (open_task && turn < hard_max - 1));
     if (open_task && turn >= hard_max - 1)
       tools_now = 0; /* forced stop approaching hard ceiling */
+    while (messages) {
+      int pr = maybe_preempt_compact(c, &messages, &compact_refills);
+      if (pr < 0) {
+        free(messages); free(last_tool_out); free(tools); free(mem_user);
+        return compact_stop_plate(compact_refills);
+      }
+      if (pr == 0) break;
+    }
     char *body = NULL;
     if (tools_now) {
       {
         char *ef = effort_json_frag(c, grok);
+        int tool_tok = (c && c->max_tokens > 0) ? reply_max_tokens(c, user_prompt) : 768;
         asprintf(&body,
           "{\"model\":\"%s\"%s,\"messages\":%s,\"tools\":%s,\"tool_choice\":\"auto\","
-          "\"stream\":false,\"max_tokens\":768}",
-          c->model, ef ? ef : "", messages, tools);
+          "\"stream\":false,\"max_tokens\":%d}",
+          c->model, ef ? ef : "", messages, tools, tool_tok);
         free(ef);
       }
     } else {
@@ -1770,14 +2042,11 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         free(esc);
         free(plate);
       }
-      int want_stream = stream_final && on_delta;
+      int want_stream = (stream_final && on_delta) || g_live;
       /* Cap completion length so a looping local model cannot pin llama forever.
-       * Short social prompts get a tighter cap. */
+       * Short social prompts get a tighter cap. An explicit max_tokens wins. */
       {
-        int max_tok = 2048;
-        size_t upl = user_prompt ? strlen(user_prompt) : 0;
-        if (upl > 0 && upl < 48) max_tok = 512;
-        else if (upl < 200) max_tok = 1024;
+        int max_tok = reply_max_tokens(c, user_prompt);
         {
           char *ef = effort_json_frag(c, grok);
           asprintf(&body,
@@ -1791,7 +2060,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     char url[512];
     snprintf(url, sizeof url, "%s/chat/completions", c->base_url);
 
-    int want_stream = stream_final && !tools_now && on_delta;
+    /* A live run streams into the event log even when the HTTP caller
+     * did not ask for chat SSE. */
+    int want_stream = (stream_final && !tools_now && on_delta) ||
+                      (g_live && !tools_now);
     int live_streamed = 0; /* set if SSE tokens already went to on_delta this turn */
     ng_log("agent: turn %d/%d POST %s tools=%d stream=%d",
            turn + 1, max_turns, url, tools_now, want_stream);
@@ -1801,8 +2073,36 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       char *streamed = curl_post_json_stream(url, bearer, body, on_delta, userdata);
       free(body);
       body = NULL;
+      if (g_stream_cut == 1) {
+        free(streamed);
+        free(messages); free(last_tool_out); free(tools); free(mem_user);
+        if (g_live) ng_run_emit(g_live, "abort", "", "aborted");
+        return abort_plate();
+      }
+      if (g_stream_cut == 3) {
+        char *note = g_live ? ng_run_take_intercept(g_live) : NULL;
+        if (g_live) {
+          ng_run_flush(g_live);
+          ng_run_emit(g_live, "intercept", "", note ? note : "");
+        }
+        if (streamed && streamed[0] &&
+            append_role_text(&messages, "assistant", streamed) != 0) {
+          free(note); free(streamed);
+          free(messages); free(last_tool_out); free(tools); free(mem_user);
+          return strdup("oom building messages");
+        }
+        if (append_role_text(&messages, "user", note ? note : "") != 0) {
+          free(note); free(streamed);
+          free(messages); free(last_tool_out); free(tools); free(mem_user);
+          return strdup("oom building messages");
+        }
+        free(note);
+        free(streamed);
+        g_stream_cut = 0;
+        continue;
+      }
       if (streamed && streamed[0]) {
-        int cr = try_compact_retry(&messages, &compact_refills, streamed);
+        int cr = try_compact_retry(c, &messages, &compact_refills, streamed);
         if (cr == 1) {
           free(streamed);
           turn--;
@@ -1828,9 +2128,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       free(streamed);
       {
         char *ef = effort_json_frag(c, grok);
+        int max_tok = reply_max_tokens(c, user_prompt);
         asprintf(&body,
-          "{\"model\":\"%s\"%s,\"messages\":%s,\"stream\":false}",
-          c->model, ef ? ef : "", messages);
+          "{\"model\":\"%s\"%s,\"messages\":%s,\"stream\":false,\"max_tokens\":%d}",
+          c->model, ef ? ef : "", messages, max_tok);
         free(ef);
       }
       ng_log("agent: stream empty — fallback non-stream");
@@ -1899,7 +2200,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         continue;
       }
       {
-        int cr = try_compact_retry(&messages, &compact_refills, resp);
+        int cr = try_compact_retry(c, &messages, &compact_refills, resp);
         if (cr == 1) {
           free(resp);
           turn--;
@@ -1927,9 +2228,20 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
                     "\"error\":\"api_error\",\"python\":0}");
     }
 
+    {
+      int cut = ng_agent_live_cut();
+      if (cut == 1) {
+        free(resp);
+        free(messages); free(last_tool_out); free(tools); free(mem_user);
+        if (g_live) ng_run_emit(g_live, "abort", "", "aborted");
+        return abort_plate();
+      }
+    }
+
     char *tname = NULL, *targs = NULL, *tid = NULL;
     if (tools_now && ng_json_first_tool_call(resp, &tname, &targs, &tid)) {
       ng_log("agent: tool %s id=%s args=%.200s", tname, tid, targs);
+      if (g_live) ng_run_emit(g_live, "tool_call", tname, targs ? targs : "");
       /* Live tool tracking for streaming clients (spoiler UI) */
       if (stream_final && on_delta) {
         char *ea = ng_json_escape(targs ? targs : "");
@@ -2051,6 +2363,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
       free(last_tool_out);
       /* Dual-wire tool body — keep existing plates; wrap free-text shell only. */
       last_tool_out = ng_tool_result_body(cr.exit_code, cr.output);
+      if (g_live) {
+        ng_run_emit(g_live, "tool_result", tname, last_tool_out ? last_tool_out : "");
+        ng_run_note_code(g_live, tname, targs, cr.output);
+      }
       /* Cap what the model sees (keep head+tail of large dumps) */
       char *tool_for_model = NULL;
       {
@@ -2136,6 +2452,7 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
           parse_content_tool_cosplay(final, &cos_name, &cos_cmd)) {
         ng_log("agent: COSPLAY tool in content (not API tool_calls) name=%s cmd=%.200s",
                cos_name, cos_cmd);
+        if (g_live) ng_run_emit(g_live, "tool_call", cos_name, cos_cmd ? cos_cmd : "");
         if (stream_final && on_delta) {
           char *ev = NULL;
           char *en = ng_json_escape(cos_name);
@@ -2168,6 +2485,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         free(last_tool_out);
         /* Dual-wire recovered tool body — no free-text exit=N / cosplay essay. */
         last_tool_out = ng_tool_result_body(cr.exit_code, cr.output);
+        if (g_live) {
+          ng_run_emit(g_live, "tool_result", cos_name, last_tool_out ? last_tool_out : "");
+          ng_run_note_code(g_live, cos_name, cos_cmd, cr.output);
+        }
         if (stream_final && on_delta) {
           char out_cap[900];
           snprintf(out_cap, sizeof out_cap, "%.800s", last_tool_out ? last_tool_out : "");
@@ -2249,8 +2570,10 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
         continue;
       }
       /* Non-stream completion still feeds SSE clients (tools turns, or empty
-       * upstream stream fallback) so the UI can type/render progressively. */
-      if (stream_final && on_delta && !live_streamed) {
+       * upstream stream fallback) so the UI can type/render progressively.
+       * A live run records the same text through the output filter. */
+      if (g_live && !live_streamed) live_emit_text(g_live, final);
+      if (stream_final && on_delta && !live_streamed && !g_live) {
         const char *p = final;
         size_t total = 0;
         while (*p) {
@@ -2307,8 +2630,95 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     ng_memory_record_exchange(mem_user ? mem_user : user_prompt, final);
   }
   ng_log("agent: final: %.300s", final);
+  if (g_live && !g_live_streamed && final && final[0] && !strstr(final, "\"ok\":false"))
+    live_emit_text(g_live, final);
   free(mem_user);
   return final;
+}
+
+int ng_run_apply(ng_agent_cfg *c, const ng_run *run) {
+  ng_run_limits lim;
+  if (!c || !run) return -1;
+  if (ng_run_load_limits(run, &lim) != 0) return -1;
+  if (lim.model[0]) {
+    char *m = strdup(lim.model);
+    if (m) {
+      free(c->model);
+      c->model = m;
+    }
+  }
+  if (lim.has_effort) {
+    if (!lim.effort[0]) {
+      free(c->reasoning_effort);
+      c->reasoning_effort = NULL;
+    } else if (ng_agent_set_reasoning_effort(c, lim.effort) != 0) {
+      return -1;
+    }
+  }
+  if (lim.max_tokens < 0) lim.max_tokens = 0;
+  if (lim.max_tokens > 128000) lim.max_tokens = 128000;
+  c->max_tokens = lim.max_tokens;
+  if (lim.context_tokens < 0) lim.context_tokens = 0;
+  c->context_tokens = lim.context_tokens;
+  c->compact_max_refills = lim.compact_max_refills;
+  c->compact_keep_tail = lim.compact_keep_tail;
+  c->compact_keep_head = lim.compact_keep_head;
+  c->compact_shrink_at = lim.compact_shrink_at;
+  c->compact_preemptive = lim.compact_preemptive ? 1 : 0;
+  c->compact_explicit = lim.compact_explicit ? 1 : 0;
+  return 0;
+}
+
+char *ng_run_execute(ng_agent_cfg *c, const char *id) {
+  ng_run *run;
+  char *prompt;
+  char *reply;
+  if (!c || !id) return NULL;
+  run = ng_run_open(id);
+  if (!run) {
+    return strdup("{\"schema\":\"nanobot.run.v1\",\"ok\":false,"
+                  "\"error\":\"run_not_found\",\"python\":0}");
+  }
+  prompt = ng_run_prompt(run);
+  if (!prompt || !prompt[0]) {
+    ng_run_finish(run, "error", "need_prompt");
+    ng_run_close(run);
+    free(prompt);
+    return strdup("{\"schema\":\"nanobot.run.v1\",\"ok\":false,"
+                  "\"error\":\"need_prompt\",\"python\":0}");
+  }
+  if (ng_run_mark_running(run) != 0) {
+    free(prompt);
+    ng_run_finish(run, "error", "meta_write");
+    ng_run_close(run);
+    return strdup("{\"schema\":\"nanobot.run.v1\",\"ok\":false,"
+                  "\"error\":\"meta_write\",\"python\":0}");
+  }
+  c->live = run;
+  g_live_streamed = 0;
+  ng_run_apply(c, run);
+  ng_run_emit(run, "status", "", "running");
+  reply = ng_agent_run(c, prompt);
+  ng_run_flush(run);
+  if (!reply) {
+    ng_run_finish(run, "error", "no_reply");
+    reply = strdup("{\"schema\":\"nanobot.run.v1\",\"ok\":false,"
+                   "\"error\":\"no_reply\",\"python\":0}");
+  } else if (strstr(reply, "\"error\":\"aborted\"")) {
+    ng_run_finish(run, "aborted", "aborted");
+  } else if (strstr(reply, "\"ok\":false")) {
+    char *err = ng_json_get_string(reply, "error");
+    ng_run_finish(run, "error", err ? err : "agent_error");
+    free(err);
+  } else {
+    if (!g_live_streamed) live_emit_text(run, reply);
+    ng_run_emit(run, "done", "", "");
+    ng_run_finish(run, "done", "");
+  }
+  c->live = NULL;
+  ng_run_close(run);
+  free(prompt);
+  return reply;
 }
 
 /* Build compact User:/Agent: transcript from memory/recent.jsonl (newest last).

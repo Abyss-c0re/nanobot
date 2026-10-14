@@ -1,3 +1,4 @@
+#include "agent.h"
 #include "runctl.h"
 #include "util.h"
 
@@ -66,6 +67,8 @@ static void test_control(void) {
   free(prompt);
   expect(ng_run_emit(run, "token", "", "alpha sekret beta") == 1, "token emitted");
   expect(ng_run_emit(run, "token", "", "see DROPME") == 0, "drop suppresses the chunk");
+  expect(ng_run_emit(run, "token", "", "sekr") == 1, "needle prefix is held");
+  expect(ng_run_flush(run) == 0, "flush held prefix");
   expect(ng_run_emit(run, "thinking", "", "hidden") == 0, "thinking kind dropped");
   expect(ng_run_emit(run, "tool_call", "shell", "{\"command\":\"echo hi\"}") == 1, "tool call");
   expect(ng_run_note_code(run, "shell", "echo hi", "hello") == 0, "plain output is not a change");
@@ -73,6 +76,7 @@ static void test_control(void) {
          "diff output is a code change");
   events = ng_run_events_json(id, -1, 20);
   expect(events && strstr(events, "alpha *** beta"), "redact reached the log");
+  expect(events && strstr(events, "sekr"), "flush wrote the held prefix");
   expect(events && !strstr(events, "sekret"), "raw needle stays out of the log");
   expect(events && !strstr(events, "DROPME"), "dropped chunk stays out of the log");
   expect(events && strstr(events, "\"kind\":\"tool_call\""), "tool call recorded");
@@ -109,6 +113,19 @@ static void test_control(void) {
   expect(lim.max_tokens == 1234 && lim.context_tokens == 8000, "token caps");
   expect(lim.compact_explicit == 1 && lim.compact_max_refills == 4 && lim.compact_keep_tail == 3,
          "compact settings");
+  {
+    ng_agent_cfg cfg;
+    ng_agent_cfg_init(&cfg);
+    expect(ng_run_apply(&cfg, run) == 0, "apply limits");
+    expect(cfg.model && strcmp(cfg.model, "local-model") == 0, "apply model");
+    expect(cfg.reasoning_effort && strcmp(cfg.reasoning_effort, "xhigh") == 0, "apply effort");
+    expect(cfg.max_tokens == 1234 && cfg.context_tokens == 8000, "apply tokens");
+    expect(cfg.compact_explicit == 1 && cfg.compact_max_refills == 4 &&
+               cfg.compact_keep_tail == 3 && cfg.compact_keep_head == 1 &&
+               cfg.compact_preemptive == 1,
+           "apply compact");
+    ng_agent_cfg_free(&cfg);
+  }
   lim.has_effort = 1;
   snprintf(lim.effort, sizeof lim.effort, "bad token");
   expect(ng_run_set_limits(id, &lim) != 0, "bad effort rejected");

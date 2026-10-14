@@ -2,6 +2,8 @@
 #define NANOBOT_AGENT_H
 #include "auth.h"
 
+typedef struct ng_run ng_run;
+
 typedef struct {
   ng_session *session; /* not owned */
   char *base_url;
@@ -11,6 +13,20 @@ typedef struct {
   /* Grok only. Canonical token (low|medium|high|xhigh or another catalog id).
    * NULL omits reasoning_effort. */
   char *reasoning_effort;
+  /* File-backed async run. Not owned. NULL on a normal chat turn. */
+  ng_run *live;
+  /* 0 keeps the prompt-length completion cap. Otherwise clamped to 1..128000. */
+  int max_tokens;
+  /* 0 disables preemptive compaction. Estimate is strlen(messages) / 4. */
+  int context_tokens;
+  int compact_max_refills;
+  int compact_keep_tail;
+  /* -1 uses the historical head schedule. 0 or 1 forces it when explicit. */
+  int compact_keep_head;
+  int compact_shrink_at;
+  int compact_preemptive;
+  /* 0 keeps the historical 3-refill compact. 1 uses the fields above. */
+  int compact_explicit;
 } ng_agent_cfg;
 
 void ng_agent_cfg_init(ng_agent_cfg *c);
@@ -80,6 +96,14 @@ void ng_agent_apply_provider_policy(ng_agent_cfg *c);
 /* Spawn light subagent sharing this cfg's session; returns malloc'd id or NULL. */
 char *ng_agent_subagent_spawn(ng_agent_cfg *c, const char *type, const char *desc,
                               const char *prompt);
+
+/* Copy runs/<id>/config.json onto cfg. Does not write the env file.
+ * Returns 0, or -1 when the run is missing. */
+int ng_run_apply(ng_agent_cfg *c, const ng_run *run);
+
+/* Mark the run running and call ng_agent_run on its prompt.txt.
+ * Returns malloc'd assistant text, or an error plate. */
+char *ng_run_execute(ng_agent_cfg *c, const char *id);
 
 /* Grok Build x.ai/suggestPrompt: one-shot next-user-line prediction.
  * No tools. max_tokens 64. Returns malloc'd raw assistant text (or plate).
