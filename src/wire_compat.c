@@ -379,29 +379,52 @@ static char *compact_plate(int dropped, int truncated) {
   return s;
 }
 
-char *ng_messages_compact(const char *messages, int refill) {
+static void compact_normalize(const ng_compact_policy *in, ng_compact_policy *out) {
+  memset(out, 0, sizeof *out);
+  out->refill = (!in || in->refill < 1) ? 1 : in->refill;
+  out->max_refills = (!in || in->max_refills <= 0) ? 3 : in->max_refills;
+  if (out->max_refills > 8) out->max_refills = 8;
+  out->keep_tail = (!in || in->keep_tail <= 0) ? 2 : in->keep_tail;
+  if (out->keep_tail > 8) out->keep_tail = 8;
+  out->keep_head = in ? in->keep_head : -1;
+  out->shrink_at = (!in || in->shrink_at == 0) ? 1800 : in->shrink_at;
+}
+
+char *ng_messages_compact_ex(const char *messages, const ng_compact_policy *policy) {
+  ng_compact_policy pol;
   const char *p;
   char *head = NULL;
-  char *last[2] = {NULL, NULL};
+  char *last[8];
   int nlast = 0;
   int total = 0;
-  int keep_tail;
+  int tail_cap;
+  int use_tail;
   int keep_head;
+  int skip;
   int kept;
-  char *parts[6];
+  char *parts[12];
   int pn = 0;
   int dropped;
   char *plate = NULL;
   char *out;
   int i;
-  if (!messages || refill < 1) return NULL;
+  memset(last, 0, sizeof last);
+  compact_normalize(policy, &pol);
+  if (!messages) return NULL;
+  tail_cap = pol.keep_tail;
+  use_tail = tail_cap - (pol.refill - 1);
+  if (use_tail < 1) use_tail = 1;
+  if (pol.keep_head < 0)
+    keep_head = (pol.refill >= pol.max_refills) ? 0 : 1;
+  else
+    keep_head = pol.keep_head ? 1 : 0;
   p = skip_ws(messages);
   if (*p != '[') return NULL;
   p++;
   for (;;) {
     char *obj;
     p = skip_ws(p);
-    if (*p == ',' ) { p++; continue; }
+    if (*p == ',') { p++; continue; }
     if (*p == ']' || !*p) break;
     obj = take_object(&p);
     if (!obj) break;
@@ -410,45 +433,43 @@ char *ng_messages_compact(const char *messages, int refill) {
       head = obj;
       continue;
     }
-    if (nlast < 2) {
+    if (nlast < tail_cap) {
       last[nlast++] = obj;
       continue;
     }
     free(last[0]);
-    last[0] = last[1];
-    last[1] = obj;
+    memmove(last, last + 1, (size_t)(tail_cap - 1) * sizeof last[0]);
+    last[tail_cap - 1] = obj;
   }
   if (total <= 0 || !head) {
     free(head);
-    free(last[0]);
-    free(last[1]);
+    for (i = 0; i < nlast; i++) free(last[i]);
     return NULL;
   }
-  keep_tail = (refill <= 1) ? 2 : 1;
-  keep_head = (refill >= 3) ? 0 : 1;
-  if (keep_tail > nlast) keep_tail = nlast;
-  kept = (keep_head ? 1 : 0) + keep_tail;
+  if (use_tail > nlast) use_tail = nlast;
+  skip = nlast - use_tail;
+  kept = (keep_head ? 1 : 0) + use_tail;
   /* A lone prompt is the last object. Dropping it would leave only a plate. */
   if (kept <= 0) {
     free(head);
-    free(last[0]);
-    free(last[1]);
+    for (i = 0; i < nlast; i++) free(last[i]);
     return NULL;
   }
   if (kept >= total) {
     int shrunk = 0;
-    char *all[3];
+    char *all[9];
     int an = 0;
     all[an++] = head;
-    if (nlast > 0) all[an++] = last[0];
-    if (nlast > 1) all[an++] = last[1];
-    for (i = 0; i < an - 1; i++) {
-      if (strlen(all[i]) > 1800) {
-        char *rep = compact_plate(0, 1);
-        if (rep) {
-          free(all[i]);
-          all[i] = rep;
-          shrunk = 1;
+    for (i = 0; i < nlast && an < 9; i++) all[an++] = last[i];
+    if (pol.shrink_at > 0) {
+      for (i = 0; i < an - 1; i++) {
+        if ((int)strlen(all[i]) > pol.shrink_at) {
+          char *rep = compact_plate(0, 1);
+          if (rep) {
+            free(all[i]);
+            all[i] = rep;
+            shrunk = 1;
+          }
         }
       }
     }
@@ -456,9 +477,6 @@ char *ng_messages_compact(const char *messages, int refill) {
       for (i = 0; i < an; i++) free(all[i]);
       return NULL;
     }
-    head = all[0];
-    if (an > 1) last[0] = all[1];
-    if (an > 2) last[1] = all[2];
     out = join_msgs(all, an);
     for (i = 0; i < an; i++) free(all[i]);
     if (out && strlen(out) >= strlen(messages)) {
@@ -472,19 +490,13 @@ char *ng_messages_compact(const char *messages, int refill) {
   else free(head);
   plate = compact_plate(dropped, 0);
   if (!plate) {
-    free(last[0]);
-    free(last[1]);
+    for (i = 0; i < nlast; i++) free(last[i]);
     if (keep_head) free(parts[0]);
     return NULL;
   }
   parts[pn++] = plate;
-  if (keep_tail == 1) {
-    if (nlast == 2) free(last[0]);
-    parts[pn++] = nlast == 2 ? last[1] : last[0];
-  } else {
-    if (nlast > 0) parts[pn++] = last[0];
-    if (nlast > 1) parts[pn++] = last[1];
-  }
+  for (i = 0; i < skip; i++) free(last[i]);
+  for (i = skip; i < nlast; i++) parts[pn++] = last[i];
   out = join_msgs(parts, pn);
   for (i = 0; i < pn; i++) free(parts[i]);
   if (out && strlen(out) >= strlen(messages)) {
@@ -492,4 +504,15 @@ char *ng_messages_compact(const char *messages, int refill) {
     return NULL;
   }
   return out;
+}
+
+char *ng_messages_compact(const char *messages, int refill) {
+  ng_compact_policy pol;
+  memset(&pol, 0, sizeof pol);
+  pol.refill = refill;
+  pol.max_refills = 3;
+  pol.keep_tail = 2;
+  pol.keep_head = -1;
+  pol.shrink_at = 1800;
+  return ng_messages_compact_ex(messages, &pol);
 }

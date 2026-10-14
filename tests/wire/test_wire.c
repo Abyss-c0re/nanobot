@@ -210,6 +210,51 @@ static void test_compact(void) {
   }
 }
 
+static void test_compact_policy(void) {
+  char *parts[6];
+  char *joined = NULL;
+  char *out;
+  size_t total = 2;
+  int i;
+  ng_compact_policy pol;
+  char tag[8];
+  for (i = 0; i < 6; i++) {
+    snprintf(tag, sizeof tag, "M%dMARK", i);
+    parts[i] = one_msg(i % 2 ? "assistant" : "user", tag, 220);
+    total += parts[i] ? strlen(parts[i]) + 1 : 0;
+  }
+  joined = malloc(total + 8);
+  expect(joined && parts[0] && parts[5], "policy alloc");
+  if (joined && parts[0] && parts[1] && parts[2] && parts[3] && parts[4] && parts[5]) {
+    snprintf(joined, total + 8, "[%s,%s,%s,%s,%s,%s]",
+             parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
+    memset(&pol, 0, sizeof pol);
+    pol.refill = 1;
+    pol.max_refills = 3;
+    pol.keep_tail = 4;
+    pol.keep_head = -1;
+    pol.shrink_at = 1800;
+    out = ng_messages_compact_ex(joined, &pol);
+    expect(out && strstr(out, "M0MARK") && strstr(out, "M5MARK"), "wide tail keeps ends");
+    expect(out && strstr(out, "M2MARK") && !strstr(out, "M1MARK"), "wide tail drops the oldest middle");
+    expect(out && strlen(out) < strlen(joined), "wide tail shrinks");
+    free(out);
+    pol.refill = 3;
+    pol.max_refills = 5;
+    pol.keep_tail = 2;
+    out = ng_messages_compact_ex(joined, &pol);
+    expect(out && strstr(out, "M0MARK") && strstr(out, "M5MARK"), "later refill still keeps head");
+    expect(out && !strstr(out, "M4MARK"), "later refill keeps one tail");
+    free(out);
+    pol.refill = 5;
+    out = ng_messages_compact_ex(joined, &pol);
+    expect(out && strstr(out, "M5MARK") && !strstr(out, "M0MARK"), "last refill drops head");
+    free(out);
+  }
+  free(joined);
+  for (i = 0; i < 6; i++) free(parts[i]);
+}
+
 static void test_overflow(void) {
   expect(!ng_resp_is_context_overflow("the context window is fine"), "prose is not overflow");
   expect(!ng_resp_is_context_overflow(
@@ -283,6 +328,7 @@ int main(void) {
   test_truncate();
   test_pack();
   test_compact();
+  test_compact_policy();
   test_overflow();
   test_mcp_parse();
   if (fails) {

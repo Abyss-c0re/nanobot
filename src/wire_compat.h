@@ -21,8 +21,24 @@ char *ng_suggest_pack_turns(const char *const *roles, const char *const *texts, 
 /* 1 when a provider body is a context-length error. */
 int ng_resp_is_context_overflow(const char *resp);
 
-/* Shrink a chat messages JSON array. NULL when the array cannot get smaller.
- * refill is 1..3. Caller stops after three failed or exhausted refills. */
+/* Compaction policy. refill is the 1-based attempt.
+ * max_refills <= 0 means 3. keep_tail <= 0 means 2 (clamped to 1..8).
+ * keep_head < 0 drops the first message only on the last refill.
+ * keep_head 0 or 1 forces that choice on every refill.
+ * shrink_at == 0 means 1800. shrink_at < 0 does not replace long objects. */
+typedef struct ng_compact_policy {
+  int refill;
+  int max_refills;
+  int keep_tail;
+  int keep_head;
+  int shrink_at;
+} ng_compact_policy;
+
+/* Shrink a chat messages JSON array. NULL when the array cannot get smaller. */
+char *ng_messages_compact_ex(const char *messages, const ng_compact_policy *policy);
+
+/* Historical schedule: refill 1 keeps the head and the last 2, refill 2 keeps
+ * the head and the last 1, refill >= 3 keeps the last message only. */
 char *ng_messages_compact(const char *messages, int refill);
 
 /* structuredContent object/array when present, else NULL (caller keeps text). */
