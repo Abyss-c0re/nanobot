@@ -1,11 +1,16 @@
 #include "agent.h"
+#include "hub_local.h"
 #include "runctl.h"
 #include "util.h"
 
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -378,12 +383,101 @@ static void test_list_newest(void) {
   for (i = 0; i < 33; i++) free(ids[i]);
 }
 
+static int proc_children(pid_t pid) {
+  char path[64];
+  FILE *fp;
+  int n = 0;
+  int x;
+  snprintf(path, sizeof path, "/proc/%d/task/%d/children", (int)pid, (int)pid);
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (fscanf(fp, "%d", &x) == 1) n++;
+  fclose(fp);
+  return n;
+}
+
+static void test_hub_closed_client(void) {
+  char home[] = "/tmp/nanobot-hub-XXXXXX";
+  int port = -1;
+  int lfd;
+  int cfd = -1;
+  pid_t pid;
+  struct sockaddr_in addr;
+  socklen_t al = sizeof addr;
+  char req[] = "GET /hub/v1/events HTTP/1.1\r\nHost: loop\r\n\r\n";
+  char buf[1024];
+  int got = 0;
+  int i;
+  expect(mkdtemp(home) != NULL, "hub home");
+  ng_set_workdir(home);
+  lfd = socket(AF_INET, SOCK_STREAM, 0);
+  expect(lfd >= 0, "hub probe socket");
+  if (lfd < 0) return;
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = 0;
+  if (bind(lfd, (struct sockaddr *)&addr, sizeof addr) == 0 &&
+      getsockname(lfd, (struct sockaddr *)&addr, &al) == 0)
+    port = ntohs(addr.sin_port);
+  close(lfd);
+  expect(port > 0, "hub port");
+  if (port <= 0) return;
+  pid = fork();
+  expect(pid >= 0, "hub fork");
+  if (pid < 0) return;
+  if (pid == 0) {
+    ng_hub_out_cfg cfg;
+    setpgid(0, 0);
+    memset(&cfg, 0, sizeof cfg);
+    cfg.port_out = port;
+    ng_hub_out_serve(&cfg);
+    _exit(0);
+  }
+  setpgid(pid, pid);
+  for (i = 0; i < 50; i++) {
+    cfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (cfd < 0) break;
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons((uint16_t)port);
+    if (connect(cfd, (struct sockaddr *)&addr, sizeof addr) == 0) break;
+    close(cfd);
+    cfd = -1;
+    usleep(20000);
+  }
+  expect(cfd >= 0, "hub connect");
+  if (cfd >= 0) {
+    struct timeval tv;
+    tv.tv_sec = 2;
+    tv.tv_usec = 0;
+    setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    send(cfd, req, sizeof req - 1, 0);
+    while (got < (int)sizeof buf - 1) {
+      ssize_t r = recv(cfd, buf + got, sizeof buf - 1 - (size_t)got, 0);
+      if (r <= 0) break;
+      got += (int)r;
+      buf[got] = 0;
+      if (strstr(buf, "stream_open")) break;
+    }
+    expect(strstr(buf, "stream_open") != NULL, "hub stream opened");
+    expect(proc_children(pid) >= 1, "hub events child is running");
+    close(cfd);
+    sleep(2);
+    expect(proc_children(pid) == 0, "closed client ends the events child");
+  }
+  kill(-pid, SIGTERM);
+  waitpid(pid, NULL, 0);
+}
+
 int main(void) {
   test_routes();
   test_control();
   test_long_record();
   test_oversize_filter();
   test_list_newest();
+  test_hub_closed_client();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;

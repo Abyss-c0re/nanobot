@@ -130,15 +130,19 @@ static int client_loopback(int cfd) {
   return 0;
 }
 
-static void out_write(int fd, const char *s) {
-  if (!s) return;
-  size_t n = strlen(s);
+/* 0 when every byte was written. -1 when the client is gone. */
+static int out_write(int fd, const char *s) {
+  size_t n;
+  if (!s) return 0;
+  n = strlen(s);
   while (n) {
     ssize_t w = write(fd, s, n);
-    if (w <= 0) break;
+    if (w < 0 && errno == EINTR) continue;
+    if (w <= 0) return -1;
     s += w;
     n -= (size_t)w;
   }
+  return 0;
 }
 
 static void handle_out_client(int cfd, const char *expect_token) {
@@ -218,19 +222,21 @@ static void handle_out_client(int cfd, const char *expect_token) {
   }
 
   if (is_get && !strcmp(path, "/hub/v1/events")) {
-    out_write(cfd,
-      "HTTP/1.1 200 OK\r\n"
-      "Content-Type: text/event-stream\r\n"
-      "Cache-Control: no-cache\r\n"
-      "Connection: keep-alive\r\n\r\n");
-    /* Dual-wire SSE open plate — no free-text SSE comment essay. */
-    out_write(cfd,
-      "event: open\n"
-      "data: {\"schema\":\"nanobot.hub.v1\",\"ok\":true,\"action\":\"stream_open\","
-      "\"role\":\"out\","
-      "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
-      "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
-      "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n\n");
+    if (out_write(cfd,
+          "HTTP/1.1 200 OK\r\n"
+          "Content-Type: text/event-stream\r\n"
+          "Cache-Control: no-cache\r\n"
+          "Connection: keep-alive\r\n\r\n") != 0 ||
+        out_write(cfd,
+          "event: open\n"
+          "data: {\"schema\":\"nanobot.hub.v1\",\"ok\":true,\"action\":\"stream_open\","
+          "\"role\":\"out\","
+          "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
+          "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
+          "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}\n\n") != 0) {
+      close(cfd);
+      return;
+    }
 
     char path_ev[720];
     events_path(path_ev, sizeof path_ev);
@@ -247,16 +253,22 @@ static void handle_out_client(int cfd, const char *expect_token) {
           if (!L) continue;
           char frame[4300];
           snprintf(frame, sizeof frame, "data: %s\n\n", line);
-          out_write(cfd, frame);
+          if (out_write(cfd, frame) != 0) {
+            fclose(f);
+            close(cfd);
+            return;
+          }
         }
         offset = ftell(f);
         fclose(f);
       }
-      /* heartbeat */
-      out_write(cfd, ": ping\n\n");
+      /* A closed client must not keep this child until the hour cap. */
+      if (out_write(cfd, ": ping\n\n") != 0) {
+        close(cfd);
+        return;
+      }
       sleep(1);
       ticks++;
-      /* detect closed peer: try MSG_PEEK optional skip */
     }
     close(cfd);
     return;

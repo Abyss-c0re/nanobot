@@ -54,7 +54,7 @@ Tool rounds may still pause (tool call → run shell → continue); **final text
 **OUT**
 
 - `GET /hub/v1/health` — `{"ok":true,"role":"out"}`
-- `GET /hub/v1/events` — SSE (`text/event-stream`), tail of hub event log
+- `GET /hub/v1/events` — SSE (`text/event-stream`), tail of hub event log. The child stays while writes succeed, for at most one hour. A failed write ends that child.
 - `GET /hub/v1/events?since=N` — resume
 
 ## Flags / env
