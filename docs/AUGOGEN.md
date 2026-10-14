@@ -32,11 +32,12 @@ POST /peer/v1/augogen
 
 The ranker holds eight concepts on the stack (192-byte norm, 24 tokens, no heap).
 Score is token overlap plus a 64-bit sketch distance. A priority cascade names
-the plate first. Plates `purge_intent` and `protect_flow` block storage and
-auto-run. `hold_flash`, `forbid_live`, and `bake_rom` return a remedy line and
-do not enqueue. Other plates are forward: with `enqueue` `1` the line is stored
-as the pending suggestion. Full auto runs it only when the caller passed an
-agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) stores the line and leaves it pending.
+the plate first. `purge_intent` and `protect_flow` set `execute` and, when
+`enqueue` is `1`, store the remedy line. The act text itself is never stored.
+`hold_flash`, `forbid_live`, and `bake_rom` set `enact` and are not stored.
+Other plates are forward: with `enqueue` `1` the concept line is stored.
+Full auto runs a stored line only when the caller passed an agent.
+Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
 
 A peer sends that line to another peer with `POST /peer/v1/prompt`. The CubalC
 board `programs/motive_rank.cubalc` is the same eight-step flow in the language.

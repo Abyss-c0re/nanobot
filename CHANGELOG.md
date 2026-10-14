@@ -67,7 +67,7 @@
 
 ## Unreleased
 
-- **hive:** `POST /api/augogen` and `/peer/v1/augogen` action `motive` ranks eight concepts (token overlap plus a 64-bit sketch) and a priority cascade. A forward plate stores a 2–12 word line when `enqueue` is set. Full auto runs that line only when an agent is present. Purge and protect plates are not stored and are not run. `NANOBOT_AUGOGEN_AUTO=0` keeps vote-only. Docs: `docs/AUGOGEN.md`. CubalC board: `programs/motive_rank.cubalc`.
+- **hive:** `POST /api/augogen` and `/peer/v1/augogen` action `motive` ranks eight concepts (token overlap plus a 64-bit sketch) and a priority cascade. A forward plate stores its 2–12 word line when `enqueue` is set. `purge_intent` and `protect_flow` store the remedy line and never store the act. `hold_flash`, `forbid_live`, and `bake_rom` are enacted and are not stored. Full auto runs a stored line only when an agent is present. `NANOBOT_AUGOGEN_AUTO=0` keeps vote-only. Docs: `docs/AUGOGEN.md`. CubalC board: `programs/motive_rank.cubalc`.
 - **wire:** CLI floor `NG_CLI_VERSION_DEFAULT` / `x-grok-client-version` is `1.0.52` (installed Grok Build; the public crate may lag). Product version stays 0.5.6. Runtime auto-bump is unchanged.
 - **wire:** every cli-chat-proxy call sends `x-grok-client-identifier` (default `nanobot`, then `NANOBOT_CLIENT_NAME`, then `GROK_CLIENT_NAME`) and `x-authenticateresponse: authenticate-response`.
 - **wire:** suggestPrompt transcript packer uses a 24000-character budget and a 1500-character cap on older turns. The user-message JSON object is closed. Request and response fields are unchanged.

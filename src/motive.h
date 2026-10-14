@@ -30,6 +30,8 @@ enum {
 typedef struct {
   int plate;
   int forward;
+  int execute; /* purge / protect: the remedy line may be stored */
+  int enact;   /* hold / forbid_live / bake: named, not stored */
   int rank;
   int hamming;
   int lexical;
