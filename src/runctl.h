@@ -97,7 +97,9 @@ char *ng_run_list_json(void);
 int ng_run_is_route(const char *path, char *id, size_t idsz, char *action,
                     size_t asz, long *since);
 
-/* 0 keeps tailing. Non-zero stops the tail. The run worker is untouched. */
+/* 0 keeps tailing. Non-zero stops the tail. The run worker is untouched.
+ * line NULL is an idle ping, about once a second, and is not an event.
+ */
 typedef int (*ng_run_line_fn)(void *ud, const char *line);
 
 /* Deliver events with seq > since. timeout_ms 0 reads once.

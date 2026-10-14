@@ -27,14 +27,21 @@ static void expect(int cond, const char *msg) {
 
 static int on_line(void *ud, const char *line) {
   int *n = ud;
-  (void)line;
+  if (!line) return 0;
   (*n)++;
   return 0;
 }
 
 static int stop_line(void *ud, const char *line) {
   int *n = ud;
-  (void)line;
+  if (!line) return 0;
+  (*n)++;
+  return -1;
+}
+
+static int ping_once(void *ud, const char *line) {
+  int *n = ud;
+  if (line) return 0;
   (*n)++;
   return -1;
 }
@@ -503,6 +510,30 @@ static void test_tail_stop(void) {
   free(id);
 }
 
+static void test_tail_ping(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  char *id;
+  ng_run *run;
+  int pings = 0;
+  struct timespec a, b;
+  long ms;
+  expect(mkdtemp(home) != NULL, "ping home");
+  ng_set_workdir(home);
+  id = ng_run_create("tail ping", NULL, NULL);
+  expect(id != NULL, "ping create");
+  if (!id) return;
+  run = ng_run_open(id);
+  expect(run != NULL, "ping open");
+  if (run) ng_run_close(run);
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  expect(ng_run_tail(id, -1, 5000, ping_once, &pings) == 0, "idle ping stops the tail");
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+  expect(pings == 1, "one idle ping");
+  expect(ms >= 800 && ms < 1800, "idle ping is about one second");
+  free(id);
+}
+
 int main(void) {
   test_routes();
   test_control();
@@ -510,6 +541,7 @@ int main(void) {
   test_oversize_filter();
   test_list_newest();
   test_tail_stop();
+  test_tail_ping();
   test_hub_closed_client();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);

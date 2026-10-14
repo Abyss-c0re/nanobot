@@ -843,7 +843,8 @@ typedef struct {
 
 static int run_sse_line(void *ud, const char *line) {
   run_sse_ud *u = ud;
-  if (!u || !line) return 0;
+  if (!u) return 0;
+  if (!line) return send_all(u->fd, ": ping\n\n", 8) == 0 ? 0 : -1;
   if (send_all(u->fd, "data: ", 6) != 0) return -1;
   if (send_all(u->fd, line, strlen(line)) != 0) return -1;
   if (send_all(u->fd, "\n\n", 2) != 0) return -1;

@@ -1071,5 +1071,8 @@ int ng_run_tail(const char *id, long since, int timeout_ms, ng_run_line_fn fn, v
       nanosleep(&ts, NULL);
       waited += 50;
     }
+    /* Idle ping about once a second. A non-zero callback stops the tail. */
+    if (timeout_ms > 0 && (waited % 1000) == 0 && fn(ud, NULL) != 0)
+      return delivered;
   }
 }
