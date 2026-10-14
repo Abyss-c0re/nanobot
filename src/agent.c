@@ -1658,6 +1658,13 @@ char *ng_agent_run_attachments(ng_agent_cfg *c, const char *user_prompt,
     }
     /* lightweight memory of shell for context */
     if (r) ng_memory_record_exchange(user_prompt, r);
+    /* A shell already inside ng_run_command is not killed. Abort still wins
+     * once that command returns. */
+    if (g_live && ng_agent_live_cut() == 1) {
+      ng_run_emit(g_live, "abort", "", "aborted");
+      free(r);
+      return abort_plate();
+    }
     return r;
   }
 
