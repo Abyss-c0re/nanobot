@@ -568,9 +568,9 @@ int ng_run_poll(ng_run *run, int wait_ms) {
     {
       struct timespec ts;
       ts.tv_sec = 0;
-      ts.tv_nsec = 200 * 1000 * 1000;
+      ts.tv_nsec = 50 * 1000 * 1000;
       nanosleep(&ts, NULL);
-      waited += 200;
+      waited += 50;
     }
   }
 }

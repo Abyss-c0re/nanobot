@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 static int fails;
@@ -96,6 +97,31 @@ static void test_control(void) {
   expect(ng_run_poll(run, 0) == 0, "resumed");
   expect(ng_run_request_abort(id) == 0, "abort");
   expect(ng_run_poll(run, 0) == 1, "aborted");
+  expect(ng_run_request_pause(id) == 0, "pause for slice");
+  {
+    pid_t child;
+    struct timespec t0, t1;
+    long ms;
+    int rc;
+    int st = 0;
+    child = fork();
+    expect(child >= 0, "slice fork");
+    if (child == 0) {
+      usleep(30 * 1000);
+      if (ng_run_request_abort(id) != 0) _exit(2);
+      _exit(0);
+    }
+    if (child > 0) {
+      clock_gettime(CLOCK_MONOTONIC, &t0);
+      rc = ng_run_poll(run, 1000);
+      clock_gettime(CLOCK_MONOTONIC, &t1);
+      ms = (long)(t1.tv_sec - t0.tv_sec) * 1000 +
+           (long)(t1.tv_nsec - t0.tv_nsec) / 1000000;
+      expect(rc == 1, "abort seen inside the pause wait");
+      expect(ms < 170, "pause slice is shorter than 200 ms");
+      waitpid(child, &st, 0);
+    }
+  }
   ng_run_limits_clear(&lim);
   snprintf(lim.model, sizeof lim.model, "local-model");
   lim.has_effort = 1;

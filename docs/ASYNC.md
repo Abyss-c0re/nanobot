@@ -629,7 +629,7 @@ Reads `control` and `intercept.txt`.
 | 2 | Still paused. |
 | 3 | `intercept.txt` exists and is non-empty. |
 
-`wait_ms` 0 checks once. `wait_ms` > 0 sleeps in 200 ms slices until the deadline or the state changes. `wait_ms` < 0 waits until the run is not paused. Abort is tested before intercept. Intercept is tested before pause. A missing control file is treated as `run`.
+`wait_ms` 0 checks once. `wait_ms` > 0 sleeps in 50 ms slices until the deadline or the state changes. `wait_ms` < 0 waits until the run is not paused. Abort is tested before intercept. Intercept is tested before pause. A missing control file is treated as `run`.
 
 ### `ng_run_take_intercept`
 
