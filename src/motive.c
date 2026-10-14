@@ -151,15 +151,6 @@ static int plate_forward(int plate) {
   }
 }
 
-static int plate_execute(int plate) {
-  return plate == NG_PLATE_PURGE || plate == NG_PLATE_PROTECT;
-}
-
-static int plate_enact(int plate) {
-  return plate == NG_PLATE_HOLD_FLASH || plate == NG_PLATE_FORBID_LIVE ||
-         plate == NG_PLATE_BAKE_ROM;
-}
-
 static const char *remedy_line(int plate) {
   switch (plate) {
     case NG_PLATE_PURGE:
@@ -268,8 +259,6 @@ void ng_motive_rank(const char *text, ng_motive *out) {
   norm_text(text, norm, sizeof norm);
   out->plate = plate_of(norm);
   out->forward = plate_forward(out->plate);
-  out->execute = plate_execute(out->plate);
-  out->enact = plate_enact(out->plate);
   qh = simhash_text(norm);
   for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
     int lex = lexical_hits(norm, kConcept[i]);
@@ -306,12 +295,11 @@ char *ng_motive_json(const char *text) {
   concept = ng_json_escape(m.concept);
   asprintf(&out,
            "{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":true,"
-           "\"plate\":\"%s\",\"forward\":%s,\"execute\":%s,\"enact\":%s,"
-           "\"rank\":%d,\"hamming\":%d,\"lexical\":%d,"
+           "\"plate\":\"%s\",\"forward\":%s,\"rank\":%d,"
+           "\"hamming\":%d,\"lexical\":%d,"
            "\"concept\":\"%s\",\"line\":\"%s\","
            "\"concepts\":%d,\"python\":0}",
-           ng_motive_plate_name(m.plate), m.forward ? "true" : "false",
-           m.execute ? "true" : "false", m.enact ? "true" : "false", m.rank,
+           ng_motive_plate_name(m.plate), m.forward ? "true" : "false", m.rank,
            m.hamming, m.lexical, concept ? concept : "", line ? line : "",
            NG_MOTIVE_CONCEPTS);
   free(line);

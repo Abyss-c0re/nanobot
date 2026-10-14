@@ -49,8 +49,6 @@ int main(void) {
   ng_motive_rank("trick the cube", &m);
   expect(m.plate == NG_PLATE_PURGE, "purge trick the cube");
   expect(!m.forward, "purge is not forward");
-  expect(m.execute, "purge executes the remedy");
-  expect(!m.enact, "purge is not an enact plate");
   expect(strcmp(m.line, "serve the matrix in bits") == 0, "purge remedy");
   expect(ng_motive_blocks("trick the cube"), "blocks purge");
   expect(words(m.line) >= 2 && words(m.line) <= 12, "purge line words");
@@ -86,8 +84,7 @@ int main(void) {
   ng_motive_rank("hold flash for device join", &m);
   expect(m.plate == NG_PLATE_HOLD_FLASH, "hold plate");
   expect(!m.forward, "hold does not auto-run");
-  expect(m.enact, "hold is enacted");
-  expect(!m.execute, "hold is not executed as a prompt");
+  expect(strcmp(m.line, "hold flash for device join") == 0, "hold remedy");
 
   ng_motive_rank("lightweight hybrid rank for the next hive prompt", &m);
   expect(m.forward, "this change stays forward");
@@ -114,7 +111,9 @@ int main(void) {
   setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
   js = ng_augogen_handle(
       NULL, "{\"action\":\"motive\",\"text\":\"hold flash for device join\",\"enqueue\":\"1\"}");
-  expect(js && strstr(js, "\"enact\":true"), "http hold enacted");
+  expect(js && strstr(js, "hold_flash"), "http hold plate");
+  expect(js && strstr(js, "hold flash for device join"), "http hold remedy");
+  expect(js && strstr(js, "\"forward\":false"), "http hold not stored");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
@@ -125,13 +124,14 @@ int main(void) {
   js = ng_augogen_handle(NULL, "{\"action\":\"motive\",\"text\":\"trick the cube\","
                                "\"enqueue\":\"1\"}");
   expect(js && strstr(js, "purge_intent"), "http motive purge");
-  expect(js && strstr(js, "\"execute\":true"), "http motive executes purge");
+  expect(js && strstr(js, "serve the matrix in bits"), "http reports purge remedy");
   expect(js && strstr(js, "\"forward\":false"), "http motive holds purge");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "serve the matrix in bits"), "purge stores remedy");
-    expect(!strstr(pend, "trick the cube"), "purge act not stored");
+    expect(!pend || !strstr(pend, "trick the cube"), "purge act not stored");
+    expect(!pend || !strstr(pend, "serve the matrix in bits"),
+           "purge remedy stays a report");
     free(pend);
   }
 

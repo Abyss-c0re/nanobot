@@ -532,10 +532,9 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
                 enq[0] == 'Y'))
       asked = 1;
     ng_motive_rank(text ? text : "", &m);
-    /* Forward stores the concept line. Purge and protect store the remedy.
-     * Hold, forbid-live, and bake are enacted and stay off the pending line. */
-    if (asked && (m.forward || m.execute) && m.line[0] &&
-        !suggestion_forbidden(m.line) && !ng_motive_blocks(m.line)) {
+    /* Report every plate. Store a line only when the plate is forward. */
+    if (asked && m.forward && m.line[0] && !suggestion_forbidden(m.line) &&
+        !ng_motive_blocks(m.line)) {
       unsigned long gen = p.generation + 1;
       plate_clear(&p);
       p.generation = gen;
