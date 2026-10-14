@@ -2,10 +2,16 @@
 #include "motive.h"
 #include "util.h"
 #include "memory.h"
+#include <arpa/inet.h>
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -409,6 +415,155 @@ static void new_id(char *out, size_t n) {
   snprintf(out, n, "ag-%ld-%d", (long)time(NULL), (int)(getpid() & 0xFFFF));
 }
 
+/* Copy an env knob, or the settings value when the env is empty. */
+static void knob_copy(char *dst, size_t cap, const char *envkey, const char *setkey) {
+  const char *e = getenv(envkey);
+  char *owned = NULL;
+  size_t n;
+  if (!dst || cap < 2) return;
+  dst[0] = 0;
+  if (!e || !e[0]) {
+    owned = ng_settings_get(setkey);
+    e = owned;
+  }
+  if (e && e[0]) snprintf(dst, cap, "%s", e);
+  free(owned);
+  n = strlen(dst);
+  while (n && (dst[n - 1] == '\n' || dst[n - 1] == '\r' || dst[n - 1] == ' '))
+    dst[--n] = 0;
+}
+
+/* IPv4 literal only, so a nudge never waits on DNS. */
+static int peer_ipv4(const char *spec, char *host, size_t hcap, int *port) {
+  char buf[80];
+  char *colon, *slash;
+  const char *p;
+  size_t n;
+  if (!spec || !host || hcap < 16 || !port) return 0;
+  p = spec;
+  while (*p == ' ') p++;
+  if (!strncmp(p, "https://", 8)) return 0;
+  if (!strncmp(p, "http://", 7)) p += 7;
+  n = strlen(p);
+  if (n == 0 || n >= sizeof buf) return 0;
+  memcpy(buf, p, n + 1);
+  slash = strchr(buf, '/');
+  if (slash) *slash = 0;
+  colon = strrchr(buf, ':');
+  if (!colon || colon == buf || !colon[1]) return 0;
+  *colon = 0;
+  if (strlen(buf) >= hcap) return 0;
+  for (p = buf; *p; p++) {
+    if (*p != '.' && (*p < '0' || *p > '9')) return 0;
+  }
+  *port = atoi(colon + 1);
+  if (*port <= 0 || *port > 65535) return 0;
+  memcpy(host, buf, strlen(buf) + 1);
+  return 1;
+}
+
+static int token_safe(const char *t) {
+  size_t n;
+  if (!t || !t[0]) return 0;
+  n = strlen(t);
+  if (n > 80) return 0;
+  for (; *t; t++) {
+    unsigned char c = (unsigned char)*t;
+    if (c <= 32 || c >= 127) return 0;
+  }
+  return 1;
+}
+
+static int connect_budget(int fd, const struct sockaddr_in *sa) {
+  int flags, err = 0;
+  socklen_t el = sizeof err;
+  struct pollfd pfd;
+  flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0) return 0;
+  if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) return 0;
+  if (connect(fd, (const struct sockaddr *)sa, sizeof *sa) == 0) return 1;
+  if (errno != EINPROGRESS) return 0;
+  pfd.fd = fd;
+  pfd.events = POLLOUT;
+  pfd.revents = 0;
+  if (poll(&pfd, 1, 200) <= 0) return 0;
+  if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) < 0 || err) return 0;
+  return 1;
+}
+
+static int write_budget(int fd, const char *buf, size_t n) {
+  size_t off = 0;
+  while (off < n) {
+    struct pollfd pfd;
+    ssize_t w;
+    pfd.fd = fd;
+    pfd.events = POLLOUT;
+    pfd.revents = 0;
+    if (poll(&pfd, 1, 200) <= 0) return 0;
+    w = write(fd, buf + off, n - off);
+    if (w < 0) {
+      if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+      return 0;
+    }
+    if (w == 0) return 0;
+    off += (size_t)w;
+  }
+  return 1;
+}
+
+/* One configured peer, one POST, no retry. The body carries hop=1. */
+static void motive_nudge(const char *line) {
+  char spec[96], token[96], host[16];
+  char body[192], req[512];
+  char *esc = NULL;
+  int port = 0, fd = -1, bl, rl;
+  struct sockaddr_in sa;
+  knob_copy(spec, sizeof spec, "NANOBOT_MOTIVE_PEER", "MOTIVE_PEER");
+  knob_copy(token, sizeof token, "NANOBOT_MOTIVE_PEER_TOKEN", "MOTIVE_PEER_TOKEN");
+  if (!spec[0] || !token_safe(token)) return;
+  if (!peer_ipv4(spec, host, sizeof host, &port)) return;
+  esc = ng_json_escape(line ? line : "");
+  if (!esc) return;
+  bl = snprintf(body, sizeof body,
+                "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\",\"hop\":\"1\"}",
+                esc);
+  free(esc);
+  if (bl < 0 || (size_t)bl >= sizeof body) return;
+  rl = snprintf(req, sizeof req,
+                "POST /peer/v1/augogen HTTP/1.0\r\n"
+                "Host: %s:%d\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: %d\r\n"
+                "X-Nanobot-Peer-Token: %s\r\n"
+                "Connection: close\r\n\r\n"
+                "%s",
+                host, port, bl, token, body);
+  if (rl < 0 || (size_t)rl >= sizeof req) return;
+  fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (fd < 0) return;
+  memset(&sa, 0, sizeof sa);
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons((uint16_t)port);
+  if (inet_pton(AF_INET, host, &sa.sin_addr) != 1 ||
+      !connect_budget(fd, &sa) || !write_budget(fd, req, (size_t)rl)) {
+    close(fd);
+    return;
+  }
+  shutdown(fd, SHUT_WR);
+  {
+    char dump[64];
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    if (poll(&pfd, 1, 200) > 0) {
+      ssize_t n = read(fd, dump, sizeof dump);
+      (void)n;
+    }
+  }
+  close(fd);
+}
+
 char *ng_augogen_pending_json(void) {
   ng_augogen p;
   load_plate(&p);
@@ -523,14 +678,18 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
   if (!strcmp(action, "motive") || !strcmp(action, "rank")) {
     char *text = ng_json_get_string(json_body, "text");
     char *enq = ng_json_get_string(json_body, "enqueue");
+    char *hopv = ng_json_get_string(json_body, "hop");
     ng_motive m;
     char *js;
-    int asked = 0;
+    int asked = 0, hop = 0;
     if (!text) text = ng_json_get_string(json_body, "act");
     if (!text) text = strdup("");
     if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
                 enq[0] == 'Y'))
       asked = 1;
+    if (hopv && (hopv[0] == '1' || hopv[0] == 't' || hopv[0] == 'T' ||
+                 hopv[0] == 'y' || hopv[0] == 'Y'))
+      hop = 1;
     ng_motive_rank(text ? text : "", &m);
     /* Report every plate. Store a line only when the plate is forward. */
     if (asked && m.forward && m.line[0] && !suggestion_forbidden(m.line) &&
@@ -551,10 +710,13 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         if (p.confirmed && agent) try_auto_run(&p, agent);
       }
       save_plate(&p);
+      /* A hop already arrived from one peer. Do not POST it onward. */
+      if (!hop) motive_nudge(m.line);
     }
     js = ng_motive_json(text ? text : "");
     free(text);
     free(enq);
+    free(hopv);
     free(action);
     return js ? js
               : strdup("{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":false,"

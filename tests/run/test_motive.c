@@ -3,11 +3,17 @@
 
 #include <nanobot/os.h>
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
+#include <unistd.h>
 
 static int g_fail;
 
@@ -39,12 +45,69 @@ static double seconds_since(const struct timespec *a) {
   return (double)(b.tv_sec - a->tv_sec) + (double)(b.tv_nsec - a->tv_nsec) / 1e9;
 }
 
+static int count_substr(const char *s, const char *n) {
+  int c = 0;
+  size_t L;
+  if (!s || !n || !n[0]) return 0;
+  L = strlen(n);
+  while (*s) {
+    if (!strncmp(s, n, L)) c++;
+    s++;
+  }
+  return c;
+}
+
+static void hop_sink(int lfd, const char *path) {
+  FILE *f = fopen(path, "w");
+  if (!f) _exit(2);
+  for (;;) {
+    struct pollfd pfd;
+    int c, total = 0;
+    char buf[1500];
+    const char *resp =
+        "HTTP/1.0 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}";
+    pfd.fd = lfd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    if (poll(&pfd, 1, 500) <= 0) break;
+    c = accept(lfd, NULL, NULL);
+    if (c < 0) break;
+    buf[0] = 0;
+    while (total + 1 < (int)sizeof buf) {
+      struct pollfd rfd;
+      int n;
+      rfd.fd = c;
+      rfd.events = POLLIN;
+      rfd.revents = 0;
+      if (poll(&rfd, 1, 200) <= 0) break;
+      n = (int)read(c, buf + total, sizeof buf - 1 - (size_t)total);
+      if (n <= 0) break;
+      total += n;
+      buf[total] = 0;
+      if (strstr(buf, "\r\n\r\n")) break;
+    }
+    fputs(buf, f);
+    fputs("\n---\n", f);
+    fflush(f);
+    if (write(c, resp, strlen(resp)) < 0) {
+      /* The peer already has the request. */
+    }
+    close(c);
+  }
+  fclose(f);
+  _exit(0);
+}
+
 int main(void) {
   ng_motive m;
   struct timespec t0;
   int i, blocks = 0;
   char *js;
   char home[] = "/tmp/nb-motive-test";
+
+  /* Early stores must not open a socket. A name is not an address. */
+  setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+  unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
 
   ng_motive_rank("trick the cube", &m);
   expect(m.plate == NG_PLATE_PURGE, "purge trick the cube");
@@ -144,6 +207,97 @@ int main(void) {
     expect(pend && strstr(pend, "prompt a peer to move"), "peer line stored");
     expect(pend && strstr(pend, "\"executed\":false"), "vote-only does not run");
     free(pend);
+  }
+
+  setenv("NANOBOT_MOTIVE_PEER", "http://localhost:9", 1);
+  setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"prompt a peer to move\",\"enqueue\":\"1\"}");
+  expect(seconds_since(&t0) < 0.2, "a name does not wait on dns");
+  expect(js && strstr(js, "\"forward\":true"), "name peer still ranks");
+  free(js);
+
+  {
+    int lfd, port = 0, st = 0, on = 1;
+    pid_t kid;
+    char url[64];
+    char path[] = "/tmp/nb-motive-hop.log";
+    char *log = NULL;
+    struct sockaddr_in sa;
+    socklen_t sl = sizeof sa;
+    FILE *lf;
+    long sz;
+    unlink(path);
+    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    expect(lfd >= 0, "hop socket");
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    if (lfd >= 0 &&
+        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
+        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 8) == 0 &&
+        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
+      port = ntohs(sa.sin_port);
+      kid = fork();
+      expect(kid >= 0, "hop fork");
+      if (kid == 0) hop_sink(lfd, path);
+      if (kid > 0) {
+        close(lfd);
+        snprintf(url, sizeof url, "http://127.0.0.1:%d", port);
+        setenv("NANOBOT_MOTIVE_PEER", url, 1);
+        setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"motive\",\"text\":\"trick the cube\",\"enqueue\":\"1\"}");
+        free(js);
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        for (i = 0; i < 32; i++) {
+          js = ng_augogen_handle(
+              NULL,
+              "{\"action\":\"motive\",\"text\":\"prompt a peer to move\",\"enqueue\":\"1\"}");
+          free(js);
+        }
+        expect(seconds_since(&t0) < 2.0, "thirty-two hops under two seconds");
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"motive\",\"text\":\"prompt a peer to move\","
+            "\"enqueue\":\"1\",\"hop\":\"1\"}");
+        expect(js && strstr(js, "\"forward\":true"), "hop still stores");
+        free(js);
+        setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"motive\",\"text\":\"prompt a peer to move\",\"enqueue\":\"1\"}");
+        free(js);
+        waitpid(kid, &st, 0);
+        lf = fopen(path, "r");
+        expect(lf != NULL, "hop log");
+        if (lf) {
+          fseek(lf, 0, SEEK_END);
+          sz = ftell(lf);
+          if (sz < 0) sz = 0;
+          fseek(lf, 0, SEEK_SET);
+          log = malloc((size_t)sz + 1);
+          if (log) {
+            size_t n = fread(log, 1, (size_t)sz, lf);
+            log[n] = 0;
+          }
+          fclose(lf);
+        }
+        expect(log && count_substr(log, "POST /peer/v1/augogen") == 32, "one post per forward");
+        expect(log && strstr(log, "hop-test"), "token header sent");
+        expect(log && strstr(log, "\"hop\":\"1\""), "hop stops the chain");
+        expect(log && strstr(log, "prompt a peer to move"), "stored line is the body");
+        expect(!log || !strstr(log, "trick the cube"), "purge act is not posted");
+        expect(!log || !strstr(log, "serve the matrix in bits"), "remedy is not posted");
+        free(log);
+        unlink(path);
+      }
+    } else {
+      expect(0, "hop bind");
+      if (lfd >= 0) close(lfd);
+    }
   }
 
   if (g_fail) {
