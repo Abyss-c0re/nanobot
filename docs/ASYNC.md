@@ -376,7 +376,7 @@ When every object is already inside the kept set, objects other than the last on
 
 `text` stored in the file is capped at 4000 bytes before JSON escaping. `seq` starts at 1 for the first appended line.
 
-`ng_run_execute` classifies the agent reply after `ng_run_flush`:
+`ng_run_execute` leaves an abort plate unflushed, so a held filter prefix is not written after the abort event. Every other reply is flushed, then classified:
 
 - A reply that contains `"error":"aborted"` finishes `aborted`.
 - Any other reply that contains `"ok":false` finishes `error`, with the `error` string from the plate or `agent_error`.
@@ -612,7 +612,7 @@ int ng_run_flush(ng_run *run);
 
 Flushes the token carry, then the thinking carry. A non-empty result is appended as that kind with an empty name. Returns 0, or -1 when `run` is NULL. The return value does not report a short write on the append.
 
-Called at the end of a normal SSE stream, after an intercept cut, at the end of `live_emit_text`, and at the end of `ng_run_execute`. Abort skips it (`g_stream_cut == 1` returns before the intercept flush, and `consume_sse_stream` flushes only when `g_stream_cut` is 0).
+Called at the end of a normal SSE stream, after an intercept cut, at the end of `live_emit_text`, and from `ng_run_execute` for every reply except an abort plate. `consume_sse_stream` flushes only when `g_stream_cut` is 0, and the abort return does not flush either.
 
 ### `ng_run_poll`
 
@@ -794,7 +794,7 @@ char *ng_run_execute(ng_agent_cfg *c, const char *id);
 
 File: `src/agent.c`.
 
-Opens the run, reads `prompt.txt`, marks it running, sets `c->live`, clears `g_live_streamed`, applies limits, emits `status` / `running`, and calls `ng_agent_run`. Then flushes, classifies the reply (see [Event schema](#event-schema)), clears `c->live`, closes the run, and returns the malloc'd reply.
+Opens the run, reads `prompt.txt`, marks it running, sets `c->live`, clears `g_live_streamed`, applies limits, emits `status` / `running`, and calls `ng_agent_run`. An abort plate is classified without `ng_run_flush`. Every other reply is flushed, then classified (see [Event schema](#event-schema)). It then clears `c->live`, closes the run, and returns the malloc'd reply.
 
 NULL `c` or `id` returns NULL. A missing run returns a `run_not_found` plate. An empty prompt finishes `error` / `need_prompt`. A failed running mark finishes `error` / `meta_write`.
 
@@ -926,7 +926,7 @@ Returns `/api/v1/runs` when the path starts with that prefix, else `/peer/v1/run
 static int run_plate_code(const char *plate);
 ```
 
-Maps a run plate to an HTTP status. NULL is 500. `"error":"run_not_found"` is 404. `"error":"bad_id"` is 400. `"error":"oom"` is 500. Any other plate that contains `"ok":false` is 400. Everything else is 200, including a status plate whose run `status` is `error` and whose plate `ok` is true.
+Maps a run plate to an HTTP status. NULL is 500. The first `"ok"` field decides the success class: `true` is 200, including a list or events plate whose nested object contains `"error":"run_not_found"`, and a status plate whose run `status` is `error`. When that field is absent or not `true`, `"error":"run_not_found"` is 404, `"error":"bad_id"` is 400, `"error":"oom"` is 500, and any other `"ok":false` plate is 400.
 
 #### `run_send_json`
 

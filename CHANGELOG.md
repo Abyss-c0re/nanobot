@@ -75,7 +75,8 @@
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.
 - **wire:** a provider context-overflow error compacts the message array locally, at most three refills in a row, then returns `compact_stop`.
 - **runs:** `POST /api/runs`, `/api/v1/runs`, and `/peer/v1/runs` queue a forked agent turn and return `202`. `GET` status, events, and a 20s SSE tail show thinking, tokens, tool calls, and code-change notes. `POST` abort, pause, resume, intercept, filter, and config are read between turns and between stream lines. A shell command already inside `ng_run_command` finishes before abort is applied. Docs: `docs/ASYNC.md`.
-- **runs:** stream filters (`drop`, `redact`, `drop_kind`) apply as chunks arrive. A needle split across chunks is held until it completes or the stream flushes.
+- **runs:** stream filters (`drop`, `redact`, `drop_kind`) apply as chunks arrive. A needle split across chunks is held until it completes or the stream flushes. An abort plate does not flush that prefix.
+- **runs:** a plate whose own `ok` is true stays HTTP 200. A nested `run_not_found` inside a list or events body does not change that status.
 - **runs:** compaction policy (`max_refills`, `keep_tail`, `keep_head`, `shrink_at`, `preemptive`) and token caps (`max_tokens`, `context_tokens`) are per run and via `NANOBOT_MAX_TOKENS`, `NANOBOT_CONTEXT_TOKENS`, `NANOBOT_COMPACT_REFILLS`, `NANOBOT_COMPACT_KEEP_TAIL`. Unset refills stay at 3.
 - **chore(portability):** strip product/OS hardcodes and branding from core C, comments, and docs (config-only personal ACL, gate mirror, shared secrets); host wrappers plant platform paths
 - **feat(task):** internal tools `task_plan` / `task_start` / `task_step_done` / `task_done` / `task_block` / `task_status`; open tasks self-remind each turn until done or blocked (hard max turns)

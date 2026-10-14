@@ -793,8 +793,21 @@ static const char *run_prefix_of(const char *path) {
   return "/api/runs";
 }
 
+/* The plate's own ok field is the first "ok" key. Nested run objects follow it. */
+static int run_plate_ok(const char *plate) {
+  const char *ok = strstr(plate, "\"ok\":");
+  unsigned char end;
+  if (!ok) return 0;
+  ok += 5;
+  while (*ok == ' ') ok++;
+  if (strncmp(ok, "true", 4) != 0) return 0;
+  end = (unsigned char)ok[4];
+  return end == 0 || end == ',' || end == '}' || end == ' ' || end == '\n' || end == '\r';
+}
+
 static int run_plate_code(const char *plate) {
   if (!plate) return 500;
+  if (run_plate_ok(plate)) return 200;
   if (strstr(plate, "\"error\":\"run_not_found\"")) return 404;
   if (strstr(plate, "\"error\":\"bad_id\"")) return 400;
   if (strstr(plate, "\"error\":\"oom\"")) return 500;

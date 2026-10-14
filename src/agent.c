@@ -2710,18 +2710,22 @@ char *ng_run_execute(ng_agent_cfg *c, const char *id) {
   ng_run_apply(c, run);
   ng_run_emit(run, "status", "", "running");
   reply = ng_agent_run(c, prompt);
-  ng_run_flush(run);
-  if (!reply) {
+  if (reply && strstr(reply, "\"error\":\"aborted\"")) {
+    /* Leave a held filter prefix unwritten. The abort event is already logged. */
+    ng_run_finish(run, "aborted", "aborted");
+  } else if (!reply) {
+    ng_run_flush(run);
     ng_run_finish(run, "error", "no_reply");
     reply = strdup("{\"schema\":\"nanobot.run.v1\",\"ok\":false,"
                    "\"error\":\"no_reply\",\"python\":0}");
-  } else if (strstr(reply, "\"error\":\"aborted\"")) {
-    ng_run_finish(run, "aborted", "aborted");
   } else if (strstr(reply, "\"ok\":false")) {
-    char *err = ng_json_get_string(reply, "error");
+    char *err;
+    ng_run_flush(run);
+    err = ng_json_get_string(reply, "error");
     ng_run_finish(run, "error", err ? err : "agent_error");
     free(err);
   } else {
+    ng_run_flush(run);
     if (!g_live_streamed) live_emit_text(run, reply);
     ng_run_emit(run, "done", "", "");
     ng_run_finish(run, "done", "");
