@@ -201,15 +201,29 @@ char *ng_run_create(const char *prompt, const ng_run_limits *limits,
   if (snprintf(root, sizeof root, "%s/runs", ng_workdir()) >= (int)sizeof root)
     return NULL;
   mkdir(root, 0700);
-  if (snprintf(id, sizeof id, "r%ld%03u", (long)time(NULL), (++seq) % 1000) >=
-      (int)sizeof id)
-    return NULL;
+  /* Each HTTP request is its own process, so a static counter alone repeats.
+   * Pid separates workers. A reused pid in the same second retries. */
   {
-    char leaf[56];
-    snprintf(leaf, sizeof leaf, "/%s", id);
-    if (path_join(dir, sizeof dir, root, leaf) != 0) return NULL;
+    int made = 0;
+    unsigned n = (unsigned)getpid();
+    int attempt;
+    for (attempt = 0; attempt < 16; attempt++) {
+      char leaf[56];
+      if (snprintf(id, sizeof id, "r%ld-%u-%u", (long)time(NULL), n,
+                   (seq + (unsigned)attempt) % 1000) >= (int)sizeof id)
+        return NULL;
+      if (!id_ok(id)) return NULL;
+      snprintf(leaf, sizeof leaf, "/%s", id);
+      if (path_join(dir, sizeof dir, root, leaf) != 0) return NULL;
+      if (mkdir(dir, 0700) == 0) {
+        made = 1;
+        seq += (unsigned)attempt + 1;
+        break;
+      }
+      if (errno != EEXIST) return NULL;
+    }
+    if (!made) return NULL;
   }
-  if (mkdir(dir, 0700) != 0) return NULL;
   if (path_join(path, sizeof path, dir, "/prompt.txt") != 0) return NULL;
   if (write_text(path, prompt) != 0) return NULL;
   if (path_join(path, sizeof path, dir, "/control") != 0) return NULL;
