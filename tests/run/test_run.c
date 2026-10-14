@@ -147,9 +147,41 @@ static void test_control(void) {
   free(id);
 }
 
+static void test_long_record(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  char *id;
+  ng_run *run;
+  char *events;
+  char big[2001];
+  int lines = 0;
+  memset(big, 1, 2000);
+  big[2000] = 0;
+  expect(mkdtemp(home) != NULL, "long home");
+  ng_set_workdir(home);
+  id = ng_run_create("long record", NULL, NULL);
+  expect(id != NULL, "long create");
+  if (!id) return;
+  run = ng_run_open(id);
+  expect(ng_run_emit(run, "tool_result", "shell", big) == 1, "long emit");
+  ng_run_close(run);
+  run = ng_run_open(id);
+  expect(run != NULL, "reopen after long record");
+  expect(ng_run_emit(run, "token", "", "after") == 1, "seq continues");
+  events = ng_run_events_json(id, -1, 10);
+  expect(events && strlen(events) > 12000, "escaped record stays whole");
+  expect(events && strstr(events, "\"seq\":2") != NULL, "second event keeps seq 2");
+  expect(events && strstr(events, "after") != NULL, "following token present");
+  free(events);
+  expect(ng_run_tail(id, -1, 0, on_line, &lines) == 2, "tail returns both records");
+  expect(lines == 2, "tail saw both records");
+  ng_run_close(run);
+  free(id);
+}
+
 int main(void) {
   test_routes();
   test_control();
+  test_long_record();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;

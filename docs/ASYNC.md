@@ -181,7 +181,7 @@ The HTTP handler asks for 200 events. `ng_run_events_json` clamps a non-positive
 
 A missing run is HTTP 404 from `run_reject_missing` before the log is read. `ng_run_events_json` by itself, given a legal id and no `events.jsonl`, returns an empty `events` array with `"ok":true`.
 
-`fgets` uses an 8192-byte buffer. A line longer than that is split. The first piece still starts with `{` and is included, truncated. The continuation often does not start with `{` and is skipped. `ng_run_open` counts lines with a 1024-byte buffer; `seq` is near the start of the line, so a split line is still one event. Keep event text inside the 4000-byte cap and the escaped line usually fits.
+`read_record` reads one newline-terminated record, up to the text cap escaped at 6 bytes per input byte plus a 240-byte name. A longer record is discarded whole, so a client never sees a cut JSON object. `ng_run_open` counts each kept record and each discarded record as one event.
 
 ## Stream
 
@@ -374,7 +374,7 @@ When every object is already inside the kept set, objects other than the last on
 | `abort` | empty | `aborted` |
 | `done` | empty | Empty. `done` is not filtered, so a summary cannot be hidden by a drop rule. |
 
-`text` stored in the file is capped at 4000 bytes before JSON escaping. `seq` starts at 1 for the first appended line.
+`text` stored in the file is capped at 4000 bytes before JSON escaping. `name` is capped at 240 bytes. `seq` starts at 1 for the first appended line.
 
 `ng_run_execute` leaves an abort plate unflushed, so a held filter prefix is not written after the abort event. Every other reply is flushed, then classified:
 
@@ -566,7 +566,7 @@ ng_run *ng_run_open(const char *id);
 
 Allocates an `ng_run`, checks the directory with `stat`, loads the filter, and sets `seq` to the number of event lines that start with `{`. NULL when the id is illegal, the directory is missing, or allocation fails. A missing `events.jsonl` still returns a run with `seq` 0.
 
-The open count uses a 1024-byte `fgets`. `seq` is at the front of the line, so a wrapped line still counts once.
+The open count uses `read_record`. A record inside the cap counts once. A record past the cap counts once and is not replayed.
 
 ### `ng_run_close`
 
@@ -602,7 +602,7 @@ Appends one event. `kind` must match `^[a-z_]{1,24}$`. Returns 1 when a line is 
 
 Kinds `token`, `thinking`, `tool_result`, and `code_change` go through `filter_text` first. A held token or thinking prefix returns 1 and writes nothing yet. Other filtered kinds flush their local carry before the write. A drop returns 0. Unfiltered kinds (`status`, `tool_call`, `compact`, `intercept`, `abort`, `done`) are appended as given.
 
-`text` is capped at 4000 bytes. `name` and `text` are JSON-escaped. The line is written with `O_APPEND` and an exclusive `flock`. `seq` increments before the write and decrements if the write fails.
+`text` is capped at 4000 bytes and `name` at 240. Both are JSON-escaped. The line is written with `O_APPEND` and an exclusive `flock`. `seq` increments before the write and decrements if the write fails.
 
 ### `ng_run_flush`
 
@@ -772,7 +772,7 @@ int ng_run_tail(const char *id, long since, int timeout_ms, ng_run_line_fn fn,
                 void *ud);
 ```
 
-Delivers events with `seq` greater than `since`. `timeout_ms` 0 reads once. A positive timeout polls every 50 ms. Returns the number of lines delivered. Returns 0 when the id is illegal or `fn` is NULL.
+Delivers events with `seq` greater than `since`. Each callback line is one whole record. `timeout_ms` 0 reads once. A positive timeout polls every 50 ms. Returns the number of lines delivered. Returns 0 when the id is illegal or `fn` is NULL.
 
 Stops when a pass sees no new line and `ng_run_status_json` contains `"status":"done"`, `"status":"aborted"`, or `"status":"error"`. A missing run is not terminal, so the HTTP handler checks for `run_not_found` before calling tail.
 

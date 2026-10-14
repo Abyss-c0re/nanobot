@@ -18,6 +18,9 @@
 #include <unistd.h>
 
 #define RUN_TEXT_CAP 4000
+#define RUN_NAME_CAP 240
+/* Text escapes as \\uXXXX (6 bytes). Name is capped before that. */
+#define RUN_LINE_MAX (RUN_TEXT_CAP * 6 + RUN_NAME_CAP * 6 + 512)
 #define RUN_CARRY 160
 
 struct ng_run {
@@ -258,12 +261,30 @@ char *ng_run_create(const char *prompt, const ng_run_limits *limits,
   return strdup(id);
 }
 
+/* 1 = one record without its newline. 0 = EOF. -1 = record longer than buf, discarded. */
+static int read_record(FILE *fp, char *buf, size_t bufsz) {
+  char *nl;
+  int c;
+  if (!fp || !buf || bufsz < 2 || bufsz > 65536) return -1;
+  if (!fgets(buf, (int)bufsz, fp)) return 0;
+  nl = strchr(buf, '\n');
+  if (nl) {
+    if (nl > buf && nl[-1] == '\r') nl[-1] = 0;
+    else *nl = 0;
+    return 1;
+  }
+  if (feof(fp)) return buf[0] ? 1 : 0;
+  while ((c = fgetc(fp)) != EOF && c != '\n') {}
+  buf[0] = 0;
+  return -1;
+}
+
 ng_run *ng_run_open(const char *id) {
   ng_run *run;
   char dir[700];
   struct stat st;
   FILE *fp;
-  char line[1024];
+  char line[RUN_LINE_MAX];
   if (run_path(id, "", dir, sizeof dir) != 0) return NULL;
   if (stat(dir, &st) != 0 || !S_ISDIR(st.st_mode)) return NULL;
   run = calloc(1, sizeof *run);
@@ -277,8 +298,9 @@ ng_run *ng_run_open(const char *id) {
   }
   fp = fopen(dir, "r");
   if (fp) {
-    while (fgets(line, sizeof line, fp)) {
-      if (line[0] == '{') run->seq++;
+    int rr;
+    while ((rr = read_record(fp, line, sizeof line)) != 0) {
+      if (rr < 0 || line[0] == '{') run->seq++;
     }
     fclose(fp);
   }
@@ -305,14 +327,21 @@ static int append_event(ng_run *run, const char *kind, const char *name, const c
   char *line = NULL;
   int fd, rc = -1;
   char capped[RUN_TEXT_CAP + 1];
+  char namebuf[RUN_NAME_CAP + 1];
   size_t n;
   if (!run || !kind_ok(kind)) return -1;
   if (!text) text = "";
+  if (!name) name = "";
   n = strlen(text);
   if (n > RUN_TEXT_CAP) {
     memcpy(capped, text, RUN_TEXT_CAP);
     capped[RUN_TEXT_CAP] = 0;
     text = capped;
+  }
+  if (strlen(name) > RUN_NAME_CAP) {
+    memcpy(namebuf, name, RUN_NAME_CAP);
+    namebuf[RUN_NAME_CAP] = 0;
+    name = namebuf;
   }
   ne = ng_json_escape(name ? name : "");
   te = ng_json_escape(text);
@@ -635,7 +664,7 @@ char *ng_run_events_json(const char *id, long since, int limit) {
   char *body;
   size_t cap = 4096, used = 0;
   int n = 0;
-  char line[8192];
+  char line[RUN_LINE_MAX];
   if (!id_ok(id)) {
     return strdup("{\"schema\":\"nanobot.run.v1\",\"ok\":false,\"action\":\"events\","
                   "\"error\":\"bad_id\",\"python\":0}");
@@ -651,15 +680,14 @@ char *ng_run_events_json(const char *id, long since, int limit) {
                           id, since);
   fp = fopen(path, "r");
   if (fp) {
-    while (fgets(line, sizeof line, fp) && n < limit) {
+    while (n < limit) {
       long seq;
       size_t L;
-      char *nl;
-      if (line[0] != '{') continue;
+      int rr = read_record(fp, line, sizeof line);
+      if (rr == 0) break;
+      if (rr < 0 || line[0] != '{') continue;
       seq = line_seq(line);
       if (since >= 0 && seq <= since) continue;
-      nl = strchr(line, '\n');
-      if (nl) *nl = 0;
       L = strlen(line);
       if (used + L + 8 >= cap) {
         char *nb;
@@ -858,15 +886,14 @@ int ng_run_tail(const char *id, long since, int timeout_ms, ng_run_line_fn fn, v
     FILE *fp = fopen(path, "r");
     int saw = 0;
     if (fp) {
-      char line[8192];
-      while (fgets(line, sizeof line, fp)) {
+      char line[RUN_LINE_MAX];
+      for (;;) {
         long seq;
-        char *nl;
-        if (line[0] != '{') continue;
+        int rr = read_record(fp, line, sizeof line);
+        if (rr == 0) break;
+        if (rr < 0 || line[0] != '{') continue;
         seq = line_seq(line);
         if (cursor >= 0 && seq <= cursor) continue;
-        nl = strchr(line, '\n');
-        if (nl) *nl = 0;
         fn(ud, line);
         if (seq > cursor) cursor = seq;
         delivered++;
