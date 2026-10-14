@@ -665,14 +665,18 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
           buf[len] = 0;
         }
       } else if (n == 0) {
-        /* Writer closed. Reap once if the child has exited. A live child stays. */
+        /* Writer closed. Reap when the child has exited.
+         * A live child stays in this loop, so abort and the deadline still run.
+         * poll on the closed pipe would spin, so pace one 200 ms slice. */
         int st = 0;
         pid_t w = waitpid(pid, &st, WNOHANG);
         if (w == pid) {
           if (WIFEXITED(st)) r.exit_code = WEXITSTATUS(st);
           else r.exit_code = 128 + (WIFSIGNALED(st) ? WTERMSIG(st) : 1);
+          break;
         }
-        break;
+        struct pollfd idle = { .fd = -1, .events = 0 };
+        poll(&idle, 1, 200);
       }
     }
     int st;

@@ -620,10 +620,19 @@ static void test_shell_eof_reap(void) {
   cr = ng_run_command("sleep 2 >/dev/null 2>&1 &", 5);
   clock_gettime(CLOCK_MONOTONIC, &b);
   alarm(0);
-  sigaction(SIGALRM, &old, NULL);
   ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
   expect(cr.exit_code == 0, "a background shell still returns its status");
   expect(ms < 1500, "a background shell returns before the child finishes");
+  ng_cmd_result_free(&cr);
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  alarm(8);
+  cr = ng_run_command("exec >/dev/null 2>&1; sleep 30", 2);
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  alarm(0);
+  sigaction(SIGALRM, &old, NULL);
+  ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+  expect(cr.exit_code == 124, "a live child after EOF still hits the deadline");
+  expect(ms >= 1500 && ms < 5000, "EOF with a live child waits for the deadline");
   ng_cmd_result_free(&cr);
 }
 
