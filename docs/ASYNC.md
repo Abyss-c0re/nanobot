@@ -124,7 +124,7 @@ An empty model field leaves the listener's model in place. `has_effort` with an 
 
 The child closes the client socket, calls `ng_run_execute`, frees the reply and the id, and `_exit(0)`. It does not call `ng_agent_save_env`. Model and effort changes stay inside that child. The listener's `ng_agent_cfg` is not freed in the request worker.
 
-`GET` on the collection returns `ng_run_list_json` (at most 32 runs). `HEAD` is treated as GET. Any other method on the collection is `405` with `Allow: GET, HEAD, POST, OPTIONS`.
+`GET` on the collection returns `ng_run_list_json` (at most 32 runs, newest events file first). `HEAD` is treated as GET. Any other method on the collection is `405` with `Allow: GET, HEAD, POST, OPTIONS`.
 
 ## Status
 
@@ -742,7 +742,7 @@ Malloc'd status plate described under [Status](#status). Illegal id: `bad_id`. M
 char *ng_run_list_json(void);
 ```
 
-Malloc'd plate `{"schema":"nanobot.run.v1","ok":true,"action":"list","runs":[...],"python":0}`. Reads `$NANOBOT_HOME/runs` and embeds up to 32 `ng_run_status_json` objects, skipping names that fail `id_ok`. A missing directory yields an empty `runs` array.
+Malloc'd plate `{"schema":"nanobot.run.v1","ok":true,"action":"list","runs":[...],"python":0}`. Reads `$NANOBOT_HOME/runs` and embeds up to 32 `ng_run_status_json` objects, skipping names that fail `id_ok`. The 32 are the runs whose `events.jsonl` was modified most recently, newest first. A run directory with no events file is ranked by the directory mtime. A missing directory yields an empty `runs` array.
 
 ### `ng_run_is_route`
 

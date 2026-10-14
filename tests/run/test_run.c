@@ -2,6 +2,7 @@
 #include "runctl.h"
 #include "util.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -322,11 +323,67 @@ static void test_oversize_filter(void) {
   free(id);
 }
 
+static void test_list_newest(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  char *ids[33];
+  char *list;
+  char path[700];
+  char needle[80];
+  struct timespec ts[2];
+  const char *newest;
+  const char *older;
+  int i;
+  int plates = 0;
+  for (i = 0; i < 33; i++) ids[i] = NULL;
+  expect(mkdtemp(home) != NULL, "list home");
+  ng_set_workdir(home);
+  for (i = 0; i < 33; i++) {
+    ids[i] = ng_run_create("list me", NULL, NULL);
+    expect(ids[i] != NULL, "list create");
+  }
+  for (i = 0; i < 33; i++) {
+    if (!ids[i]) continue;
+    snprintf(path, sizeof path, "%s/runs/%s/events.jsonl", ng_workdir(), ids[i]);
+    ts[0].tv_sec = 1000000000L + i;
+    ts[0].tv_nsec = 0;
+    ts[1] = ts[0];
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "list mtime");
+  }
+  list = ng_run_list_json();
+  expect(list != NULL, "list json");
+  if (ids[32]) {
+    snprintf(needle, sizeof needle, "\"id\":\"%s\"", ids[32]);
+    expect(list && strstr(list, needle), "newest run is listed");
+  }
+  if (ids[0]) {
+    snprintf(needle, sizeof needle, "\"id\":\"%s\"", ids[0]);
+    expect(list && !strstr(list, needle), "oldest run is left out");
+  }
+  if (list) {
+    const char *p = list;
+    while ((p = strstr(p, "\"id\":\"")) != NULL) {
+      plates++;
+      p += 6;
+    }
+  }
+  expect(plates == 32, "list keeps 32 plates");
+  if (list && ids[32] && ids[31]) {
+    snprintf(needle, sizeof needle, "\"id\":\"%s\"", ids[32]);
+    newest = strstr(list, needle);
+    snprintf(needle, sizeof needle, "\"id\":\"%s\"", ids[31]);
+    older = strstr(list, needle);
+    expect(newest && older && newest < older, "newest plate is first");
+  }
+  free(list);
+  for (i = 0; i < 33; i++) free(ids[i]);
+}
+
 int main(void) {
   test_routes();
   test_control();
   test_long_record();
   test_oversize_filter();
+  test_list_newest();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;

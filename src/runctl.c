@@ -852,6 +852,67 @@ char *ng_run_status_json(const char *id) {
                       "\"python\":0}");
 }
 
+struct list_slot {
+  char name[48];
+  time_t sec;
+  long nsec;
+};
+
+/* Newest activity first. Equal stamps keep the earlier name. */
+static int slot_newer(const struct list_slot *a, const struct list_slot *b) {
+  if (a->sec != b->sec) return a->sec > b->sec;
+  return a->nsec > b->nsec;
+}
+
+static void slot_times(const char *id, time_t *sec, long *nsec) {
+  char path[700];
+  struct stat st;
+  *sec = 0;
+  *nsec = 0;
+  if (run_path(id, "events.jsonl", path, sizeof path) == 0 && stat(path, &st) == 0) {
+    *sec = st.st_mtim.tv_sec;
+    *nsec = st.st_mtim.tv_nsec;
+    return;
+  }
+  if (run_path(id, "", path, sizeof path) == 0 && stat(path, &st) == 0) {
+    *sec = st.st_mtim.tv_sec;
+    *nsec = st.st_mtim.tv_nsec;
+  }
+}
+
+static void slot_insert(struct list_slot *slot, int *nslot, const char *name,
+                        time_t sec, long nsec) {
+  struct list_slot neu;
+  size_t nlen;
+  int i;
+  if (!name) return;
+  nlen = strlen(name);
+  if (nlen == 0 || nlen >= sizeof neu.name) return;
+  memset(&neu, 0, sizeof neu);
+  memcpy(neu.name, name, nlen + 1);
+  neu.sec = sec;
+  neu.nsec = nsec;
+  if (*nslot < 32) {
+    i = *nslot;
+    while (i > 0 && slot_newer(&neu, &slot[i - 1])) {
+      slot[i] = slot[i - 1];
+      i--;
+    }
+    slot[i] = neu;
+    (*nslot)++;
+    return;
+  }
+  if (!slot_newer(&neu, &slot[*nslot - 1])) return;
+  slot[*nslot - 1] = neu;
+  i = *nslot - 1;
+  while (i > 0 && slot_newer(&slot[i], &slot[i - 1])) {
+    struct list_slot tmp = slot[i - 1];
+    slot[i - 1] = slot[i];
+    slot[i] = tmp;
+    i--;
+  }
+}
+
 char *ng_run_list_json(void) {
   char root[700];
   DIR *d;
@@ -859,6 +920,9 @@ char *ng_run_list_json(void) {
   char *body;
   size_t cap = 2048, used;
   int n = 0;
+  struct list_slot slot[32];
+  int nslot = 0;
+  int si;
   snprintf(root, sizeof root, "%s/runs", ng_workdir());
   body = malloc(cap);
   if (!body) return NULL;
@@ -867,30 +931,37 @@ char *ng_run_list_json(void) {
                           "\"runs\":[");
   d = opendir(root);
   if (d) {
-    while ((de = readdir(d)) != NULL && n < 32) {
-      char *st;
-      size_t L;
+    /* Directory order hides a live run once more than 32 exist. */
+    while ((de = readdir(d)) != NULL) {
+      time_t sec;
+      long nsec;
       if (!id_ok(de->d_name)) continue;
-      st = ng_run_status_json(de->d_name);
-      if (!st) continue;
-      L = strlen(st);
-      if (used + L + 8 >= cap) {
-        char *nb = realloc(body, cap * 2 + L);
-        if (!nb) {
-          free(st);
-          break;
-        }
-        cap = cap * 2 + L;
-        body = nb;
-      }
-      if (n) body[used++] = ',';
-      memcpy(body + used, st, L);
-      used += L;
-      body[used] = 0;
-      free(st);
-      n++;
+      slot_times(de->d_name, &sec, &nsec);
+      slot_insert(slot, &nslot, de->d_name, sec, nsec);
     }
     closedir(d);
+  }
+  for (si = 0; si < nslot; si++) {
+    char *st;
+    size_t L;
+    st = ng_run_status_json(slot[si].name);
+    if (!st) continue;
+    L = strlen(st);
+    if (used + L + 8 >= cap) {
+      char *nb = realloc(body, cap * 2 + L);
+      if (!nb) {
+        free(st);
+        break;
+      }
+      cap = cap * 2 + L;
+      body = nb;
+    }
+    if (n) body[used++] = ',';
+    memcpy(body + used, st, L);
+    used += L;
+    body[used] = 0;
+    free(st);
+    n++;
   }
   if (used + 32 >= cap) {
     char *nb = realloc(body, used + 32);
