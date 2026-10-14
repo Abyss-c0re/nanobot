@@ -6,6 +6,8 @@
 #include "util.h"
 #include "hub_local.h"
 #include "agent.h"
+#include "runctl.h"
+#include "wire_compat.h"
 #include "api_share.h"
 #include "subagent.h"
 #include "ng_sched.h"
@@ -277,7 +279,7 @@ static void chat_sse_delta(void *p, const char *chunk, size_t n) {
 
 static void http_response(int fd, int code, const char *ctype, const char *body, size_t blen) {
   char hdr[256];
-  const char *reason = code == 200 ? "OK" : code == 400 ? "Bad Request" : code == 404 ? "Not Found" : "Error";
+  const char *reason = code == 200 ? "OK" : code == 202 ? "Accepted" : code == 400 ? "Bad Request" : code == 404 ? "Not Found" : "Error";
   int n = snprintf(hdr, sizeof hdr,
     "HTTP/1.1 %d %s\r\n"
     "Content-Type: %s\r\n"
@@ -615,6 +617,537 @@ static const char *path_of(const char *req) {
   return p;
 }
 
+/* Quoted key outside a string. A prompt may contain the same letters. */
+static const char *json_key_pos(const char *json, const char *key) {
+  size_t klen;
+  int in_str = 0;
+  const char *p;
+  if (!json || !key) return NULL;
+  klen = strlen(key);
+  if (klen == 0 || klen > 60) return NULL;
+  for (p = json; *p; p++) {
+    if (in_str) {
+      if (*p == '\\' && p[1]) {
+        p++;
+        continue;
+      }
+      if (*p == '"') in_str = 0;
+      continue;
+    }
+    if (*p != '"') continue;
+    if (strncmp(p + 1, key, klen) == 0 && p[1 + klen] == '"') return p;
+    in_str = 1;
+  }
+  return NULL;
+}
+
+static int json_has_key(const char *json, const char *key) {
+  return json_key_pos(json, key) != NULL;
+}
+
+static int json_int_key(const char *json, const char *key, int def) {
+  const char *p = json_key_pos(json, key);
+  if (!p) return def;
+  p = strchr(p, ':');
+  if (!p) return def;
+  return atoi(p + 1);
+}
+
+static int json_boolish(const char *json, const char *key, int def) {
+  const char *p = json_key_pos(json, key);
+  if (!p) return def;
+  p = strchr(p, ':');
+  if (!p) return def;
+  p++;
+  while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+  if (!strncmp(p, "true", 4)) return 1;
+  if (!strncmp(p, "false", 5)) return 0;
+  return atoi(p);
+}
+
+/* Object value of key, or NULL when the value is not an object. */
+static char *json_object_slice(const char *json, const char *key) {
+  const char *p, *s;
+  int depth = 0;
+  size_t n;
+  char *out;
+  if (!json || !key || strlen(key) > 60) return NULL;
+  p = json_key_pos(json, key);
+  if (!p) return NULL;
+  p = strchr(p, ':');
+  if (!p) return NULL;
+  p++;
+  while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+  if (*p != '{') return NULL;
+  s = p;
+  for (; *p; p++) {
+    if (*p == '"') {
+      p++;
+      while (*p && *p != '"') {
+        if (*p == '\\' && p[1]) p++;
+        p++;
+      }
+      if (!*p) return NULL;
+      continue;
+    }
+    if (*p == '{') depth++;
+    else if (*p == '}') {
+      depth--;
+      if (depth == 0) {
+        p++;
+        break;
+      }
+    }
+  }
+  if (depth != 0) return NULL;
+  n = (size_t)(p - s);
+  if (n == 0 || n > 8000) return NULL;
+  out = malloc(n + 1);
+  if (!out) return NULL;
+  memcpy(out, s, n);
+  out[n] = 0;
+  return out;
+}
+
+/* 0 ok, -1 model does not fit, -2 effort does not fit. */
+static int limits_from_body(const char *body, ng_run_limits *lim) {
+  char *model = NULL, *effort = NULL, *compact = NULL;
+  if (!lim) return -1;
+  ng_run_limits_clear(lim);
+  if (!body) return 0;
+  model = ng_json_get_string(body, "model");
+  effort = ng_json_get_string(body, "reasoning_effort");
+  if (!effort) effort = ng_json_get_string(body, "effort");
+  if (model && model[0]) {
+    if (strlen(model) >= sizeof lim->model) {
+      free(model);
+      free(effort);
+      return -1;
+    }
+    memcpy(lim->model, model, strlen(model) + 1);
+  }
+  if (effort) {
+    if (strlen(effort) >= sizeof lim->effort) {
+      free(model);
+      free(effort);
+      return -2;
+    }
+    lim->has_effort = 1;
+    memcpy(lim->effort, effort, strlen(effort) + 1);
+  }
+  free(model);
+  free(effort);
+  if (json_has_key(body, "max_tokens"))
+    lim->max_tokens = json_int_key(body, "max_tokens", 0);
+  if (json_has_key(body, "context_tokens"))
+    lim->context_tokens = json_int_key(body, "context_tokens", 0);
+  compact = json_object_slice(body, "compact");
+  if (compact) {
+    lim->compact_explicit = 1;
+    if (json_has_key(compact, "max_refills"))
+      lim->compact_max_refills = json_int_key(compact, "max_refills", 3);
+    if (json_has_key(compact, "keep_tail"))
+      lim->compact_keep_tail = json_int_key(compact, "keep_tail", 2);
+    if (json_has_key(compact, "keep_head"))
+      lim->compact_keep_head = json_int_key(compact, "keep_head", -1);
+    if (json_has_key(compact, "shrink_at"))
+      lim->compact_shrink_at = json_int_key(compact, "shrink_at", 1800);
+    if (json_has_key(compact, "preemptive"))
+      lim->compact_preemptive = json_boolish(compact, "preemptive", 0);
+    free(compact);
+  } else if (json_has_key(body, "compact_max_refills") ||
+             json_has_key(body, "compact_keep_tail") ||
+             json_has_key(body, "compact_keep_head") ||
+             json_has_key(body, "compact_shrink_at") ||
+             json_has_key(body, "compact_preemptive") ||
+             json_has_key(body, "compact_explicit")) {
+    lim->compact_explicit = 1;
+    if (json_has_key(body, "compact_explicit"))
+      lim->compact_explicit = json_boolish(body, "compact_explicit", 1);
+    if (json_has_key(body, "compact_max_refills"))
+      lim->compact_max_refills = json_int_key(body, "compact_max_refills", 3);
+    if (json_has_key(body, "compact_keep_tail"))
+      lim->compact_keep_tail = json_int_key(body, "compact_keep_tail", 2);
+    if (json_has_key(body, "compact_keep_head"))
+      lim->compact_keep_head = json_int_key(body, "compact_keep_head", -1);
+    if (json_has_key(body, "compact_shrink_at"))
+      lim->compact_shrink_at = json_int_key(body, "compact_shrink_at", 1800);
+    if (json_has_key(body, "compact_preemptive"))
+      lim->compact_preemptive = json_boolish(body, "compact_preemptive", 0);
+  }
+  return 0;
+}
+
+static int model_token_ok(const char *model) {
+  const char *m;
+  if (!model) return 1;
+  for (m = model; *m; m++) {
+    if (*m == '"' || *m == '\n' || *m == '\r' || *m == ' ') return 0;
+  }
+  return 1;
+}
+
+static const char *run_prefix_of(const char *path) {
+  if (path && !strncmp(path, "/api/v1/runs", 12)) return "/api/v1/runs";
+  if (path && !strncmp(path, "/peer/v1/runs", 13)) return "/peer/v1/runs";
+  return "/api/runs";
+}
+
+static int run_plate_code(const char *plate) {
+  if (!plate) return 500;
+  if (strstr(plate, "\"error\":\"run_not_found\"")) return 404;
+  if (strstr(plate, "\"error\":\"bad_id\"")) return 400;
+  if (strstr(plate, "\"error\":\"oom\"")) return 500;
+  if (strstr(plate, "\"ok\":false")) return 400;
+  return 200;
+}
+
+static void run_send_json(int cfd, const char *plate) {
+  const char *fallback =
+      "{\"schema\":\"nanobot.run.v1\",\"ok\":false,\"error\":\"oom\",\"python\":0}";
+  http_json(cfd, run_plate_code(plate), plate ? plate : fallback);
+}
+
+/* 1 when the id is missing or illegal and the error plate was sent. */
+static int run_reject_missing(int cfd, const char *id) {
+  char *st = ng_run_status_json(id);
+  int missing = !st || strstr(st, "\"error\":\"run_not_found\"") ||
+                strstr(st, "\"error\":\"bad_id\"");
+  if (!missing) {
+    free(st);
+    return 0;
+  }
+  run_send_json(cfd, st);
+  free(st);
+  return 1;
+}
+
+typedef struct {
+  int fd;
+} run_sse_ud;
+
+static void run_sse_line(void *ud, const char *line) {
+  run_sse_ud *u = ud;
+  if (!u || !line) return;
+  send_all(u->fd, "data: ", 6);
+  send_all(u->fd, line, strlen(line));
+  send_all(u->fd, "\n\n", 2);
+}
+
+/* File-backed async runs. 1 = this request was answered. */
+static int handle_runs(int cfd, const char *req, const char *path, int is_get,
+                       int is_post, int is_head, ng_agent_cfg *agent,
+                       ng_session *session) {
+  char id[48], action[32];
+  long since = -1;
+  const char *body;
+  const char *prefix;
+  if (!ng_run_is_route(path, id, sizeof id, action, sizeof action, &since))
+    return 0;
+  if (!require_peer_auth(cfd, req, 1)) return 1;
+  prefix = run_prefix_of(path);
+  body = strstr(req, "\r\n\r\n");
+  body = body ? body + 4 : "";
+
+  if (!id[0]) {
+    char *prompt = NULL;
+    char *filter = NULL;
+    ng_run_limits lim;
+    char *id_new = NULL;
+    int lim_rc;
+    const char *p;
+    if (is_get) {
+      char *list = ng_run_list_json();
+      run_send_json(cfd, list);
+      free(list);
+      return 1;
+    }
+    if (!is_post) {
+      http_method_not_allowed(cfd, "GET, HEAD, POST, OPTIONS");
+      return 1;
+    }
+    prompt = ng_json_get_string(body, "prompt");
+    if (!prompt) prompt = ng_json_get_string(body, "message");
+    if (prompt) {
+      p = prompt;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (!*p) {
+        free(prompt);
+        prompt = NULL;
+      }
+    }
+    if (!prompt) {
+      http_peer_err(cfd, 400, "missing_prompt");
+      return 1;
+    }
+    if (strlen(prompt) > 256 * 1024) {
+      free(prompt);
+      http_peer_err(cfd, 400, "prompt_too_long");
+      return 1;
+    }
+    if (!agent) {
+      free(prompt);
+      http_peer_err(cfd, 503, "no_agent");
+      return 1;
+    }
+    if (strncmp(prompt, "@!", 2) != 0 && ng_agent_needs_browser_session(agent)) {
+      if (session && !ng_session_valid(session) && !session->login_pending)
+        (void)ng_session_ensure(session);
+      if (!session || !ng_session_valid(session)) {
+        free(prompt);
+        http_peer_err_flag(cfd, 401, "need_login", "need_login");
+        return 1;
+      }
+    }
+    lim_rc = limits_from_body(body, &lim);
+    if (lim_rc == -1) {
+      free(prompt);
+      http_peer_err(cfd, 400, "bad_model");
+      return 1;
+    }
+    if (lim_rc == -2) {
+      free(prompt);
+      http_peer_err(cfd, 400, "bad_reasoning_effort");
+      return 1;
+    }
+    if (!model_token_ok(lim.model)) {
+      free(prompt);
+      http_peer_err(cfd, 400, "bad_model");
+      return 1;
+    }
+    if (lim.has_effort && lim.effort[0]) {
+      char canon[40];
+      if (ng_effort_canon(lim.effort, canon, sizeof canon) != 0) {
+        free(prompt);
+        http_peer_err(cfd, 400, "bad_reasoning_effort");
+        return 1;
+      }
+    }
+    filter = json_object_slice(body, "filter");
+    if (json_has_key(body, "filter") && !filter) {
+      free(prompt);
+      http_peer_err(cfd, 400, "bad_filter");
+      return 1;
+    }
+    id_new = ng_run_create(prompt, &lim, filter);
+    free(prompt);
+    free(filter);
+    if (!id_new) {
+      http_peer_err(cfd, 400, "run_create_failed");
+      return 1;
+    }
+    {
+      pid_t w = fork();
+      if (w == 0) {
+        char *reply;
+        close(cfd);
+        reply = ng_run_execute(agent, id_new);
+        free(reply);
+        free(id_new);
+        _exit(0);
+      }
+      if (w < 0) {
+        ng_run *run = ng_run_open(id_new);
+        if (run) {
+          ng_run_finish(run, "error", "fork_failed");
+          ng_run_close(run);
+        }
+        free(id_new);
+        http_peer_err(cfd, 503, "fork_failed");
+        return 1;
+      }
+    }
+    {
+      char *ack = NULL;
+      char poll[160], evu[160], stu[160];
+      int pn = snprintf(poll, sizeof poll, "%s/%s", prefix, id_new);
+      int en = snprintf(evu, sizeof evu, "%s/%s/events", prefix, id_new);
+      int sn = snprintf(stu, sizeof stu, "%s/%s/stream", prefix, id_new);
+      if (pn < 0 || pn >= (int)sizeof poll || en < 0 || en >= (int)sizeof evu ||
+          sn < 0 || sn >= (int)sizeof stu) {
+        free(id_new);
+        http_peer_err(cfd, 500, "oom");
+        return 1;
+      }
+      if (asprintf(&ack,
+                   "{\"schema\":\"nanobot.run.v1\",\"ok\":true,"
+                   "\"action\":\"run_queued\",\"id\":\"%s\",\"status\":\"queued\","
+                   "\"poll\":\"%s\",\"events\":\"%s\",\"stream\":\"%s\","
+                   "\"python\":0}",
+                   id_new, poll, evu, stu) < 0)
+        ack = NULL;
+      http_response(cfd, 202, "application/json", ack ? ack : "{}",
+                    ack ? strlen(ack) : 2);
+      free(ack);
+      free(id_new);
+    }
+    return 1;
+  }
+
+  if (!action[0]) {
+    char *st;
+    if (!is_get) {
+      http_method_not_allowed(cfd, "GET, HEAD, OPTIONS");
+      return 1;
+    }
+    st = ng_run_status_json(id);
+    run_send_json(cfd, st);
+    free(st);
+    return 1;
+  }
+  if (!strcmp(action, "events")) {
+    char *ev;
+    if (!is_get) {
+      http_method_not_allowed(cfd, "GET, HEAD, OPTIONS");
+      return 1;
+    }
+    if (run_reject_missing(cfd, id)) return 1;
+    ev = ng_run_events_json(id, since, 200);
+    run_send_json(cfd, ev);
+    free(ev);
+    return 1;
+  }
+  if (!strcmp(action, "stream")) {
+    char hdr[384];
+    char open[320];
+    int hn, on;
+    run_sse_ud ud;
+    if (is_head) {
+      char *st = ng_run_status_json(id);
+      run_send_json(cfd, st);
+      free(st);
+      return 1;
+    }
+    if (!is_get) {
+      http_method_not_allowed(cfd, "GET, HEAD, OPTIONS");
+      return 1;
+    }
+    if (run_reject_missing(cfd, id)) return 1;
+    hn = snprintf(hdr, sizeof hdr,
+                  "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: text/event-stream\r\n"
+                  "Cache-Control: no-cache\r\n"
+                  "Connection: close\r\n"
+                  "Access-Control-Allow-Origin: *\r\n"
+                  "\r\n");
+    if (hn > 0 && hn < (int)sizeof hdr) send_all(cfd, hdr, (size_t)hn);
+    on = snprintf(open, sizeof open,
+                  "event: open\ndata: {\"schema\":\"nanobot.run.v1\",\"ok\":true,"
+                  "\"action\":\"stream_open\",\"id\":\"%s\",\"since\":%ld,"
+                  "\"python\":0}\n\n",
+                  id, since);
+    if (on > 0 && on < (int)sizeof open) send_all(cfd, open, (size_t)on);
+    ud.fd = cfd;
+    ng_run_tail(id, since, 20000, run_sse_line, &ud);
+    {
+      static const char bye[] =
+          "event: bye\ndata: {\"schema\":\"nanobot.run.v1\",\"ok\":true,"
+          "\"action\":\"stream_window\",\"python\":0}\n\n";
+      send_all(cfd, bye, sizeof bye - 1);
+    }
+    return 1;
+  }
+  if (!is_post) {
+    http_method_not_allowed(cfd, "POST, OPTIONS");
+    return 1;
+  }
+  if (run_reject_missing(cfd, id)) return 1;
+  if (!strcmp(action, "abort") || !strcmp(action, "pause") ||
+      !strcmp(action, "resume")) {
+    int rc = !strcmp(action, "abort") ? ng_run_request_abort(id)
+             : !strcmp(action, "pause") ? ng_run_request_pause(id)
+                                         : ng_run_request_resume(id);
+    char *st;
+    if (rc != 0) {
+      http_peer_err(cfd, 404, "run_not_found");
+      return 1;
+    }
+    st = ng_run_status_json(id);
+    run_send_json(cfd, st);
+    free(st);
+    return 1;
+  }
+  if (!strcmp(action, "intercept")) {
+    char *text = ng_json_get_string(body, "text");
+    char *st;
+    const char *p;
+    int rc;
+    if (!text) text = ng_json_get_string(body, "prompt");
+    p = text ? text : "";
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+    if (!*p) {
+      free(text);
+      http_peer_err(cfd, 400, "missing_text");
+      return 1;
+    }
+    rc = ng_run_request_intercept(id, text);
+    free(text);
+    if (rc != 0) {
+      http_peer_err(cfd, 400, "bad_intercept");
+      return 1;
+    }
+    st = ng_run_status_json(id);
+    run_send_json(cfd, st);
+    free(st);
+    return 1;
+  }
+  if (!strcmp(action, "filter")) {
+    char *filter = NULL;
+    const char *use;
+    char *st;
+    int rc;
+    if (json_has_key(body, "filter")) {
+      filter = json_object_slice(body, "filter");
+      if (!filter) {
+        http_peer_err(cfd, 400, "bad_filter");
+        return 1;
+      }
+      use = filter;
+    } else {
+      use = body;
+    }
+    if (!use || !use[0]) {
+      free(filter);
+      http_peer_err(cfd, 400, "bad_filter");
+      return 1;
+    }
+    rc = ng_run_set_filter(id, use);
+    free(filter);
+    if (rc != 0) {
+      http_peer_err(cfd, 400, "bad_filter");
+      return 1;
+    }
+    st = ng_run_status_json(id);
+    run_send_json(cfd, st);
+    free(st);
+    return 1;
+  }
+  if (!strcmp(action, "config")) {
+    ng_run_limits lim;
+    char *st;
+    int lim_rc = limits_from_body(body, &lim);
+    if (lim_rc == -1 || !model_token_ok(lim.model)) {
+      http_peer_err(cfd, 400, "bad_model");
+      return 1;
+    }
+    if (lim_rc == -2) {
+      http_peer_err(cfd, 400, "bad_reasoning_effort");
+      return 1;
+    }
+    if (ng_run_set_limits(id, &lim) != 0) {
+      http_peer_err(cfd, 400, "bad_limits");
+      return 1;
+    }
+    st = ng_run_status_json(id);
+    run_send_json(cfd, st);
+    free(st);
+    return 1;
+  }
+  http_peer_err(cfd, 404, "not_found");
+  return 1;
+}
+
+
 static void handle_client(int cfd, ng_http_cfg *cfg) {
   ng_agent_cfg *agent = cfg->agent;
   ng_session *session = cfg->session;
@@ -657,6 +1190,13 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
   if (session) {
     int pr = ng_session_poll_login(session);
     if (pr == 1) ng_log("auth: browser approved session");
+  }
+
+  if (handle_runs(cfd, req, path, is_get, is_post,
+                  strncmp(req, "HEAD ", 5) == 0, agent, session)) {
+    free(req);
+    close(cfd);
+    return;
   }
 
   /*
@@ -1381,7 +1921,8 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/ready\",\"/peer/v1/ready\",\"/api/ready\","
       "\"/peer/v1/info\",\"/peer/v1/prompt\",\"/peer/v1/shell\",\"/peer/v1/jobs\","
       "\"/peer/v1/task\",\"/peer/v1/models\",\"/api/chat\",\"/api/auth\",\"/api/task\","
-      "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/augogen\",\"/api/subagents\"],"
+      "\"/api/settings\",\"/api/models\",\"/api/braincube\",\"/api/augogen\",\"/api/subagents\","
+      "\"/api/runs\",\"/api/v1/runs\",\"/peer/v1/runs\"],"
       "\"product_wire\":\"smx2\",\"peer_http\":\"lab_ops_only\","
       "\"peer_http_is_product_bus\":false,\"share\":\"state_matrix_only\","
       "\"hold_flash\":1,\"llm_is_commander\":false,\"python\":0}";
@@ -1397,7 +1938,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     const char *ns =
       (strcmp(path, "/peer/v1") == 0 || strcmp(path, "/peer/v1/") == 0) ? "peer/v1" :
       (strcmp(path, "/api/v1") == 0 || strcmp(path, "/api/v1/") == 0) ? "api/v1" : "api";
-    char body[1400];
+    char body[2048];
     int n = snprintf(body, sizeof body,
       "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"index\","
       "\"service\":\"nanobot-peer\",\"namespace\":\"%s\","
@@ -1412,10 +1953,15 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/peer/v1/task\",\"/api/task\",\"/peer/v1/models\",\"/api/models\","
       "\"/api/settings\",\"/settings\",\"/api/backend\",\"/peer/v1/backend\","
       "\"/api/auth\",\"/api/chat\",\"/api/braincube\",\"/api/augogen\",\"/api/subagents\","
+      "\"/api/runs\",\"/api/v1/runs\",\"/peer/v1/runs\","
       "\"/api/log\",\"/peer/v1/log\",\"/api/mcp/servers\""
       "],"
       NG_PEER_HTTP_DUAL_WIRE "}",
       ns);
+    if (n < 0 || n >= (int)sizeof body) {
+      http_peer_err(cfd, 500, "oom");
+      free(req); close(cfd); return;
+    }
     http_response(cfd, 200, "application/json", body, (size_t)n);
     free(req); close(cfd); return;
   }
@@ -7099,7 +7645,7 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       (void)ng_session_ensure(session);
     int signed_in = session && ng_session_valid(session);
     /* Room for expanded dual-wire endpoints list (/api/* + control + api-share). */
-    char body[2048];
+    char body[3072];
     char share_frag[512];
     ng_api_share_info_json(agent, share_frag, sizeof share_frag);
     char *ver = ng_json_escape(NG_VERSION);
@@ -7128,6 +7674,9 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       "\"/api/shell\","
       "\"/peer/v1/jobs\","
       "\"/api/jobs\","
+      "\"/api/runs\","
+      "\"/api/v1/runs\","
+      "\"/peer/v1/runs\","
       "\"/peer/v1/control\","
       "\"/api/control\","
       "\"/peer/v1/api-share\","
