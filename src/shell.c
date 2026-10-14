@@ -608,6 +608,7 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
   time_t deadline = time(NULL) + timeout_sec;
   int timed_out = 0;
   int stopped = 0;
+  int capped = 0;
   while (1) {
     if (g_shell_stop && g_shell_stop()) {
       stopped = 1;
@@ -629,26 +630,40 @@ static ng_cmd_result ng_run_command_ex(const char *command, int timeout_sec, int
       char tmp[1024];
       ssize_t n = read(pipefd[0], tmp, sizeof tmp);
       if (n > 0) {
-        if (len + (size_t)n + 1 > cap) {
+        /* Past the capture cap, keep the stored bytes and read one chunk.
+         * The wait loop then polls the abort hook and the deadline. */
+        if (capped) {
+        } else if (len + (size_t)n + 1 > cap) {
           size_t ncap = cap * 2;
           if (ncap > ng_out_max()) ncap = ng_out_max() + 1;
           if (len + (size_t)n + 1 > ncap) {
-            size_t room = ncap - len - 1;
-            if (room > 0) {
-              memcpy(buf + len, tmp, room);
-              len += room;
-              buf[len] = 0;
+            if (cap < ncap) {
+              char *nb = realloc(buf, ncap);
+              if (nb) { buf = nb; cap = ncap; }
             }
-            while (read(pipefd[0], tmp, sizeof tmp) > 0) {}
-            break;
+            if (cap > len + 1) {
+              size_t room = cap - len - 1;
+              if (room > (size_t)n) room = (size_t)n;
+              if (room > 0) {
+                memcpy(buf + len, tmp, room);
+                len += room;
+                buf[len] = 0;
+              }
+            }
+            capped = 1;
+          } else {
+            char *nb = realloc(buf, ncap);
+            if (!nb) break;
+            buf = nb; cap = ncap;
+            memcpy(buf + len, tmp, (size_t)n);
+            len += (size_t)n;
+            buf[len] = 0;
           }
-          char *nb = realloc(buf, ncap);
-          if (!nb) break;
-          buf = nb; cap = ncap;
+        } else {
+          memcpy(buf + len, tmp, (size_t)n);
+          len += (size_t)n;
+          buf[len] = 0;
         }
-        memcpy(buf + len, tmp, (size_t)n);
-        len += (size_t)n;
-        buf[len] = 0;
       } else if (n == 0) break;
     }
     int st;

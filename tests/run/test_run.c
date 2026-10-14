@@ -513,6 +513,21 @@ static void test_tail_stop(void) {
 
 static int shell_stop_now(void) { return 1; }
 
+static struct timespec cap_t0;
+
+static int shell_stop_after_window(void) {
+  struct timespec n;
+  long ms;
+  clock_gettime(CLOCK_MONOTONIC, &n);
+  ms = (long)(n.tv_sec - cap_t0.tv_sec) * 1000L + (n.tv_nsec - cap_t0.tv_nsec) / 1000000L;
+  return ms >= 700;
+}
+
+static void cap_alarm(int sig) {
+  (void)sig;
+  _exit(86);
+}
+
 static void test_shell_abort_kills(void) {
   char home[] = "/tmp/nanobot-run-XXXXXX";
   struct timespec a, b;
@@ -528,6 +543,58 @@ static void test_shell_abort_kills(void) {
   ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
   expect(cr.exit_code == 130, "abort kills the shell");
   expect(ms < 1500, "killed shell does not wait out the timeout");
+  ng_cmd_result_free(&cr);
+}
+
+static void test_shell_cap_deadline(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  struct timespec a, b;
+  struct sigaction sa, old;
+  long ms;
+  ng_cmd_result cr;
+  expect(mkdtemp(home) != NULL, "cap home");
+  ng_set_workdir(home);
+  ng_shell_set_stop(NULL);
+  memset(&sa, 0, sizeof sa);
+  sa.sa_handler = cap_alarm;
+  sigaction(SIGALRM, &sa, &old);
+  alarm(8);
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  cr = ng_run_command("yes", 2);
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  alarm(0);
+  sigaction(SIGALRM, &old, NULL);
+  ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+  expect(cr.exit_code == 124, "capture cap still hits the deadline");
+  expect(ms >= 1500 && ms < 5000, "capped shell returns on the deadline");
+  expect(cr.output && strlen(cr.output) <= ng_out_max() + 32, "capped output stays bounded");
+  ng_cmd_result_free(&cr);
+}
+
+static void test_shell_cap_abort(void) {
+  char home[] = "/tmp/nanobot-run-XXXXXX";
+  struct timespec a, b;
+  struct sigaction sa, old;
+  long ms;
+  ng_cmd_result cr;
+  expect(mkdtemp(home) != NULL, "cap abort home");
+  ng_set_workdir(home);
+  clock_gettime(CLOCK_MONOTONIC, &cap_t0);
+  ng_shell_set_stop(shell_stop_after_window);
+  memset(&sa, 0, sizeof sa);
+  sa.sa_handler = cap_alarm;
+  sigaction(SIGALRM, &sa, &old);
+  alarm(6);
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  cr = ng_run_command("yes", 30);
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  alarm(0);
+  sigaction(SIGALRM, &old, NULL);
+  ng_shell_set_stop(NULL);
+  ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+  expect(cr.exit_code == 130, "abort still applies after the capture cap");
+  expect(ms >= 500 && ms < 2500, "abort after the cap returns");
+  expect(cr.output && strlen(cr.output) <= ng_out_max() + 8, "abort after the cap keeps the cap");
   ng_cmd_result_free(&cr);
 }
 
@@ -563,6 +630,8 @@ int main(void) {
   test_list_newest();
   test_tail_stop();
   test_shell_abort_kills();
+  test_shell_cap_deadline();
+  test_shell_cap_abort();
   test_tail_ping();
   test_hub_closed_client();
   if (fails) {

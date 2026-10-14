@@ -421,6 +421,8 @@ Pause while an SSE line is being processed stops the reader inside `ng_run_poll`
 
 A shell command that has entered `ng_run_command` is killed when the live run's control file is `abort`. The wait loop polls that file, then `SIGKILL`s the shell process group and returns. Abort before that call returns the abort plate and does not start the command. After the killed command returns, the tool result is emitted, then the run finishes `aborted`. The same stop hook covers a model `run_terminal_command` that is already inside the shell. Pause and intercept do not kill the shell.
 
+When captured output reaches `ng_out_max`, the wait loop keeps those bytes. Later pipe data is read one chunk at a time, and the loop returns to the abort hook and the deadline. The child is reaped when it has exited. Filling the capture cap is not a kill by itself.
+
 `g_live_streamed` is cleared in `ng_run_execute` only. A nested `ng_agent_run` does not clear it, so a parent that already streamed tokens is not tokenized again at the end.
 
 ## Concurrency
