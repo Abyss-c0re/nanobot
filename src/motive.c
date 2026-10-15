@@ -257,6 +257,18 @@ void ng_motive_rank(const char *text, ng_motive *out) {
   if (!out) return;
   memset(out, 0, sizeof *out);
   norm_text(text, norm, sizeof norm);
+  /* Silence has no tokens to rank. The peer-prompt concept is the motive. */
+  if (!norm[0]) {
+    int peer = 0;
+    for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
+      if (!strcmp(kConcept[i], "prompt a peer to move")) peer = i;
+    }
+    out->plate = NG_PLATE_OBSERVE;
+    out->forward = 1;
+    copy_cap(out->concept, sizeof out->concept, kConcept[peer]);
+    copy_cap(out->line, sizeof out->line, kConcept[peer]);
+    return;
+  }
   out->plate = plate_of(norm);
   out->forward = plate_forward(out->plate);
   qh = simhash_text(norm);

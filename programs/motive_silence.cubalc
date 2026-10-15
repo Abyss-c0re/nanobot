@@ -1,0 +1,15 @@
+// Silence prompts one peer. Ordinary program: no HOLD_FLASH line.
+
+CUBE silence ROLE observer PROTON 1
+CUBE peer    ROLE nanobot  PROTON 1
+
+PLUG silence peer
+
+IMPULSE silence 1
+IMPULSE peer 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY peer
+DECIDE peer
+ASSERT CUBES >= 2
+PRINT "silence" UNITY DECIDE ENERGY

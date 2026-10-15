@@ -142,6 +142,13 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(strcmp(m.concept, "read the law and prove") == 0, "law concept");
 
+  ng_motive_rank("", &m);
+  expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
+  expect(m.forward, "silence may prompt");
+  expect(strcmp(m.line, "prompt a peer to move") == 0, "silence prompts a peer");
+  ng_motive_rank("   ", &m);
+  expect(strcmp(m.line, "prompt a peer to move") == 0, "blank text prompts a peer");
+
   ng_motive_rank("audit the last code change", &m);
   expect(m.plate == NG_PLATE_AUDIT, "audit plate");
   expect(strcmp(m.line, "audit the last code change") == 0, "audit line");
@@ -425,9 +432,15 @@ int main(void) {
     free(pend);
   }
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\"}");
-  expect(js && strstr(js, "\"status\":\"empty\""), "blank generate stays empty");
-  expect(js && strstr(js, "\"suggestion\":\"\""), "blank generate stores no line");
+  expect(js && strstr(js, "prompt a peer to move"), "blank generate prompts a peer");
+  expect(js && strstr(js, "\"status\":\"pending\""), "blank generate is pending");
   free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "prompt a peer to move"), "silence line stored");
+    expect(!pend || !strstr(pend, "trick the cube"), "silence stores no purge act");
+    free(pend);
+  }
 
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
