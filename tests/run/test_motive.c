@@ -1018,6 +1018,38 @@ int main(void) {
          "an ascii quote and a period stay off the suggestion");
   free(js);
 
+  /* A unicode space beside a quote trims with the quote. The words stay. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"\\u00a0\\u201cread the law and prove\\u201d\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a unicode space stays off the quoted suggestion");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"read the law and prove\",\"status\""),
+           "the stored suggestion keeps the unpadded law words");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"\\u201c read the law and prove \\u201d\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a space inside the quotes stays off the suggestion");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read the law and prove\\t\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a trailing tab stays off the suggestion");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read the law and prove\\u2014\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\xe2\x80\x94\""),
+         "an em dash stays on the suggestion");
+  free(js);
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

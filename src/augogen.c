@@ -446,6 +446,28 @@ static int edge_quote(const char *p) {
   return 0;
 }
 
+/* Byte length of one unicode space, or 0. ASCII space is not included.
+ * Quote bytes E2 80 98/99/9C/9D stay out of this set. An em dash stays out. */
+static int utf8_space(const char *p) {
+  unsigned char a, b, c;
+  if (!p || !p[0]) return 0;
+  a = (unsigned char)p[0];
+  if (a == 0xC2 && p[1]) {
+    b = (unsigned char)p[1];
+    if (b == 0x85 || b == 0xA0) return 2; /* U+0085, U+00A0 */
+  }
+  if (!p[1] || !p[2]) return 0;
+  b = (unsigned char)p[1];
+  c = (unsigned char)p[2];
+  if (a == 0xE1 && b == 0x9A && c == 0x80) return 3; /* U+1680 */
+  if (a == 0xE2 && b == 0x80 &&
+      ((c >= 0x80 && c <= 0x8A) || c == 0xA8 || c == 0xA9 || c == 0xAF))
+    return 3; /* U+2000–U+200A, U+2028, U+2029, U+202F */
+  if (a == 0xE2 && b == 0x81 && c == 0x9F) return 3; /* U+205F */
+  if (a == 0xE3 && b == 0x80 && c == 0x80) return 3; /* U+3000 */
+  return 0;
+}
+
 /* grok-build prompt_suggest::sanitize_suggestion */
 static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   char line[SUG_CAP];
@@ -460,21 +482,43 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   while (*raw && *raw != '\n' && *raw != '\r' && i + 1 < sizeof line)
     line[i++] = *raw++;
   line[i] = 0;
-  /* Trim ASCII and typographic quotes. The words stay. */
+  /* Trim quotes and edge whitespace. A quote behind a unicode space still drops.
+   * The words stay. An em dash stays. */
   p = line;
   for (;;) {
     int n = edge_quote(p);
-    if (!n) break;
-    p += n;
+    if (n) {
+      p += n;
+      continue;
+    }
+    if (*p == ' ' || *p == '\t' || *p == '\v' || *p == '\f') {
+      p++;
+      continue;
+    }
+    n = utf8_space(p);
+    if (n) {
+      p += n;
+      continue;
+    }
+    break;
   }
   i = strlen(p);
   for (;;) {
     int n;
     while (i > 0 && (p[i - 1] == '"' || p[i - 1] == '\'' || p[i - 1] == '`' ||
-                     p[i - 1] == ' ' || p[i - 1] == '.'))
+                     p[i - 1] == ' ' || p[i - 1] == '\t' || p[i - 1] == '\v' ||
+                     p[i - 1] == '\f' || p[i - 1] == '.'))
       i--;
     if (i >= 3 && (n = edge_quote(p + i - 3)) == 3) {
       i -= 3;
+      continue;
+    }
+    if (i >= 3 && utf8_space(p + i - 3) == 3) {
+      i -= 3;
+      continue;
+    }
+    if (i >= 2 && utf8_space(p + i - 2) == 2) {
+      i -= 2;
       continue;
     }
     break;

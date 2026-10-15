@@ -91,6 +91,7 @@
 - **lean:** the listener counts a worker before the fork, while the child-exit signal is held, so a worker that exits first still occupies one slot. That slot is released when the worker is reaped. The child cap is unchanged. CubalC board: `programs/fork_slot.cubalc`.
 - **hive:** the one peer POST quotes the plate, lexical count, Hamming, and concept of the posted line. The sender's plate keeps the rank of the act. A partial act still reports that act. `hop` `1` stores locally and does not POST. Generate does not POST. CubalC board: `programs/motive_body.cubalc`.
 - **hive:** a leading or trailing typographic quote on a suggestion trims with the ASCII quotes. The words stay. The 2–12 word bound stays. CubalC board: `programs/motive_quote.cubalc`.
+- **hive:** a space, a tab, or a unicode space at the edge of a suggestion trims with those quotes, so a quote behind that space still drops. The words stay. An em dash stays. The 2–12 word bound stays. CubalC board: `programs/motive_pad.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.
