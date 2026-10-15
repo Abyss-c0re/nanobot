@@ -246,34 +246,40 @@ static void rc_cache_save(const uint8_t *digits8) {
   (void)dir;
 }
 
+/* Copy http://host:port into caller storage. The default is loopback :8080. */
+void ng_bc_parse_rock_host(const char *url, char *host, size_t host_sz, int *port) {
+  char *colon, *slash;
+  int n;
+  if (port) *port = 8080;
+  if (!host || host_sz < 16) {
+    if (host && host_sz) host[0] = 0;
+    return;
+  }
+  snprintf(host, host_sz, "%s", "127.0.0.1");
+  if (!url || strncmp(url, "http://", 7) != 0 || !url[7]) return;
+  snprintf(host, host_sz, "%s", url + 7);
+  slash = strchr(host, '/');
+  if (slash) *slash = 0;
+  colon = strchr(host, ':');
+  if (colon) {
+    *colon = 0;
+    n = atoi(colon + 1);
+    if (port) *port = (n > 0 && n <= 65535) ? n : 8080;
+  }
+  if (!host[0]) snprintf(host, host_sz, "%s", "127.0.0.1");
+}
+
 /* Direct TCP GET — no popen/curl (fork+exec was ~1s and starved rockctl). */
 static int rockctl_http_get(char *buf, size_t cap) {
-  const char *host = "127.0.0.1";
+  char hostbuf[128];
+  const char *host;
   int port = 8080;
-  const char *env = getenv("ROCKCTL_URL");
   int fd = -1, n = 0, total = 0;
   struct sockaddr_in sa;
   struct timeval tv;
-  char req[128];
-  if (env && env[0]) {
-    /* only support http://host:port form; default path /api/v1/status */
-    if (strncmp(env, "http://", 7) == 0) {
-      char tmp[128];
-      char *colon, *slash;
-      snprintf(tmp, sizeof tmp, "%s", env + 7);
-      slash = strchr(tmp, '/');
-      if (slash) *slash = 0;
-      colon = strchr(tmp, ':');
-      if (colon) {
-        *colon = 0;
-        host = tmp;
-        port = atoi(colon + 1);
-        if (port <= 0) port = 8080;
-      } else {
-        host = tmp;
-      }
-    }
-  }
+  char req[192];
+  ng_bc_parse_rock_host(getenv("ROCKCTL_URL"), hostbuf, sizeof hostbuf, &port);
+  host = hostbuf;
   fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) return -1;
   tv.tv_sec = 0;
