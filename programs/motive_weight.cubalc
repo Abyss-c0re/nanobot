@@ -1,0 +1,16 @@
+// Lexical weight stays 64 unless the host sets it.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE weight ROLE observer PROTON 1
+CUBE rank   ROLE nanobot  PROTON 1
+
+PLUG weight rank
+
+IMPULSE weight 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "weight" UNITY DECIDE ENERGY

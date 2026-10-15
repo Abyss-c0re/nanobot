@@ -240,6 +240,18 @@ static int lexical_hits(const char *norm, const char *concept) {
   return hits;
 }
 
+/* Unset, empty, or outside 0-255 stays 64. The plate cascade is unchanged. */
+static int lex_weight(void) {
+  const char *e = getenv("NANOBOT_MOTIVE_LEX_W");
+  char *end = NULL;
+  long v;
+  if (!e || !e[0]) return 64;
+  v = strtol(e, &end, 10);
+  if (!end || end == e || *end) return 64;
+  if (v < 0 || v > 255) return 64;
+  return (int)v;
+}
+
 static void copy_cap(char *dst, size_t cap, const char *src) {
   size_t n;
   if (!dst || cap < 2) return;
@@ -272,15 +284,18 @@ void ng_motive_rank(const char *text, ng_motive *out) {
   out->plate = plate_of(norm);
   out->forward = plate_forward(out->plate);
   qh = simhash_text(norm);
-  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
-    int lex = lexical_hits(norm, kConcept[i]);
-    int h = ham64(qh, simhash_text(kConcept[i]));
-    int score = lex * 64 + (64 - h);
-    if (score > best_score) {
-      best = i;
-      best_score = score;
-      best_lex = lex;
-      best_ham = h;
+  {
+    int lw = lex_weight();
+    for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
+      int lex = lexical_hits(norm, kConcept[i]);
+      int h = ham64(qh, simhash_text(kConcept[i]));
+      int score = lex * lw + (64 - h);
+      if (score > best_score) {
+        best = i;
+        best_score = score;
+        best_lex = lex;
+        best_ham = h;
+      }
     }
   }
   out->rank = best_score < 0 ? 0 : best_score;

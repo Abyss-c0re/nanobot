@@ -141,6 +141,23 @@ int main(void) {
 
   ng_motive_rank("read the law and prove", &m);
   expect(strcmp(m.concept, "read the law and prove") == 0, "law concept");
+  expect(m.rank == 256, "default lexical weight is 64");
+  setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 67, "lexical weight 1 keeps the hamming term");
+  expect(m.lexical == 3 && m.hamming == 0, "weight leaves the feature counts");
+  expect(m.forward, "weight leaves a forward plate forward");
+  ng_motive_rank("trick the cube", &m);
+  expect(m.plate == NG_PLATE_PURGE && !m.forward, "weight leaves a purge closed");
+  ng_motive_rank("", &m);
+  expect(m.rank == 0, "silence ignores the weight");
+  setenv("NANOBOT_MOTIVE_LEX_W", "256", 1);
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256, "weight above 255 stays 64");
+  setenv("NANOBOT_MOTIVE_LEX_W", "nope", 1);
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256, "a bad weight stays 64");
+  unsetenv("NANOBOT_MOTIVE_LEX_W");
 
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
@@ -217,7 +234,7 @@ int main(void) {
     expect(pend && strstr(pend, "\"rank\":256"), "stored peer keeps rank");
     expect(pend && strstr(pend, "\"lexical\":3"), "stored peer keeps lexical");
     expect(pend && strstr(pend, "\"hamming\":0"), "stored peer keeps hamming");
-    expect(pend && strstr(pend, "\"plate\":\"observe\""), "stored peer keeps the plate");
+    expect(!pend || !strstr(pend, "\"plate\":"), "stored peer omits the plate name");
     expect(pend && strstr(pend, "\"executed\":false"), "vote-only does not run");
     free(pend);
   }
@@ -470,7 +487,7 @@ int main(void) {
     expect(pend && strstr(pend, "\"rank\":256"), "stored plate keeps rank");
     expect(pend && strstr(pend, "\"lexical\":3"), "stored plate keeps lexical");
     expect(pend && strstr(pend, "\"hamming\":0"), "stored plate keeps hamming");
-    expect(pend && strstr(pend, "\"plate\":\"observe\""), "stored plate keeps the plate name");
+    expect(!pend || !strstr(pend, "\"plate\":"), "stored plate omits the plate name");
     free(pend);
   }
   js = ng_augogen_handle(
@@ -494,7 +511,7 @@ int main(void) {
     expect(pend && strstr(pend, "\"rank\":0"), "stored silence keeps rank");
     expect(pend && strstr(pend, "\"lexical\":0"), "stored silence keeps lexical");
     expect(pend && strstr(pend, "\"hamming\":0"), "stored silence keeps hamming");
-    expect(pend && strstr(pend, "\"plate\":\"observe\""), "stored silence keeps the plate");
+    expect(!pend || !strstr(pend, "\"plate\":"), "stored silence omits the plate name");
     free(pend);
   }
   /* Generate enqueue stays local. The motive action is the peer POST. */
