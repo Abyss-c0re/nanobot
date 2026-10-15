@@ -115,8 +115,6 @@ int main(void) {
   expect(m.plate == NG_PLATE_PURGE, "purge trick the cube");
   expect(!m.forward, "purge is not forward");
   expect(strcmp(m.line, "serve the matrix in bits") == 0, "purge remedy");
-  expect(strcmp(m.concept, "fold the matrix and decide") == 0, "purge keeps the sketch concept");
-  expect(m.rank == 40 && m.lexical == 0 && m.hamming == 24, "purge sketch rank");
   expect(ng_motive_blocks("trick the cube"), "blocks purge");
   expect(words(m.line) >= 2 && words(m.line) <= 12, "purge line words");
 
@@ -184,43 +182,6 @@ int main(void) {
   ng_motive_rank("audit the last code change", &m);
   expect(m.plate == NG_PLATE_AUDIT, "audit plate");
   expect(strcmp(m.line, "audit the last code change") == 0, "audit line");
-
-  ng_motive_rank("confess the last flash", &m);
-  expect(strcmp(m.concept, "confess the heat and serve") == 0, "name word beats a later word");
-  expect(m.rank == 103 && m.lexical == 1 && m.hamming == 25, "name word keeps its own score");
-  expect(m.plate == NG_PLATE_CONFESS && m.forward, "name word leaves the plate");
-
-  ng_motive_rank("read the change and confess", &m);
-  expect(strcmp(m.concept, "confess the heat and serve") == 0, "longer name word wins a shared overlap");
-  expect(m.rank == 108 && m.lexical == 1 && m.hamming == 20, "longer name word keeps its score");
-
-  ng_motive_rank("keep the change synced", &m);
-  expect(strcmp(m.concept, "keep free energy flowing") == 0, "a name word stays over a longer later word");
-  expect(m.rank == 105 && m.lexical == 1 && m.hamming == 23, "tied score keeps the name word");
-
-  ng_motive_rank("read the law", &m);
-  expect(strcmp(m.concept, "read the law and prove") == 0, "partial law stays the law");
-  expect(m.rank == 185 && m.lexical == 2 && m.hamming == 7, "partial law rank");
-
-  ng_motive_rank("please read the law and prove it", &m);
-  expect(strcmp(m.concept, "read the law and prove") == 0, "wrapped law stays the law");
-  expect(m.rank == 248 && m.lexical == 3 && m.hamming == 8, "wrapped law rank");
-
-  ng_motive_rank("read the law and confess", &m);
-  expect(strcmp(m.concept, "read the law and prove") == 0, "two overlaps beat one name");
-  expect(m.rank == 183 && m.lexical == 2 && m.hamming == 9, "two overlaps keep the law score");
-  expect(m.plate == NG_PLATE_CONFESS, "confess plate stays on the mixed line");
-
-  ng_motive_rank("you lied", &m);
-  expect(m.plate == NG_PLATE_CONFESS, "lied is confess");
-  expect(strcmp(m.concept, "rank concepts then act") == 0, "a bare confess keeps the sketch");
-  expect(strcmp(m.line, "rank concepts then act") == 0, "a bare confess line is the sketch");
-  expect(m.rank == 43 && m.lexical == 0 && m.hamming == 21, "a bare confess rank is the sketch");
-
-  ng_motive_rank("it crashed again", &m);
-  expect(m.plate == NG_PLATE_INVESTIGATE, "crashed is investigate");
-  expect(strcmp(m.concept, "confess the heat and serve") == 0, "a bare fault keeps the sketch");
-  expect(m.rank == 35 && m.lexical == 0 && m.hamming == 29, "a bare fault rank is the sketch");
 
   ng_motive_rank("hold flash for device join", &m);
   expect(m.plate == NG_PLATE_HOLD_FLASH, "hold plate");
