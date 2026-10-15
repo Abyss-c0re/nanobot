@@ -940,8 +940,69 @@ static void test_worker_slot_before_exit(void) {
   sigaction(SIGCHLD, &old, NULL);
 }
 
+static void write_orphan(const char *jdir, const char *id, const char *status) {
+  char path[192];
+  FILE *f;
+  snprintf(path, sizeof path, "%s/%s.json", jdir, id);
+  f = fopen(path, "wb");
+  expect(f != NULL, "seed an orphan job");
+  if (!f) return;
+  fprintf(f, "{\"id\":\"%s\",\"status\":\"%s\",\"kind\":\"prompt\"}\n", id, status);
+  fclose(f);
+}
+
+static int orphan_fields(const char *jdir, const char *id, char *st_out, size_t st_n,
+                         char *err, size_t err_n) {
+  char path[192];
+  char buf[400];
+  FILE *f;
+  size_t n;
+  char *st;
+  char *e;
+  if (st_out && st_n) st_out[0] = 0;
+  if (err && err_n) err[0] = 0;
+  snprintf(path, sizeof path, "%s/%s.json", jdir, id);
+  f = fopen(path, "rb");
+  if (!f) return 0;
+  n = fread(buf, 1, sizeof buf - 1, f);
+  fclose(f);
+  buf[n] = 0;
+  st = ng_json_get_string(buf, "status");
+  e = ng_json_get_string(buf, "error");
+  if (st_out && st_n && st) snprintf(st_out, st_n, "%s", st);
+  if (err && err_n && e) snprintf(err, err_n, "%s", e);
+  free(st);
+  free(e);
+  return 1;
+}
+
+static void test_auto_orphan(void) {
+  char jdir[] = "/tmp/nb-orphan-test";
+  char st[32];
+  char err[64];
+  mkdir(jdir, 0700);
+  write_orphan(jdir, "agrun-0000000001-1", "queued");
+  write_orphan(jdir, "17920893130001", "queued");
+  write_orphan(jdir, "agrun-0000000002-1", "done");
+  write_orphan(jdir, "nope-1", "queued");
+  ng_jobs_mark_orphans(jdir);
+  expect(orphan_fields(jdir, "agrun-0000000001-1", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "error") == 0 && strcmp(err, "orphan_restart") == 0,
+         "a queued auto job left by a restart is marked error");
+  expect(orphan_fields(jdir, "17920893130001", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "error") == 0 && strcmp(err, "orphan_restart") == 0,
+         "a queued digit job left by a restart is marked error");
+  expect(orphan_fields(jdir, "agrun-0000000002-1", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "done") == 0 && err[0] == 0,
+         "a done auto job stays done");
+  expect(orphan_fields(jdir, "nope-1", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "queued") == 0 && err[0] == 0,
+         "a name that is not a job id stays queued");
+}
+
 int main(void) {
   test_cap_regular_fd();
+  test_auto_orphan();
   test_worker_title();
   test_worker_slot_before_exit();
   test_lean_info_skips_refresh();

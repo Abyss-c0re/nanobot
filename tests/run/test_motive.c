@@ -1169,17 +1169,18 @@ int main(void) {
   /* A done auto job past the keep cap drops. A queued job stays. */
   {
     char path[256];
-    int i, before = 0;
+    int i;
     DIR *d = opendir("/tmp/nb-motive-test/jobs");
     struct dirent *de;
     if (d) {
       while ((de = readdir(d)) != NULL) {
-        size_t n = strlen(de->d_name);
-        if (n > 5 && strcmp(de->d_name + n - 5, ".json") == 0) before++;
+        if (strncmp(de->d_name, "agrun-", 6) == 0) {
+          snprintf(path, sizeof path, "%s/jobs/%s", home, de->d_name);
+          unlink(path);
+        }
       }
       closedir(d);
     }
-    expect(before < 40, "the job plate has room under the keep cap");
     for (i = 1; i <= 49; i++) {
       FILE *f;
       char id[40];

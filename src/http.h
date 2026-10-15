@@ -22,6 +22,9 @@ struct ng_http_cfg {
 
 int ng_http_serve(ng_http_cfg *cfg);
 
+/* On listen, a queued or running job whose worker is gone becomes error. */
+void ng_jobs_mark_orphans(const char *jdir);
+
 /* The accept loop counts a worker before fork. A failed fork releases it. */
 void ng_http_worker_slots_reset(void);
 int ng_http_worker_slots(void);

@@ -128,10 +128,32 @@ static void jobs_gc(const char *jdir) {
   }
 }
 
+/* A peer job id is all digits. An auto job id is agrun, then digits and hyphens. */
+static int job_meta_stem(const char *stem, size_t n) {
+  size_t i;
+  int digit = 0;
+  if (n == 0 || n >= 32) return 0;
+  if (n >= 6 && strncmp(stem, "agrun-", 6) == 0) {
+    if (n < 8) return 0;
+    for (i = 6; i < n; i++) {
+      unsigned char c = (unsigned char)stem[i];
+      if (c == '-') continue;
+      if (!isdigit(c)) return 0;
+      digit = 1;
+    }
+    return digit;
+  }
+  for (i = 0; i < n; i++) {
+    if (!isdigit((unsigned char)stem[i])) return 0;
+  }
+  return 1;
+}
+
 /* Residual: cool_restart / SIGTERM kills job worker children; metas stay
  * status=running|queued forever (jobs_gc never drops live). Mesh poll spins.
- * On listen only — mark orphans error so GC and dual-wire poll can finish. */
-static void jobs_mark_orphans(const char *jdir) {
+ * On listen only — mark orphans error so GC and dual-wire poll can finish.
+ * An auto id is included. A done job stays done. */
+void ng_jobs_mark_orphans(const char *jdir) {
   if (!jdir || !jdir[0]) return;
   DIR *d = opendir(jdir);
   if (!d) return;
@@ -142,15 +164,7 @@ static void jobs_mark_orphans(const char *jdir) {
     size_t len = strlen(name);
     if (len < 6 || strcmp(name + len - 5, ".json") != 0) continue;
     size_t idlen = len - 5;
-    if (idlen == 0 || idlen >= 32) continue;
-    int digits = 1;
-    for (size_t i = 0; i < idlen; i++) {
-      if (!isdigit((unsigned char)name[i])) {
-        digits = 0;
-        break;
-      }
-    }
-    if (!digits) continue;
+    if (!job_meta_stem(name, idlen)) continue;
     char mpath[700];
     snprintf(mpath, sizeof mpath, "%s/%s", jdir, name);
     char *meta = ng_read_file(mpath, NULL);
@@ -9185,7 +9199,7 @@ int ng_http_serve(ng_http_cfg *cfg) {
   {
     char jdir[640];
     snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
-    jobs_mark_orphans(jdir);
+    ng_jobs_mark_orphans(jdir);
     jobs_gc(jdir);
   }
 
