@@ -40,11 +40,14 @@ passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
 
 When that store happens and the request has no `hop`, one optional IPv4 peer
 receives the stored line. Set `NANOBOT_MOTIVE_PEER` (or settings `MOTIVE_PEER`)
-to `http://A.B.C.D:port` and `NANOBOT_MOTIVE_PEER_TOKEN` (or settings
-`MOTIVE_PEER_TOKEN`). The POST is `/peer/v1/augogen` with `enqueue` `1` and
-`hop` `1`, and the body text is the stored line. A request that already
-carries `hop` `1` stores locally and does not POST. An empty peer does not
-POST. There is no second peer and no retry. The act text is not the body.
+to `http://A.B.C.D:port`. The token is `NANOBOT_MOTIVE_PEER_TOKEN` or settings
+`MOTIVE_PEER_TOKEN`, or else an absolute path in `NANOBOT_MOTIVE_PEER_TOKEN_FILE`
+or settings `MOTIVE_PEER_TOKEN_FILE`. That file must be a regular owner-only
+file of at most 80 bytes. A leading `token=` is stripped. A group or other
+permission bit skips the file. The POST is `/peer/v1/augogen` with `enqueue`
+`1` and `hop` `1`, and the body text is the stored line. A request that
+already carries `hop` `1` stores locally and does not POST. An empty peer
+does not POST. There is no second peer and no retry. The act text is not the body.
 The CubalC boards are `programs/motive_rank.cubalc` and `programs/motive_hop.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true

@@ -4,6 +4,7 @@
 #include <nanobot/os.h>
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
@@ -108,6 +109,7 @@ int main(void) {
   /* Early stores must not open a socket. A name is not an address. */
   setenv("NANOBOT_MOTIVE_PEER", "off", 1);
   unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+  unsetenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE");
 
   ng_motive_rank("trick the cube", &m);
   expect(m.plate == NG_PLATE_PURGE, "purge trick the cube");
@@ -298,6 +300,109 @@ int main(void) {
       expect(0, "hop bind");
       if (lfd >= 0) close(lfd);
     }
+  }
+
+  /* A world-readable token file is skipped. An owner-only file is used. */
+  {
+    int lfd, port = 0, st = 0, on = 1, fd;
+    pid_t kid;
+    char url[64];
+    char path[] = "/tmp/nb-motive-hop-file.log";
+    char open_path[] = "/tmp/nb-motive-tok-open";
+    char own_path[] = "/tmp/nb-motive-tok-own";
+    char *log = NULL;
+    struct sockaddr_in sa;
+    socklen_t sl = sizeof sa;
+    FILE *sf, *lf;
+    long sz;
+    const char *open_tok = "open-tok\n";
+    const char *own_tok = "token=file-tok\n";
+    unlink(path);
+    fd = open(open_path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+    expect(fd >= 0, "open token file");
+    if (fd >= 0) {
+      expect(fchmod(fd, 0644) == 0, "open token mode");
+      expect(write(fd, open_tok, strlen(open_tok)) > 0, "open token write");
+      close(fd);
+    }
+    fd = open(own_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+    expect(fd >= 0, "owner token file");
+    if (fd >= 0) {
+      expect(fchmod(fd, 0600) == 0, "owner token mode");
+      expect(write(fd, own_tok, strlen(own_tok)) > 0, "owner token write");
+      close(fd);
+    }
+    sf = fopen("/tmp/nb-motive-test/settings", "w");
+    expect(sf != NULL, "settings for token file");
+    if (sf) {
+      fputs("MOTIVE_PEER_TOKEN_FILE=/tmp/nb-motive-tok-own\n", sf);
+      fclose(sf);
+    }
+    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    expect(lfd >= 0, "file hop socket");
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    if (lfd >= 0 &&
+        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
+        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 4) == 0 &&
+        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
+      port = ntohs(sa.sin_port);
+      kid = fork();
+      expect(kid >= 0, "file hop fork");
+      if (kid == 0) hop_sink(lfd, path);
+      if (kid > 0) {
+        close(lfd);
+        snprintf(url, sizeof url, "http://127.0.0.1:%d", port);
+        setenv("NANOBOT_MOTIVE_PEER", url, 1);
+        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+        setenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE", open_path, 1);
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"motive\",\"text\":\"prompt a peer to move\",\"enqueue\":\"1\"}");
+        free(js);
+        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE");
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"motive\",\"text\":\"prompt a peer to move\",\"enqueue\":\"1\"}");
+        free(js);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"motive\",\"text\":\"prompt a peer to move\","
+            "\"enqueue\":\"1\",\"hop\":\"1\"}");
+        free(js);
+        waitpid(kid, &st, 0);
+        lf = fopen(path, "r");
+        expect(lf != NULL, "file hop log");
+        if (lf) {
+          fseek(lf, 0, SEEK_END);
+          sz = ftell(lf);
+          if (sz < 0) sz = 0;
+          fseek(lf, 0, SEEK_SET);
+          log = malloc((size_t)sz + 1);
+          if (log) {
+            size_t n = fread(log, 1, (size_t)sz, lf);
+            log[n] = 0;
+          }
+          fclose(lf);
+        }
+        expect(log && count_substr(log, "POST /peer/v1/augogen") == 1,
+               "owner file posts once");
+        expect(log && strstr(log, "X-Nanobot-Peer-Token: file-tok"),
+               "token prefix stripped");
+        expect(!log || !strstr(log, "open-tok"), "world-readable file skipped");
+        expect(!log || !strstr(log, "token=file-tok"), "prefix stays off the wire");
+        free(log);
+        unlink(path);
+      }
+    } else {
+      expect(0, "file hop bind");
+      if (lfd >= 0) close(lfd);
+    }
+    unlink(open_path);
+    unlink(own_path);
+    setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+    unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+    unsetenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE");
   }
 
   if (g_fail) {

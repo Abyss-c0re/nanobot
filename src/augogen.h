@@ -16,6 +16,8 @@
  * forward line. Auto runs it only when an agent is present.
  * One optional IPv4 peer receives that stored line once. hop=1 does not
  * forward again. An empty NANOBOT_MOTIVE_PEER means no POST.
+ * The peer token may come from an owner-only file. A group or other bit
+ * skips that file.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */
 char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body);

@@ -474,6 +474,36 @@ static int token_safe(const char *t) {
   return 1;
 }
 
+/* Owner-only regular file. A group or other bit skips it. */
+static int token_from_file(char *dst, size_t cap) {
+  char path[256];
+  char buf[96];
+  struct stat st;
+  FILE *f;
+  size_t n;
+  char *p;
+  if (!dst || cap < 2) return 0;
+  dst[0] = 0;
+  knob_copy(path, sizeof path, "NANOBOT_MOTIVE_PEER_TOKEN_FILE", "MOTIVE_PEER_TOKEN_FILE");
+  if (path[0] != '/') return 0;
+  if (lstat(path, &st) != 0) return 0;
+  if (!S_ISREG(st.st_mode)) return 0;
+  if (st.st_mode & (S_IRWXG | S_IRWXO)) return 0;
+  if (st.st_size <= 0 || st.st_size > 80) return 0;
+  f = fopen(path, "r");
+  if (!f) return 0;
+  n = fread(buf, 1, sizeof buf - 1, f);
+  fclose(f);
+  buf[n] = 0;
+  p = buf;
+  if (!strncmp(p, "token=", 6)) p += 6;
+  n = strlen(p);
+  while (n && (p[n - 1] == '\n' || p[n - 1] == '\r' || p[n - 1] == ' ')) p[--n] = 0;
+  if (!token_safe(p)) return 0;
+  snprintf(dst, cap, "%s", p);
+  return dst[0] != 0;
+}
+
 static int connect_budget(int fd, const struct sockaddr_in *sa) {
   int flags, err = 0;
   socklen_t el = sizeof err;
@@ -520,6 +550,8 @@ static void motive_nudge(const char *line) {
   struct sockaddr_in sa;
   knob_copy(spec, sizeof spec, "NANOBOT_MOTIVE_PEER", "MOTIVE_PEER");
   knob_copy(token, sizeof token, "NANOBOT_MOTIVE_PEER_TOKEN", "MOTIVE_PEER_TOKEN");
+  if (!token_safe(token)) token[0] = 0;
+  if (!token[0]) token_from_file(token, sizeof token);
   if (!spec[0] || !token_safe(token)) return;
   if (!peer_ipv4(spec, host, sizeof host, &port)) return;
   esc = ng_json_escape(line ? line : "");
