@@ -274,7 +274,8 @@ static char *plate_json(const ng_augogen *p) {
 }
 
 /* Response-only. The plate file is already saved without this line. */
-static char *with_report(char *js, const char *report) {
+static char *with_report(char *js, const char *report, int rank, int lexical,
+                         int hamming) {
   char *esc;
   char *cut;
   char *out = NULL;
@@ -286,8 +287,10 @@ static char *with_report(char *js, const char *report) {
     free(esc);
     return js;
   }
-  if (asprintf(&out, "%.*s\"report\":\"%s\",\"stored\":false,\"python\":0}",
-               (int)(cut - js), js, esc) < 0)
+  if (asprintf(&out,
+               "%.*s\"report\":\"%s\",\"rank\":%d,\"lexical\":%d,"
+               "\"hamming\":%d,\"stored\":false,\"python\":0}",
+               (int)(cut - js), js, esc, rank, lexical, hamming) < 0)
     out = NULL;
   free(esc);
   if (!out) return js;
@@ -783,6 +786,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char *transcript = ng_json_get_string(json_body, "transcript");
     char cleaned[SUG_CAP];
     char reported[SUG_CAP];
+    int report_rank = 0, report_lex = 0, report_ham = 0;
     unsigned long gen = p.generation + 1;
     cleaned[0] = 0;
     reported[0] = 0;
@@ -801,8 +805,12 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       ng_motive ranked;
       ng_motive_rank(transcript ? transcript : "", &ranked);
       if (ranked.forward && ranked.line[0] && !suggestion_forbidden(ranked.line) &&
-          !ng_motive_blocks(ranked.line))
+          !ng_motive_blocks(ranked.line)) {
         snprintf(reported, sizeof reported, "%s", ranked.line);
+        report_rank = ranked.rank;
+        report_lex = ranked.lexical;
+        report_ham = ranked.hamming;
+      }
     }
     free(given);
     free(transcript);
@@ -833,7 +841,8 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     }
     save_plate(&p);
     free(action);
-    return with_report(plate_json(&p), reported);
+    return with_report(plate_json(&p), reported, report_rank, report_lex,
+                       report_ham);
   }
 
   {

@@ -416,6 +416,9 @@ int main(void) {
   js = ng_augogen_handle(
       NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\"}");
   expect(js && strstr(js, "read the law and prove"), "rank reports a concept");
+  expect(js && strstr(js, "\"rank\":256"), "law self-rank");
+  expect(js && strstr(js, "\"lexical\":3"), "law lexical");
+  expect(js && strstr(js, "\"hamming\":0"), "law hamming");
   expect(js && strstr(js, "\"stored\":false"), "rank report is not stored");
   expect(js && strstr(js, "\"status\":\"empty\""), "rank report leaves the plate empty");
   free(js);
@@ -435,6 +438,9 @@ int main(void) {
   }
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\"}");
   expect(js && strstr(js, "prompt a peer to move"), "blank generate reports a peer");
+  expect(js && strstr(js, "\"rank\":0"), "silence rank is zero");
+  expect(js && strstr(js, "\"lexical\":0"), "silence lexical is zero");
+  expect(js && strstr(js, "\"hamming\":0"), "silence hamming is zero");
   expect(js && strstr(js, "\"stored\":false"), "blank generate is not stored");
   expect(js && strstr(js, "\"status\":\"empty\""), "blank generate leaves the plate empty");
   free(js);
