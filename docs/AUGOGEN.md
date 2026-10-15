@@ -62,11 +62,13 @@ The sender's response and plate keep the rank of the act. A quoted plate,
 A missing value keeps the store. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, `programs/motive_space.cubalc`, `programs/motive_feed.cubalc`, `programs/motive_body.cubalc`, `programs/motive_quote.cubalc`, `programs/motive_pad.cubalc`, `programs/motive_sep.cubalc`, `programs/motive_torn.cubalc`, `programs/motive_job.cubalc`, `programs/motive_reap.cubalc`, `programs/motive_orphan.cubalc`, and `programs/motive_cap.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, `programs/motive_space.cubalc`, `programs/motive_feed.cubalc`, `programs/motive_body.cubalc`, `programs/motive_quote.cubalc`, `programs/motive_pad.cubalc`, `programs/motive_sep.cubalc`, `programs/motive_torn.cubalc`, `programs/motive_job.cubalc`, `programs/motive_reap.cubalc`, `programs/motive_orphan.cubalc`, `programs/motive_cap.cubalc`, and `programs/job_keep.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode
 then forks a `kind=prompt` job (`executed`, `job_id`). A second prompt in the same second keeps its own job file. The first prompt stays. A done auto job past 48 drops. A queued auto job stays. A queued auto job left by a restart is marked error on the next listen. A done auto job stays done. A done or error auto job past 48 drops on its own cap. A digit job keeps its own cap. A queued job stays. Vote-only never runs.
+
+A second peer job in the same second keeps its own file. The first id shape stays. The first body stays.
 
 ## Pair = one braincube
 

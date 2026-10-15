@@ -1102,10 +1102,59 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
+static void test_peer_job(void) {
+  char jdir[] = "/tmp/nb-peer-job";
+  char ida[32], idb[32], id[32];
+  char path[192];
+  int tries, got = 0;
+  for (tries = 0; tries < 4 && !got; tries++) {
+    wipe_jobs(jdir);
+    if (!ng_peer_job_reserve(jdir, "prompt", ida, sizeof ida)) continue;
+    write_side(jdir, ida, ".in", "one");
+    if (!ng_peer_job_reserve(jdir, "prompt", idb, sizeof idb)) continue;
+    write_side(jdir, idb, ".in", "two");
+    if (strlen(idb) == strlen(ida) + 2 && strncmp(idb, ida, strlen(ida)) == 0) {
+      got = 1;
+      expect(strcmp(ida, idb) != 0, "a second peer job keeps its own id");
+      snprintf(path, sizeof path, "%s/%s.in", jdir, ida);
+      expect(file_has(path, "one"), "the first peer body stays");
+      snprintf(path, sizeof path, "%s/%s.in", jdir, idb);
+      expect(file_has(path, "two"), "the second peer body stays");
+      snprintf(path, sizeof path, "%s/%s.json", jdir, ida);
+      expect(file_has(path, ida), "the first peer meta keeps its id");
+    }
+  }
+  expect(got, "two peer jobs share a second");
+  got = 0;
+  for (tries = 0; tries < 4 && !got; tries++) {
+    int n = 0;
+    int i;
+    char first[32];
+    wipe_jobs(jdir);
+    first[0] = 0;
+    for (i = 0; i < 16; i++) {
+      if (!ng_peer_job_reserve(jdir, "prompt", id, sizeof id)) break;
+      if (i == 0)
+        snprintf(first, sizeof first, "%s", id);
+      else if (strlen(id) != strlen(first) + 2 ||
+               strncmp(id, first, strlen(first)) != 0)
+        break;
+      n++;
+    }
+    if (n == 16 && !ng_peer_job_reserve(jdir, "shell", id, sizeof id)) {
+      got = 1;
+      snprintf(path, sizeof path, "%s/%s.json", jdir, first);
+      expect(file_has(path, first), "the first peer job stays when that second is full");
+    }
+  }
+  expect(got, "sixteen peer jobs fill that second");
+}
+
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
   test_auto_cap();
+  test_peer_job();
   test_worker_title();
   test_worker_slot_before_exit();
   test_lean_info_skips_refresh();

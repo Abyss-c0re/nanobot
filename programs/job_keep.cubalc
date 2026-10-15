@@ -1,0 +1,17 @@
+// A second peer job in the same second keeps its own file.
+// The first id shape stays. The first body stays.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE keep ROLE observer PROTON 1
+CUBE law ROLE nanobot PROTON 1
+
+PLUG keep law
+
+IMPULSE keep 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "keep" UNITY DECIDE ENERGY
