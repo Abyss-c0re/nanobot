@@ -39,7 +39,7 @@ itself is never stored. Full auto runs a stored line only when the caller
 passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
 When `generate` has no model line, the same ranker reports a forward concept in the response, plus the plate name, `rank`, `lexical`, and `hamming`.
 `enqueue` `1` stores that concept line and keeps the plate name, `rank`, `lexical`, and `hamming` on the plate. Generate does not POST. Without `enqueue` the plate stays empty and omits those fields.
-`NANOBOT_MOTIVE_LEX_W` sets the lexical weight from 0 to 255. Unset stays 64, so an exact concept still ranks 256. A value outside that range stays 64. The weight does not open a purge or protect plate.
+`NANOBOT_MOTIVE_LEX_W` sets the lexical weight from 0 to 255. Unset stays 64, so an exact concept still ranks 256. A value outside that range stays 64. The weight does not open a purge or protect plate. The motive JSON and a generate report name that weight as `lex_w`. The plate file omits `lex_w`.
 A blank transcript reports `prompt a peer to move` with plate `observe` and rank 0. A purge or protect transcript stays empty. The act text is not stored.
 
 When a motive store happens and the request has no `hop`, one optional IPv4 peer
@@ -52,7 +52,7 @@ permission bit skips the file. The POST is `/peer/v1/augogen` with `enqueue`
 `1` and `hop` `1`, and the body text is the stored line. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, and `programs/motive_weight.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, and `programs/motive_lex.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode

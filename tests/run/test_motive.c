@@ -142,21 +142,24 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(strcmp(m.concept, "read the law and prove") == 0, "law concept");
   expect(m.rank == 256, "default lexical weight is 64");
+  expect(m.lex_w == 64, "default lex_w is 64");
   setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 67, "lexical weight 1 keeps the hamming term");
+  expect(m.lex_w == 1, "weight 1 is reported");
   expect(m.lexical == 3 && m.hamming == 0, "weight leaves the feature counts");
   expect(m.forward, "weight leaves a forward plate forward");
   ng_motive_rank("trick the cube", &m);
   expect(m.plate == NG_PLATE_PURGE && !m.forward, "weight leaves a purge closed");
   ng_motive_rank("", &m);
   expect(m.rank == 0, "silence ignores the weight");
+  expect(m.lex_w == 1, "silence still reports the weight");
   setenv("NANOBOT_MOTIVE_LEX_W", "256", 1);
   ng_motive_rank("read the law and prove", &m);
-  expect(m.rank == 256, "weight above 255 stays 64");
+  expect(m.rank == 256 && m.lex_w == 64, "weight above 255 stays 64");
   setenv("NANOBOT_MOTIVE_LEX_W", "nope", 1);
   ng_motive_rank("read the law and prove", &m);
-  expect(m.rank == 256, "a bad weight stays 64");
+  expect(m.rank == 256 && m.lex_w == 64, "a bad weight stays 64");
   unsetenv("NANOBOT_MOTIVE_LEX_W");
 
   ng_motive_rank("", &m);
@@ -193,6 +196,7 @@ int main(void) {
   expect(js && strstr(js, "\"python\":0"), "json python 0");
   expect(js && strstr(js, "prompt a peer to move"), "json line");
   expect(js && strstr(js, "\"concepts\":8"), "json eight");
+  expect(js && strstr(js, "\"lex_w\":64"), "json names lex_w");
   free(js);
 
   mkdir(home, 0700);
@@ -235,6 +239,7 @@ int main(void) {
     expect(pend && strstr(pend, "\"lexical\":3"), "stored peer keeps lexical");
     expect(pend && strstr(pend, "\"hamming\":0"), "stored peer keeps hamming");
     expect(pend && strstr(pend, "\"plate\":\"observe\""), "stored peer keeps the plate");
+    expect(!pend || !strstr(pend, "\"lex_w\":"), "stored peer omits lex_w");
     expect(pend && strstr(pend, "\"executed\":false"), "vote-only does not run");
     free(pend);
   }
@@ -442,6 +447,8 @@ int main(void) {
   expect(js && strstr(js, "\"rank\":256"), "law self-rank");
   expect(js && strstr(js, "\"lexical\":3"), "law lexical");
   expect(js && strstr(js, "\"hamming\":0"), "law hamming");
+  expect(js && strstr(js, "\"lex_w\":64"), "law report names lex_w");
+  expect(js && count_substr(js, "\"lex_w\":") == 1, "report has one lex_w");
   expect(js && count_substr(js, "\"rank\":") == 1, "report has one rank");
   expect(js && strstr(js, "\"stored\":false"), "rank report is not stored");
   expect(js && strstr(js, "\"status\":\"empty\""), "rank report leaves the plate empty");
@@ -480,6 +487,7 @@ int main(void) {
       NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"enqueue\":\"1\"}");
   expect(js && strstr(js, "\"stored\":true"), "enqueue stores the concept");
   expect(js && count_substr(js, "\"rank\":") == 1, "stored response has one rank");
+  expect(js && count_substr(js, "\"lex_w\":") == 1, "stored response has one lex_w");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
@@ -488,6 +496,7 @@ int main(void) {
     expect(pend && strstr(pend, "\"lexical\":3"), "stored plate keeps lexical");
     expect(pend && strstr(pend, "\"hamming\":0"), "stored plate keeps hamming");
     expect(pend && strstr(pend, "\"plate\":\"observe\""), "stored plate keeps the plate name");
+    expect(!pend || !strstr(pend, "\"lex_w\":"), "stored plate omits lex_w");
     free(pend);
   }
   js = ng_augogen_handle(
@@ -512,6 +521,7 @@ int main(void) {
     expect(pend && strstr(pend, "\"lexical\":0"), "stored silence keeps lexical");
     expect(pend && strstr(pend, "\"hamming\":0"), "stored silence keeps hamming");
     expect(pend && strstr(pend, "\"plate\":\"observe\""), "stored silence keeps the plate");
+    expect(!pend || !strstr(pend, "\"lex_w\":"), "stored silence omits lex_w");
     free(pend);
   }
   /* Generate enqueue stays local. The motive action is the peer POST. */

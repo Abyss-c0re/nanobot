@@ -289,7 +289,7 @@ static char *plate_json(const ng_augogen *p) {
 
 /* The response names the plate. A stored plate already carries rank. */
 static char *with_report(char *js, const char *report, int rank, int lexical,
-                         int hamming, int stored, const char *plate) {
+                         int hamming, int lex_w, int stored, const char *plate) {
   char *esc;
   char *pesc;
   char *cut;
@@ -314,18 +314,18 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
   have_plate = strstr(js, "\"plate\":") != NULL;
   if (have_rank && have_plate) {
     if (asprintf(&out,
-                 "%.*s\"report\":\"%s\",\"stored\":%s,\"python\":0}",
-                 (int)(cut - js), js, esc, stored ? "true" : "false") < 0)
+                 "%.*s\"report\":\"%s\",\"lex_w\":%d,\"stored\":%s,\"python\":0}",
+                 (int)(cut - js), js, esc, lex_w, stored ? "true" : "false") < 0)
       out = NULL;
   } else if (have_rank) {
     if (asprintf(&out,
-                 "%.*s\"report\":\"%s\",\"plate\":\"%s\",\"stored\":%s,\"python\":0}",
-                 (int)(cut - js), js, esc, pesc, stored ? "true" : "false") < 0)
+                 "%.*s\"report\":\"%s\",\"plate\":\"%s\",\"lex_w\":%d,\"stored\":%s,\"python\":0}",
+                 (int)(cut - js), js, esc, pesc, lex_w, stored ? "true" : "false") < 0)
       out = NULL;
   } else if (asprintf(&out,
                       "%.*s\"report\":\"%s\",\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,"
-                      "\"hamming\":%d,\"stored\":%s,\"python\":0}",
-                      (int)(cut - js), js, esc, pesc, rank, lexical, hamming,
+                      "\"hamming\":%d,\"lex_w\":%d,\"stored\":%s,\"python\":0}",
+                      (int)(cut - js), js, esc, pesc, rank, lexical, hamming, lex_w,
                       stored ? "true" : "false") < 0)
     out = NULL;
   free(esc);
@@ -843,7 +843,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char *enq = ng_json_get_string(json_body, "enqueue");
     char cleaned[SUG_CAP];
     char reported[SUG_CAP];
-    int report_rank = 0, report_lex = 0, report_ham = 0;
+    int report_rank = 0, report_lex = 0, report_ham = 0, report_lex_w = 64;
     int report_plate = NG_PLATE_OBSERVE;
     int asked = 0;
     unsigned long gen = p.generation + 1;
@@ -873,6 +873,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         report_rank = ranked.rank;
         report_lex = ranked.lexical;
         report_ham = ranked.hamming;
+        report_lex_w = ranked.lex_w;
         report_plate = ranked.plate;
         if (asked) snprintf(cleaned, sizeof cleaned, "%s", ranked.line);
       }
@@ -916,7 +917,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     save_plate(&p);
     free(action);
     return with_report(plate_json(&p), reported, report_rank, report_lex,
-                       report_ham, asked && reported[0],
+                       report_ham, report_lex_w, asked && reported[0],
                        ng_motive_plate_name(report_plate));
   }
 

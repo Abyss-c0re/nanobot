@@ -34,6 +34,7 @@ typedef struct {
   int rank;
   int hamming;
   int lexical;
+  int lex_w; /* NANOBOT_MOTIVE_LEX_W used for this rank. Unset is 64. */
   char concept[NG_MOTIVE_TEXT];
   char line[NG_MOTIVE_TEXT];
 } ng_motive;
