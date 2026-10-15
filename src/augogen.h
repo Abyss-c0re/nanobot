@@ -30,7 +30,7 @@
  * A quoted plate, lexical, hamming, or concept that disagrees with the peer
  * rank is not stored. A missing value keeps the store.
  * Full auto forks a prompt job only when an agent is present.
- * Generate, vote, and apply with no agent leave the plate unexecuted.
+ * With no agent the line stays pending: no invented pair, no fork.
  * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */

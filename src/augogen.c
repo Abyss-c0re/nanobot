@@ -797,7 +797,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     }
 #endif
     recompute(&p);
-    if (augogen_auto_enabled() && p.confirmed && !p.executed)
+    if (augogen_auto_enabled() && agent && p.confirmed && !p.executed)
       try_auto_run(&p, agent);
     save_plate(&p);
     free(role);
@@ -813,9 +813,9 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
                     "\"action\":\"apply\",\"error\":\"not_confirmed\","
                     "\"auto_execute\":false,\"python\":0}");
     }
-    if (augogen_auto_enabled() && !p.executed)
+    if (augogen_auto_enabled() && agent && !p.executed)
       try_auto_run(&p, agent);
-    else
+    else if (!augogen_auto_enabled())
       snprintf(p.status, sizeof p.status, "applied");
     save_plate(&p);
     free(action);
@@ -880,14 +880,15 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       p.motive_lex = m.lexical;
       p.motive_ham = m.hamming;
       snprintf(p.plate_name, sizeof p.plate_name, "%s", ng_motive_plate_name(m.plate));
-      if (augogen_auto_enabled()) {
+      /* Pair votes are invented only when this caller can run the line. */
+      if (augogen_auto_enabled() && agent) {
         if (!pair_confirm_suggestion(&p)) {
           p.guide_vote = 1;
           p.oversee_vote = 1;
           p.pair_ok = 1;
         }
         recompute(&p);
-        if (p.confirmed && agent) try_auto_run(&p, agent);
+        if (p.confirmed) try_auto_run(&p, agent);
       }
       save_plate(&p);
       /* A hop already arrived from one peer. Do not POST it onward.
@@ -974,7 +975,8 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
           snprintf(p.plate_name, sizeof p.plate_name, "%s",
                    ng_motive_plate_name(report_plate));
         }
-        if (augogen_auto_enabled()) {
+        /* Pair votes are invented only when this caller can run the line. */
+        if (augogen_auto_enabled() && agent) {
           /* Full auto: try braincube pair; if it withholds, operator-authorized
            * auto-pair (guide+oversee=1). Mesh 0 still vetoes. */
           if (!pair_confirm_suggestion(&p)) {
