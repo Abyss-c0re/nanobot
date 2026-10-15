@@ -35,6 +35,8 @@
  * Env: NANOBOT_MAX_TURNS, NANOBOT_CMD_TIMEOUT, NANOBOT_HTTP_TIMEOUT */
 void ng_limits_init(void);
 int ng_is_lean(void);
+/* 1 when a status read may refresh a sealed session. Lean returns 0. */
+int ng_status_ensure(void);
 int ng_max_turns(void);          /* agent tool loop budget */
 int ng_cmd_timeout_sec(void);    /* shell tool wall time */
 int ng_http_timeout_sec(void);   /* LLM curl --max-time */

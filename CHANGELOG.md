@@ -85,6 +85,7 @@
 - **hive:** a motive text decodes a JSON backspace or form feed before the rank. Either separator in the law line still ranks 256, lexical 3, Hamming 0. Plain ASCII ranks are unchanged. The hop is unchanged. CubalC board: `programs/motive_feed.cubalc`.
 - **lean:** an accepted request worker retitles its command line. The listener command line stays. The worker is not a second listener. CubalC board: `programs/worker_mark.cubalc`.
 - **lean:** on a lean host, a regular stderr file at the lean log cap is cut to empty before the next line. A terminal or a pipe stays. The rotated log file is unchanged. CubalC board: `programs/lean_err.cubalc`.
+- **lean:** a lean host answers `GET /peer/v1/info` from the sealed session. The exit-node flag on that plate uses the same seal. Prompt, chat, jobs, and runs still refresh. CubalC board: `programs/lean_info.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

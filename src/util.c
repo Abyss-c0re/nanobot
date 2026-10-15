@@ -351,6 +351,12 @@ int ng_is_lean(void) {
   return g_lean;
 }
 
+/* A lean status read reports the sealed session.
+ * Prompt, chat, jobs, and runs still call ng_session_ensure. */
+int ng_status_ensure(void) {
+  return !ng_is_lean();
+}
+
 int ng_max_turns(void) {
   const char *e = getenv("NANOBOT_MAX_TURNS");
   if (e && e[0]) {

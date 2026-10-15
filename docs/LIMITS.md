@@ -17,6 +17,8 @@ An accepted request worker retitles its command line. The listener command line 
 
 On a lean host, a regular stderr file at the lean log cap is cut to empty before the next line. A terminal or a pipe stays. The rotated log file is unchanged.
 
+On a lean host, `GET /peer/v1/info` reports the sealed session. The exit-node flag on that plate uses the same seal. Prompt, chat, jobs, and runs still refresh.
+
 ## Run caps
 
 Per-run model, effort, completion cap, context estimate, and compaction are in [ASYNC.md](ASYNC.md). Process defaults:

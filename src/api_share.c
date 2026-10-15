@@ -32,7 +32,12 @@ int ng_api_share_local_exit_ok(ng_agent_cfg *c) {
   if (!ng_api_share_enabled()) return 0;
   if (ng_agent_is_grok_backend(c)) {
     if (!c->session) return 0;
-    if (ng_session_ensure(c->session) != 0) return 0;
+    /* Lean info and exit plates report the seal. They do not fork a refresh. */
+    if (ng_status_ensure()) {
+      if (ng_session_ensure(c->session) != 0) return 0;
+    } else if (!ng_session_valid(c->session)) {
+      return 0;
+    }
     if (!ng_session_valid(c->session)) return 0;
     const char *b = ng_session_bearer(c->session);
     return (b && b[0]) ? 1 : 0;

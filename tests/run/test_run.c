@@ -1,4 +1,6 @@
 #include "agent.h"
+#include "api_share.h"
+#include "auth.h"
 #include "hub_local.h"
 #include "runctl.h"
 #include "shell.h"
@@ -703,6 +705,56 @@ static void test_cap_regular_fd(void) {
   close(p[1]);
 }
 
+static void test_lean_info_skips_refresh(void) {
+  ng_agent_cfg agent;
+  ng_session session;
+  char home[] = "/tmp/ng-info-XXXXXX";
+  struct timespec a, b;
+  long ms;
+  int rc;
+  int was_lean;
+
+  was_lean = ng_is_lean();
+  setenv("NANOBOT_LEAN", "0", 1);
+  ng_limits_init();
+  expect(ng_is_lean() == 0, "host status may refresh");
+  expect(ng_status_ensure() == 1, "host status ensure stays on");
+
+  setenv("NANOBOT_LEAN", "1", 1);
+  ng_limits_init();
+  expect(ng_is_lean() == 1, "lean flag");
+  expect(ng_status_ensure() == 0, "lean status ensure is off");
+
+  expect(mkdtemp(home) != NULL, "info home");
+  ng_set_workdir(home);
+  setenv("NANOBOT_API_SHARE", "1", 1);
+  memset(&agent, 0, sizeof agent);
+  agent.base_url = strdup("https://api.x.ai");
+  ng_session_init(&session);
+  session.access_token = strdup("sealed-access");
+  session.refresh_token = strdup("sealed-refresh");
+  session.expires_at = time(NULL) + 7200;
+  agent.session = &session;
+  expect(ng_api_share_local_exit_ok(&agent) == 1, "valid seal is an exit");
+
+  session.expires_at = 1;
+  signal(SIGALRM, SIG_DFL);
+  alarm(3);
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  rc = ng_api_share_local_exit_ok(&agent);
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  alarm(0);
+  ms = (long)(b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+  expect(rc == 0, "expired lean seal is not an exit");
+  expect(ms < 500, "expired lean seal does not fork a refresh");
+
+  ng_session_free(&session);
+  free(agent.base_url);
+  if (was_lean) setenv("NANOBOT_LEAN", "1", 1);
+  else unsetenv("NANOBOT_LEAN");
+  ng_limits_init();
+}
+
 static void test_worker_title(void) {
   char path[] = "/tmp/bin/nanobot";
   char home_flag[] = "--home";
@@ -729,6 +781,7 @@ static void test_worker_title(void) {
 int main(void) {
   test_cap_regular_fd();
   test_worker_title();
+  test_lean_info_skips_refresh();
   test_routes();
   test_control();
   test_long_record();
