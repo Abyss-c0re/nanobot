@@ -864,10 +864,10 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       plate_ok = 0;
     if (!quoted_eq(lexn, m.lexical) || !quoted_eq(hamn, m.hamming)) score_ok = 0;
     if (conceptv && conceptv[0] && strcmp(conceptv, m.concept) != 0) concept_ok = 0;
-    /* Report every plate. Store a line only when the plate is forward. */
-    /* A tied rank names a concept and does not store it. */
+    /* Report every plate. Store a line only when the plate is forward.
+     * A tie still names the earliest concept. Enqueue stores that line. */
     if (asked && plate_ok && score_ok && concept_ok && m.forward && m.line[0] &&
-        m.ties == 1 && !suggestion_forbidden(m.line) && !ng_motive_blocks(m.line)) {
+        !suggestion_forbidden(m.line) && !ng_motive_blocks(m.line)) {
       unsigned long gen = p.generation + 1;
       plate_clear(&p);
       p.generation = gen;
@@ -941,7 +941,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     if (!cleaned[0]) {
       ng_motive ranked;
       ng_motive_rank(transcript ? transcript : "", &ranked);
-      if (ranked.forward && ranked.ties == 1 && ranked.line[0] &&
+      if (ranked.forward && ranked.line[0] &&
           !suggestion_forbidden(ranked.line) && !ng_motive_blocks(ranked.line)) {
         snprintf(reported, sizeof reported, "%s", ranked.line);
         report_rank = ranked.rank;

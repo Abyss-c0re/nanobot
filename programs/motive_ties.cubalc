@@ -1,4 +1,4 @@
-// A tied rank stays off the plate. Ordinary program: no HOLD_FLASH line.
+// A tied rank names the earliest concept and still posts. Ordinary program: no HOLD_FLASH line.
 
 CUBE tie  ROLE observer PROTON 1
 CUBE one  ROLE nanobot  PROTON 1
