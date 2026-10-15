@@ -262,6 +262,44 @@ static void copy_cap(char *dst, size_t cap, const char *src) {
   dst[n] = 0;
 }
 
+/* A word said twice in a row is still one token. When that sequence is
+ * the concept, the sketch distance is zero. Any other sequence stays. */
+static int same_tokens(const char *norm, const char *concept) {
+  const char *c, *p, *prev;
+  size_t prev_n;
+  int ntok;
+  if (!norm || !concept || !norm[0] || !concept[0]) return 0;
+  c = concept;
+  p = norm;
+  prev = NULL;
+  prev_n = 0;
+  ntok = 0;
+  while (*c == ' ') c++;
+  while (*p && ntok < TOK_MAX) {
+    const char *s;
+    size_t n = 0;
+    while (*p == ' ') p++;
+    if (!*p) break;
+    s = p;
+    while (p[n] && p[n] != ' ') n++;
+    p += n;
+    ntok++;
+    if (prev && prev_n == n && memcmp(prev, s, n) == 0) continue;
+    {
+      size_t cn = 0;
+      const char *cs = c;
+      while (cs[cn] && cs[cn] != ' ') cn++;
+      if (cn != n || memcmp(cs, s, n) != 0) return 0;
+      c = cs + cn;
+      while (*c == ' ') c++;
+      prev = s;
+      prev_n = n;
+    }
+  }
+  while (*p == ' ') p++;
+  return *p == 0 && *c == 0;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
@@ -290,7 +328,9 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
     int lex = lexical_hits(norm, kConcept[i]);
     int h = ham64(qh, simhash_text(kConcept[i]));
-    int score = lex * lw + (64 - h);
+    int score;
+    if (same_tokens(norm, kConcept[i])) h = 0;
+    score = lex * lw + (64 - h);
     if (score > best_score) {
       best = i;
       best_score = score;

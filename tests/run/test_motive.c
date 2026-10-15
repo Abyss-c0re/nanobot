@@ -223,6 +223,43 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 256 && m.lex_w == 64, "the env rank is unchanged");
 
+  ng_motive_rank("read read the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a doubled word stays on the law");
+  expect(strcmp(m.concept, "read the law and prove") == 0,
+         "a doubled word keeps the law concept");
+  ng_motive_rank("read the the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a doubled glue word stays on the law");
+  ng_motive_rank("READ READ THE LAW AND PROVE", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a doubled word keeps its case fold");
+  ng_motive_rank("pair pair vote then ship the step", &m);
+  expect(m.rank == 320 && m.lexical == 4 && m.hamming == 0,
+         "a doubled word stays on a four-word concept");
+  expect(strcmp(m.concept, "pair vote then ship the step") == 0,
+         "a doubled word keeps that concept");
+  ng_motive_rank("fold fold the matrix and decide", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a doubled word stays on the first concept");
+  ng_motive_rank("confess confess the heat and serve", &m);
+  expect(m.plate == NG_PLATE_CONFESS && m.rank == 256 && m.lexical == 3 &&
+             m.hamming == 0,
+         "a doubled confess word keeps the plate");
+  expect(strcmp(m.concept, "confess the heat and serve") == 0,
+         "a doubled confess word keeps that concept");
+  ng_motive_rank("read read the law", &m);
+  expect(m.rank == 179 && m.lexical == 2 && m.hamming == 13,
+         "a doubled word on a partial line stays partial");
+  expect(strcmp(m.concept, "read the law and prove") == 0,
+         "a partial line keeps the law concept");
+  ng_motive_rank("please read the law and prove", &m);
+  expect(m.rank == 246 && m.lexical == 3 && m.hamming == 10,
+         "an extra word stays off zero");
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "the exact law line stays rank 256");
+
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
   expect(m.forward, "silence may prompt");

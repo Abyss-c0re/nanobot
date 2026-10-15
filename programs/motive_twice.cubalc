@@ -1,0 +1,17 @@
+// A concept line with one word said twice in a row is still that concept.
+// The exact line stays. A partial line stays partial.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE twice ROLE observer PROTON 1
+CUBE law   ROLE nanobot  PROTON 1
+
+PLUG twice law
+
+IMPULSE twice 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "twice" UNITY DECIDE ENERGY
