@@ -745,13 +745,20 @@ int main(void) {
   expect(js && strstr(js, "\"status\":\"empty\""), "thirteen words leave the plate empty");
   expect(js && !strstr(js, "thirteen"), "thirteen words are not stored");
   free(js);
-  setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+  setenv("NANOBOT_AUGOGEN_AUTO", "1", 1);
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"suggestion\":\"rank concepts\"}");
   expect(js && strstr(js, "\"suggestion\":\"rank concepts\""), "two words stay");
-  expect(js && strstr(js, "\"status\":\"pending\""), "two words stay pending");
-  expect(js && strstr(js, "\"executed\":false"), "two words do not run");
+  expect(js && strstr(js, "\"status\":\"applied\""), "two words run");
+  expect(js && strstr(js, "\"executed\":true"), "two words run");
   free(js);
-  unsetenv("NANOBOT_AUGOGEN_AUTO");
+  {
+    int spins = 0, st = 0;
+    while (spins < 50 && waitpid(-1, &st, WNOHANG) == 0) {
+      usleep(20000);
+      spins++;
+    }
+  }
+  setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
   js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
   free(js);
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\"}");
