@@ -36,8 +36,10 @@ the plate first. The JSON reports that plate and a 2–12 word line. A forward
 plate's line is the winning concept. Every other plate reports a remedy and
 is not stored. With `enqueue` `1` only a forward line is stored. The act text
 itself is never stored. The motive response names `stored`. An enqueued forward
-line reports `stored` true. A bare motive, a purge, and a disagreed quote report
-`stored` false. The plate file omits `stored`.
+line reports `stored` true, and the plate file names `stored` true beside rank,
+lexical, and hamming. A bare motive, a purge, and a disagreed quote report
+`stored` false. An empty plate omits `stored`. The plate file still omits `lex_w`.
+The hop does not quote `stored`.
 Full auto runs a stored line only when the caller
 passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
 When `generate` has no model line, the same ranker reports a forward concept in the response, plus the plate name, `rank`, `lexical`, and `hamming`.

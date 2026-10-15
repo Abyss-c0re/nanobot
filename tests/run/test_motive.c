@@ -657,6 +657,7 @@ int main(void) {
     expect(!pend || !strstr(pend, "read the law and prove"),
            "a disagreed concept is not stored");
     expect(!pend || !strstr(pend, "\"rank\":"), "a disagreed concept leaves the file empty");
+    expect(!pend || !strstr(pend, "\"stored\""), "an empty plate omits stored");
     free(pend);
   }
   js = ng_augogen_handle(
@@ -671,7 +672,7 @@ int main(void) {
     expect(pend && strstr(pend, "\"lexical\":3"), "a matching concept keeps the count");
     expect(pend && strstr(pend, "\"hamming\":0"), "a matching concept keeps the hamming");
     expect(!pend || !strstr(pend, "\"lex_w\":"), "a matching concept omits lex_w");
-    expect(!pend || !strstr(pend, "\"stored\""), "the plate file omits stored");
+    expect(pend && strstr(pend, "\"stored\":true"), "a kept plate names stored");
     free(pend);
   }
   js = ng_augogen_handle(NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\"}");

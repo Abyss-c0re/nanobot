@@ -248,10 +248,11 @@ static char *plate_json(const ng_augogen *p) {
   score[0] = 0;
   if (p->score_kept && p->plate_name[0])
     snprintf(score, sizeof score,
-             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
+             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,\"stored\":true,",
              p->plate_name, p->motive_rank, p->motive_lex, p->motive_ham);
   else if (p->score_kept)
-    snprintf(score, sizeof score, "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
+    snprintf(score, sizeof score,
+             "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,\"stored\":true,",
              p->motive_rank, p->motive_lex, p->motive_ham);
   asprintf(&out,
            "{\"schema\":\"" NG_AUGOGEN_SCHEMA "\",\"ok\":true,"
