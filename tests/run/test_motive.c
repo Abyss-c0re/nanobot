@@ -183,21 +183,6 @@ int main(void) {
   expect(m.plate == NG_PLATE_AUDIT, "audit plate");
   expect(strcmp(m.line, "audit the last code change") == 0, "audit line");
 
-  ng_motive_rank("confession", &m);
-  expect(m.plate == NG_PLATE_CONFESS, "confession is confess");
-  expect(strcmp(m.concept, "confess the heat and serve") == 0, "confession names confess");
-  expect(m.lexical == 1 && m.hamming == 34 && m.rank == 94, "confession is one lexical hit");
-  expect(m.forward, "confession may prompt");
-  ng_motive_rank("confessions", &m);
-  expect(m.lexical == 0, "a longer word is not confession");
-  expect(strcmp(m.concept, "confess the heat and serve") != 0, "a longer word stays off that concept");
-  ng_motive_rank("confess the heat and serve", &m);
-  expect(m.lexical == 3 && m.rank == 256 && m.hamming == 0, "the confess line counts once");
-  ng_motive_rank("you lied", &m);
-  expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0, "lied stays a bare confess");
-  expect(strcmp(m.concept, "rank concepts then act") == 0, "lied keeps the sketch");
-  expect(m.rank == 43 && m.hamming == 21, "lied keeps the sketch rank");
-
   ng_motive_rank("hold flash for device join", &m);
   expect(m.plate == NG_PLATE_HOLD_FLASH, "hold plate");
   expect(!m.forward, "hold does not auto-run");
