@@ -161,6 +161,16 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 256 && m.lex_w == 64, "a bad weight stays 64");
   unsetenv("NANOBOT_MOTIVE_LEX_W");
+  ng_motive_rank_w("read the law and prove", &m, 1);
+  expect(m.rank == 67 && m.lex_w == 1, "one call can weigh lexical at 1");
+  ng_motive_rank_w("trick the cube", &m, 1);
+  expect(m.plate == NG_PLATE_PURGE && !m.forward, "a call weight leaves a purge closed");
+  ng_motive_rank_w("", &m, 1);
+  expect(m.rank == 0 && m.lex_w == 1, "silence stays rank 0 and names the call weight");
+  ng_motive_rank_w("read the law and prove", &m, 256);
+  expect(m.rank == 256 && m.lex_w == 64, "a call weight above 255 uses the env");
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256 && m.lex_w == 64, "the env rank is unchanged");
 
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
@@ -449,9 +459,37 @@ int main(void) {
   expect(js && strstr(js, "\"hamming\":0"), "law hamming");
   expect(js && strstr(js, "\"lex_w\":64"), "law report names lex_w");
   expect(js && count_substr(js, "\"lex_w\":") == 1, "report has one lex_w");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"lex_w\":\"1\"}");
+  expect(js && strstr(js, "\"rank\":256") && strstr(js, "\"lex_w\":64"),
+         "generate keeps the process weight");
+  expect(js && strstr(js, "\"stored\":false"), "generate lex_w does not store");
   expect(js && count_substr(js, "\"rank\":") == 1, "report has one rank");
   expect(js && strstr(js, "\"stored\":false"), "rank report is not stored");
   expect(js && strstr(js, "\"status\":\"empty\""), "rank report leaves the plate empty");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\",\"lex_w\":\"1\"}");
+  expect(js && strstr(js, "\"rank\":67") && strstr(js, "\"lex_w\":1"),
+         "quoted lex_w weighs this motive call");
+  expect(js && strstr(js, "\"forward\":true"), "call weight stays forward");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(!pend || !strstr(pend, "\"lex_w\":"), "call weight is not stored");
+    expect(!pend || !strstr(pend, "read the law and prove"), "call weight does not enqueue");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"trick the cube\",\"lex_w\":\"1\"}");
+  expect(js && strstr(js, "purge_intent") && strstr(js, "\"forward\":false"),
+         "call weight leaves a purge closed");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\",\"lex_w\":\"nope\"}");
+  expect(js && strstr(js, "\"rank\":256") && strstr(js, "\"lex_w\":64"),
+         "a bad call weight keeps the process weight");
   free(js);
   {
     char *pend = ng_augogen_pending_json();

@@ -262,7 +262,7 @@ static void copy_cap(char *dst, size_t cap, const char *src) {
   dst[n] = 0;
 }
 
-void ng_motive_rank(const char *text, ng_motive *out) {
+void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
   int i, best = 0, best_score = -1, best_lex = 0, best_ham = 64;
@@ -270,7 +270,7 @@ void ng_motive_rank(const char *text, ng_motive *out) {
   if (!out) return;
   memset(out, 0, sizeof *out);
   norm_text(text, norm, sizeof norm);
-  lw = lex_weight();
+  lw = (over >= 0 && over <= 255) ? over : lex_weight();
   out->lex_w = lw;
   /* Silence has no tokens to rank. The peer-prompt concept is the motive. */
   if (!norm[0]) {
@@ -308,30 +308,39 @@ void ng_motive_rank(const char *text, ng_motive *out) {
     copy_cap(out->line, sizeof out->line, remedy_line(out->plate));
 }
 
+void ng_motive_rank(const char *text, ng_motive *out) {
+  ng_motive_rank_w(text, out, -1);
+}
+
 int ng_motive_blocks(const char *text) {
   ng_motive m;
   ng_motive_rank(text, &m);
   return m.plate == NG_PLATE_PURGE || m.plate == NG_PLATE_PROTECT;
 }
 
-char *ng_motive_json(const char *text) {
-  ng_motive m;
+char *ng_motive_format(const ng_motive *m) {
   char *line = NULL, *concept = NULL, *out = NULL;
-  ng_motive_rank(text, &m);
-  line = ng_json_escape(m.line);
-  concept = ng_json_escape(m.concept);
+  if (!m) return NULL;
+  line = ng_json_escape(m->line);
+  concept = ng_json_escape(m->concept);
   asprintf(&out,
            "{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":true,"
            "\"plate\":\"%s\",\"forward\":%s,\"rank\":%d,"
            "\"hamming\":%d,\"lexical\":%d,\"lex_w\":%d,"
            "\"concept\":\"%s\",\"line\":\"%s\","
            "\"concepts\":%d,\"python\":0}",
-           ng_motive_plate_name(m.plate), m.forward ? "true" : "false", m.rank,
-           m.hamming, m.lexical, m.lex_w, concept ? concept : "", line ? line : "",
+           ng_motive_plate_name(m->plate), m->forward ? "true" : "false", m->rank,
+           m->hamming, m->lexical, m->lex_w, concept ? concept : "", line ? line : "",
            NG_MOTIVE_CONCEPTS);
   free(line);
   free(concept);
   return out ? out
              : strdup("{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":false,"
                       "\"error\":\"oom\",\"python\":0}");
+}
+
+char *ng_motive_json(const char *text) {
+  ng_motive m;
+  ng_motive_rank(text, &m);
+  return ng_motive_format(&m);
 }

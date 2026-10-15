@@ -787,9 +787,10 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char *text = ng_json_get_string(json_body, "text");
     char *enq = ng_json_get_string(json_body, "enqueue");
     char *hopv = ng_json_get_string(json_body, "hop");
+    char *lwv = ng_json_get_string(json_body, "lex_w");
     ng_motive m;
     char *js;
-    int asked = 0, hop = 0;
+    int asked = 0, hop = 0, over = -1;
     if (!text) text = ng_json_get_string(json_body, "act");
     if (!text) text = strdup("");
     if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
@@ -798,7 +799,13 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     if (hopv && (hopv[0] == '1' || hopv[0] == 't' || hopv[0] == 'T' ||
                  hopv[0] == 'y' || hopv[0] == 'Y'))
       hop = 1;
-    ng_motive_rank(text ? text : "", &m);
+    /* A quoted lex_w applies to this call. A bad value leaves the env weight. */
+    if (lwv && lwv[0]) {
+      char *end = NULL;
+      long v = strtol(lwv, &end, 10);
+      if (end && end != lwv && !*end && v >= 0 && v <= 255) over = (int)v;
+    }
+    ng_motive_rank_w(text ? text : "", &m, over);
     /* Report every plate. Store a line only when the plate is forward. */
     if (asked && m.forward && m.line[0] && !suggestion_forbidden(m.line) &&
         !ng_motive_blocks(m.line)) {
@@ -826,10 +833,11 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       /* A hop already arrived from one peer. Do not POST it onward. */
       if (!hop) motive_nudge(m.line);
     }
-    js = ng_motive_json(text ? text : "");
+    js = ng_motive_format(&m);
     free(text);
     free(enq);
     free(hopv);
+    free(lwv);
     free(action);
     return js ? js
               : strdup("{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":false,"

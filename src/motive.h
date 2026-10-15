@@ -41,6 +41,9 @@ typedef struct {
 
 const char *ng_motive_plate_name(int plate);
 void ng_motive_rank(const char *text, ng_motive *out);
+/* over < 0 reads NANOBOT_MOTIVE_LEX_W. 0-255 applies to this call only. */
+void ng_motive_rank_w(const char *text, ng_motive *out, int over);
+char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
 char *ng_motive_json(const char *text);
