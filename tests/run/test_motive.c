@@ -581,6 +581,115 @@ int main(void) {
     unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
   }
 
+  /* The hop quotes the posted line. The sender plate keeps the act. */
+  {
+    int lfd, port = 0, st = 0, on = 1;
+    pid_t kid;
+    char url[64];
+    char path[] = "/tmp/nb-motive-hop-body.log";
+    char *log = NULL;
+    char *pend;
+    struct sockaddr_in sa;
+    socklen_t sl = sizeof sa;
+    FILE *lf;
+    long sz;
+    unlink(path);
+    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    expect(lfd >= 0, "body hop socket");
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    if (lfd >= 0 &&
+        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
+        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 8) == 0 &&
+        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
+      port = ntohs(sa.sin_port);
+      kid = fork();
+      expect(kid >= 0, "body hop fork");
+      if (kid == 0) hop_sink(lfd, path);
+      if (kid > 0) {
+        close(lfd);
+        snprintf(url, sizeof url, "http://127.0.0.1:%d", port);
+        setenv("NANOBOT_MOTIVE_PEER", url, 1);
+        setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"motive\",\"text\":\"read the law\",\"enqueue\":\"1\"}");
+        expect(js && strstr(js, "\"rank\":185") && strstr(js, "\"lexical\":2") &&
+                   strstr(js, "\"hamming\":7"),
+               "partial act still reports its own rank");
+        expect(js && strstr(js, "\"concept\":\"read the law and prove\""),
+               "partial act still names the law");
+        free(js);
+        pend = ng_augogen_pending_json();
+        expect(pend && strstr(pend, "\"rank\":185") && strstr(pend, "\"lexical\":2") &&
+                   strstr(pend, "\"hamming\":7"),
+               "sender plate keeps the partial act");
+        free(pend);
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"motive\",\"text\":\"you lied\",\"enqueue\":\"1\"}");
+        expect(js && strstr(js, "\"plate\":\"confess\"") && strstr(js, "\"lexical\":0") &&
+                   strstr(js, "\"rank\":43"),
+               "bare confess still reports the sketch");
+        free(js);
+        pend = ng_augogen_pending_json();
+        expect(pend && strstr(pend, "\"plate\":\"confess\"") && strstr(pend, "\"lexical\":0") &&
+                   strstr(pend, "\"rank\":43"),
+               "sender plate keeps the bare confess");
+        expect(pend && strstr(pend, "rank concepts then act"),
+               "sender stores the sketch line");
+        free(pend);
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"motive\",\"text\":\"\",\"enqueue\":\"1\"}");
+        expect(js && strstr(js, "\"rank\":0") && strstr(js, "\"lexical\":0"),
+               "silence still reports rank 0");
+        free(js);
+        setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+        waitpid(kid, &st, 0);
+        lf = fopen(path, "r");
+        expect(lf != NULL, "body hop log");
+        if (lf) {
+          fseek(lf, 0, SEEK_END);
+          sz = ftell(lf);
+          if (sz < 0) sz = 0;
+          fseek(lf, 0, SEEK_SET);
+          log = malloc((size_t)sz + 1);
+          if (log) {
+            size_t n = fread(log, 1, (size_t)sz, lf);
+            log[n] = 0;
+          }
+          fclose(lf);
+        }
+        expect(log && count_substr(log, "POST /peer/v1/augogen") == 3, "three lines posted");
+        expect(log && count_substr(log, "\"lexical\":\"3\"") == 3,
+               "each posted line names its own lexical count");
+        expect(log && count_substr(log, "\"hamming\":\"0\"") == 3,
+               "each posted line names its own hamming");
+        expect(log && count_substr(log, "\"plate\":\"observe\"") == 3,
+               "each posted line names its own plate");
+        expect(log && strstr(log, "\"concept\":\"read the law and prove\""),
+               "partial hop names the law line");
+        expect(log && strstr(log, "\"concept\":\"rank concepts then act\""),
+               "bare confess hop names the sketch line");
+        expect(log && strstr(log, "\"concept\":\"prompt a peer to move\""),
+               "silence hop names the peer line");
+        expect(!log || !strstr(log, "\"lexical\":\"0\""), "the act count stays off the hop");
+        expect(!log || !strstr(log, "\"lexical\":\"2\""), "the partial count stays off the hop");
+        expect(!log || !strstr(log, "\"plate\":\"confess\""), "the act plate stays off the hop");
+        expect(!log || !strstr(log, "you lied"), "the act text is not the body");
+        expect(!log || !strstr(log, "read the law\""), "the partial act is not the body");
+        free(log);
+        unlink(path);
+      }
+    } else {
+      expect(0, "body hop bind");
+      if (lfd >= 0) close(lfd);
+    }
+    setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+    unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+  }
+
   /* A quoted plate that disagrees with the rank is not stored. */
   js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
   free(js);

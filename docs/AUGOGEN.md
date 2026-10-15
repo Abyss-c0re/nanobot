@@ -52,12 +52,13 @@ permission bit skips the file. The POST is `/peer/v1/augogen` with `enqueue`
 `1` and `hop` `1`, and the body text is the stored line. When that motive
 request quoted `lex_w`, the POST quotes the same value. A missing or bad
 value omits `lex_w`, so the peer keeps its process weight. The POST also
-quotes the ranked plate name, `lexical`, `hamming`, and `concept`. A quoted plate,
+quotes the plate name, `lexical`, `hamming`, and `concept` of that posted line.
+The sender's response and plate keep the rank of the act. A quoted plate,
 `lexical`, `hamming`, or `concept` that disagrees with the peer rank is not stored.
 A missing value keeps the store. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, `programs/motive_space.cubalc`, and `programs/motive_feed.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, `programs/motive_space.cubalc`, `programs/motive_feed.cubalc`, and `programs/motive_body.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode

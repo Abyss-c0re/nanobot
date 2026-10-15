@@ -889,10 +889,15 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       }
       save_plate(&p);
       /* A hop already arrived from one peer. Do not POST it onward.
-       * over is the quoted lex_w, or -1 when this call keeps the env weight. */
-      if (!hop)
-        motive_nudge(m.line, over, ng_motive_plate_name(m.plate), m.lexical,
-                     m.hamming, m.concept);
+       * over is the quoted lex_w, or -1 when this call keeps the env weight.
+       * The body is the stored line. Quote that line's own rank so the
+       * peer's check of the body agrees. The sender plate keeps the act. */
+      if (!hop) {
+        ng_motive posted;
+        ng_motive_rank_w(m.line, &posted, over);
+        motive_nudge(m.line, over, ng_motive_plate_name(posted.plate),
+                     posted.lexical, posted.hamming, posted.concept);
+      }
     }
     js = ng_motive_format(&m);
     free(text);
