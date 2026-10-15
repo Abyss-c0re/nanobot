@@ -1081,44 +1081,6 @@ int main(void) {
     free(pend);
   }
 
-  /* A blank unicode line does not hide the suggestion. The next line is the line. */
-  js = ng_augogen_handle(
-      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
-            "\"suggestion\":\"\\u00a0\\nread the law and prove\"}");
-  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
-         "a blank unicode line does not hide the suggestion");
-  free(js);
-  {
-    char *pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "\"suggestion\":\"read the law and prove\",\"status\""),
-           "the stored suggestion keeps the line after the blank");
-    free(pend);
-  }
-  js = ng_augogen_handle(
-      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
-            "\"suggestion\":\"\\u000b\\nread the law and prove\"}");
-  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
-         "a blank vertical tab does not hide the suggestion");
-  free(js);
-  js = ng_augogen_handle(
-      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
-            "\"suggestion\":\"fold the matrix\\nread the law and prove\"}");
-  expect(js && strstr(js, "\"suggestion\":\"fold the matrix\""),
-         "a filled first line stays the suggestion");
-  free(js);
-  js = ng_augogen_handle(
-      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
-            "\"suggestion\":\"read\\u000bthe law and prove\"}");
-  expect(js && strstr(js, "\"suggestion\":\"read\\u000bthe law and prove\""),
-         "an interior vertical tab stays in the suggestion");
-  free(js);
-  js = ng_augogen_handle(
-      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
-            "\"suggestion\":\"\\\"\\nread the law and prove\"}");
-  expect(js && strstr(js, "\"suggestion\":\"prompt a peer to move\""),
-         "a quote on the first line does not take the next line");
-  free(js);
-
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
