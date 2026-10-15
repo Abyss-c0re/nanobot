@@ -8,6 +8,7 @@
 #include "util.h"
 
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -1000,9 +1001,111 @@ static void test_auto_orphan(void) {
          "a name that is not a job id stays queued");
 }
 
+static void wipe_jobs(const char *jdir) {
+  DIR *d;
+  struct dirent *de;
+  mkdir(jdir, 0700);
+  d = opendir(jdir);
+  if (!d) return;
+  while ((de = readdir(d)) != NULL) {
+    char path[192];
+    if (de->d_name[0] == '.') continue;
+    if (snprintf(path, sizeof path, "%s/%s", jdir, de->d_name) >= (int)sizeof path)
+      continue;
+    unlink(path);
+  }
+  closedir(d);
+}
+
+static void write_side(const char *jdir, const char *id, const char *ext, const char *body) {
+  char path[192];
+  FILE *f;
+  snprintf(path, sizeof path, "%s/%s%s", jdir, id, ext);
+  f = fopen(path, "wb");
+  if (!f) return;
+  fputs(body, f);
+  fclose(f);
+}
+
+static int job_exists(const char *jdir, const char *id, const char *ext) {
+  char path[192];
+  snprintf(path, sizeof path, "%s/%s%s", jdir, id, ext);
+  return access(path, F_OK) == 0;
+}
+
+static void test_auto_cap(void) {
+  char jdir[] = "/tmp/nb-cap-test";
+  char edirs[] = "/tmp/nb-cap-error";
+  char id[32];
+  char st[32];
+  char err[64];
+  int i;
+  wipe_jobs(jdir);
+  for (i = 1; i <= 49; i++) {
+    snprintf(id, sizeof id, "%016d", i);
+    write_orphan(jdir, id, "done");
+    write_side(jdir, id, ".in", "old");
+    snprintf(id, sizeof id, "agrun-%010d-1", i);
+    write_orphan(jdir, id, "done");
+    write_side(jdir, id, ".in", "old");
+  }
+  write_orphan(jdir, "0000000000000000", "queued");
+  write_side(jdir, "0000000000000000", ".in", "stay");
+  write_orphan(jdir, "agrun-0000000000-9", "queued");
+  write_side(jdir, "agrun-0000000000-9", ".in", "stay");
+  write_orphan(jdir, "0000000000000050", "running");
+  write_orphan(jdir, "agrun-0000000050-1", "running");
+  ng_jobs_gc(jdir);
+  expect(!job_exists(jdir, "0000000000000001", ".json") &&
+             !job_exists(jdir, "0000000000000001", ".in"),
+         "the oldest done digit job drops");
+  expect(job_exists(jdir, "0000000000000049", ".json") &&
+             job_exists(jdir, "0000000000000049", ".in"),
+         "a newer done digit job stays");
+  expect(orphan_fields(jdir, "0000000000000000", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "queued") == 0 &&
+             job_exists(jdir, "0000000000000000", ".in"),
+         "a queued digit job stays");
+  expect(orphan_fields(jdir, "0000000000000050", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "running") == 0,
+         "a running digit job stays");
+  expect(!job_exists(jdir, "agrun-0000000001-1", ".json") &&
+             !job_exists(jdir, "agrun-0000000001-1", ".in"),
+         "the oldest done auto job drops");
+  expect(job_exists(jdir, "agrun-0000000049-1", ".json") &&
+             job_exists(jdir, "agrun-0000000049-1", ".in"),
+         "a newer done auto job stays");
+  expect(orphan_fields(jdir, "agrun-0000000000-9", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "queued") == 0 &&
+             job_exists(jdir, "agrun-0000000000-9", ".in"),
+         "a queued auto job stays");
+  expect(orphan_fields(jdir, "agrun-0000000050-1", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "running") == 0,
+         "a running auto job stays");
+
+  wipe_jobs(edirs);
+  for (i = 1; i <= 49; i++) {
+    snprintf(id, sizeof id, "agrun-%010d-1", i);
+    write_orphan(edirs, id, "error");
+    write_side(edirs, id, ".in", "old");
+  }
+  write_orphan(edirs, "agrun-0000000000-9", "queued");
+  ng_jobs_gc(edirs);
+  expect(!job_exists(edirs, "agrun-0000000001-1", ".json") &&
+             !job_exists(edirs, "agrun-0000000001-1", ".in"),
+         "the oldest error auto job drops");
+  expect(orphan_fields(edirs, "agrun-0000000049-1", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "error") == 0,
+         "a newer error auto job stays");
+  expect(orphan_fields(edirs, "agrun-0000000000-9", st, sizeof st, err, sizeof err) &&
+             strcmp(st, "queued") == 0,
+         "a queued auto job stays beside an error cap");
+}
+
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
+  test_auto_cap();
   test_worker_title();
   test_worker_slot_before_exit();
   test_lean_info_skips_refresh();

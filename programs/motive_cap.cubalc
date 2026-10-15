@@ -1,0 +1,17 @@
+// A done or error auto job past 48 drops on its own cap.
+// A digit job keeps its own cap. A queued job stays.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE cap ROLE observer PROTON 1
+CUBE law ROLE nanobot PROTON 1
+
+PLUG cap law
+
+IMPULSE cap 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "cap" UNITY DECIDE ENERGY
