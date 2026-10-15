@@ -29,9 +29,7 @@
  * That POST also quotes the ranked plate name, lexical, hamming, and concept.
  * A quoted plate, lexical, hamming, or concept that disagrees with the peer
  * rank is not stored. A missing value keeps the store.
- * A rank tied across concepts names the earliest concept and is stored
- * when enqueue asks, so the one peer POST runs. The plate file names ties
- * and still omits lex_w. The hop omits ties.
+ * The motive response names stored. The plate file omits stored.
  * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */

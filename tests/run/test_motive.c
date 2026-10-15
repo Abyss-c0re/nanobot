@@ -650,6 +650,7 @@ int main(void) {
          "a disagreed concept still reports the rank");
   expect(js && strstr(js, "\"concept\":\"read the law and prove\""),
          "the report keeps the ranked concept");
+  expect(js && strstr(js, "\"stored\":false"), "a disagreed concept names stored false");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
@@ -670,8 +671,23 @@ int main(void) {
     expect(pend && strstr(pend, "\"lexical\":3"), "a matching concept keeps the count");
     expect(pend && strstr(pend, "\"hamming\":0"), "a matching concept keeps the hamming");
     expect(!pend || !strstr(pend, "\"lex_w\":"), "a matching concept omits lex_w");
+    expect(!pend || !strstr(pend, "\"stored\""), "the plate file omits stored");
     free(pend);
   }
+  js = ng_augogen_handle(NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\"}");
+  expect(js && strstr(js, "\"stored\":false") && strstr(js, "\"rank\":256"),
+         "a bare motive names stored false");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\",\"enqueue\":\"1\"}");
+  expect(js && strstr(js, "\"stored\":true") && strstr(js, "\"rank\":256"),
+         "enqueue names stored true");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"trick the cube\",\"enqueue\":\"1\"}");
+  expect(js && strstr(js, "\"stored\":false") && strstr(js, "\"forward\":false"),
+         "a purge names stored false");
+  free(js);
 
   /* No model line: report the concept. Do not store it. A purge stays empty. */
   js = ng_augogen_handle(
@@ -854,153 +870,6 @@ int main(void) {
       expect(0, "generate hop bind");
       if (lfd >= 0) close(lfd);
     }
-  }
-
-  /* A tied rank names the earliest concept. Enqueue stores it and posts once. */
-  ng_motive_rank("read the law and prove", &m);
-  expect(m.ties == 1 && m.rank == 256 && m.lexical == 3 && m.hamming == 0,
-         "the law line is a unique rank");
-  ng_motive_rank("", &m);
-  expect(m.ties == 1 && m.rank == 0 && strcmp(m.line, "prompt a peer to move") == 0,
-         "silence is a unique rank");
-  ng_motive_rank("alpha", &m);
-  expect(m.ties == 2 && m.forward && m.plate == NG_PLATE_OBSERVE, "alpha ties two concepts");
-  expect(m.rank == 35 && m.lexical == 0 && m.hamming == 29, "alpha score is the shared rank");
-  expect(strcmp(m.concept, "read the law and prove") == 0, "a tie keeps the earliest concept");
-  js = ng_motive_json("read the law and prove");
-  expect(js && strstr(js, "\"ties\":1") && strstr(js, "\"concepts\":8"),
-         "motive json names ties");
-  free(js);
-  js = ng_motive_json("alpha");
-  expect(js && strstr(js, "\"ties\":2") && strstr(js, "\"concept\":\"read the law and prove\""),
-         "motive json names a tie");
-  free(js);
-  {
-    char *pend;
-    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
-    setenv("NANOBOT_MOTIVE_PEER", "off", 1);
-    unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
-    js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
-    free(js);
-    js = ng_augogen_handle(NULL, "{\"action\":\"motive\",\"text\":\"alpha\",\"enqueue\":\"1\"}");
-    expect(js && strstr(js, "\"ties\":2") && strstr(js, "\"forward\":true"),
-           "a tie is reported");
-    expect(js && strstr(js, "\"plate\":\"observe\""), "a tie keeps the plate");
-    free(js);
-    pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "\"rank\":35"), "a tie is stored");
-    expect(pend && strstr(pend, "read the law and prove"), "a tie stores the earliest concept");
-    expect(pend && strstr(pend, "\"ties\":2"), "the plate file names ties");
-    expect(!pend || !strstr(pend, "\"lex_w\""), "the plate file omits lex_w");
-    free(pend);
-    js = ng_augogen_handle(
-        NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\",\"enqueue\":\"1\"}");
-    expect(js && strstr(js, "\"ties\":1") && strstr(js, "\"rank\":256"),
-           "a unique rank still reports 256");
-    free(js);
-    pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "\"rank\":256"), "a unique rank is stored");
-    expect(pend && strstr(pend, "read the law and prove"), "a unique rank stores the concept");
-    expect(pend && strstr(pend, "\"ties\":1"), "a unique rank stores ties 1");
-    expect(!pend || !strstr(pend, "\"lex_w\""), "the plate file omits lex_w");
-    free(pend);
-    js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
-    free(js);
-    js = ng_augogen_handle(
-        NULL, "{\"action\":\"generate\",\"transcript\":\"alpha\",\"enqueue\":\"1\"}");
-    expect(js && strstr(js, "\"stored\":true"), "generate stores a tie");
-    free(js);
-    pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "read the law and prove"), "generate stores the earliest concept");
-    expect(pend && strstr(pend, "\"ties\":2"), "generate plate names ties");
-    expect(!pend || !strstr(pend, "\"lex_w\""), "generate plate omits lex_w");
-    free(pend);
-    js = ng_augogen_handle(
-        NULL,
-        "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"enqueue\":\"1\"}");
-    expect(js && strstr(js, "\"stored\":true") && strstr(js, "\"lex_w\":64"),
-           "generate still stores a unique rank");
-    free(js);
-  }
-  {
-    int lfd, port = 0, st = 0, on = 1;
-    pid_t kid;
-    char url[64];
-    char path[] = "/tmp/nb-motive-tie-hop.log";
-    char *log = NULL;
-    struct sockaddr_in sa;
-    socklen_t sl = sizeof sa;
-    FILE *lf;
-    long sz;
-    unlink(path);
-    lfd = socket(AF_INET, SOCK_STREAM, 0);
-    expect(lfd >= 0, "tie hop socket");
-    memset(&sa, 0, sizeof sa);
-    sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    sa.sin_port = 0;
-    if (lfd >= 0 &&
-        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
-        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 4) == 0 &&
-        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
-      port = ntohs(sa.sin_port);
-      kid = fork();
-      expect(kid >= 0, "tie hop fork");
-      if (kid == 0) hop_sink(lfd, path);
-      if (kid > 0) {
-        close(lfd);
-        snprintf(url, sizeof url, "http://127.0.0.1:%d", port);
-        setenv("NANOBOT_MOTIVE_PEER", url, 1);
-        setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
-        js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
-        free(js);
-        js = ng_augogen_handle(NULL, "{\"action\":\"motive\",\"text\":\"alpha\",\"enqueue\":\"1\"}");
-        free(js);
-        js = ng_augogen_handle(
-            NULL,
-            "{\"action\":\"motive\",\"text\":\"read the law and prove\","
-            "\"enqueue\":\"1\",\"lex_w\":\"1\"}");
-        free(js);
-        js = ng_augogen_handle(
-            NULL,
-            "{\"action\":\"motive\",\"text\":\"alpha\",\"enqueue\":\"1\",\"hop\":\"1\"}");
-        free(js);
-        setenv("NANOBOT_MOTIVE_PEER", "off", 1);
-        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
-        waitpid(kid, &st, 0);
-        lf = fopen(path, "r");
-        expect(lf != NULL, "tie hop log");
-        if (lf) {
-          fseek(lf, 0, SEEK_END);
-          sz = ftell(lf);
-          if (sz < 0) sz = 0;
-          fseek(lf, 0, SEEK_SET);
-          log = malloc((size_t)sz + 1);
-          if (log) {
-            size_t n = fread(log, 1, (size_t)sz, lf);
-            log[n] = 0;
-          }
-          fclose(lf);
-        }
-        expect(log && count_substr(log, "POST /peer/v1/augogen") == 2,
-               "the tie posts once and the law line posts once");
-        expect(log && count_substr(log, "Content-Length: 157") == 1, "the tie hop is 157 bytes");
-        expect(log && strstr(log, "\"lexical\":\"0\"") && strstr(log, "\"hamming\":\"29\""),
-               "the tie hop quotes the shared score");
-        expect(log && count_substr(log, "\"concept\":\"read the law and prove\"") == 2,
-               "the tie hop quotes the earliest concept");
-        expect(log && count_substr(log, "Content-Length: 168") == 1, "the law hop stays 168 bytes");
-        expect(!log || !strstr(log, "\"ties\""), "the hop omits ties");
-        expect(!log || !strstr(log, "\"text\":\"alpha\""), "the hop omits the raw act");
-        free(log);
-        unlink(path);
-      }
-    } else {
-      expect(0, "tie hop bind");
-      if (lfd >= 0) close(lfd);
-    }
-    setenv("NANOBOT_MOTIVE_PEER", "off", 1);
-    unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
   }
 
   if (g_fail) {

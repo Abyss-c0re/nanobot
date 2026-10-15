@@ -280,7 +280,6 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
     }
     out->plate = NG_PLATE_OBSERVE;
     out->forward = 1;
-    out->ties = 1;
     copy_cap(out->concept, sizeof out->concept, kConcept[peer]);
     copy_cap(out->line, sizeof out->line, kConcept[peer]);
     return;
@@ -288,23 +287,16 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   out->plate = plate_of(norm);
   out->forward = plate_forward(out->plate);
   qh = simhash_text(norm);
-  {
-    int ties = 0;
-    for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
-      int lex = lexical_hits(norm, kConcept[i]);
-      int h = ham64(qh, simhash_text(kConcept[i]));
-      int score = lex * lw + (64 - h);
-      if (score > best_score) {
-        best = i;
-        best_score = score;
-        best_lex = lex;
-        best_ham = h;
-        ties = 1;
-      } else if (score == best_score) {
-        ties++;
-      }
+  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
+    int lex = lexical_hits(norm, kConcept[i]);
+    int h = ham64(qh, simhash_text(kConcept[i]));
+    int score = lex * lw + (64 - h);
+    if (score > best_score) {
+      best = i;
+      best_score = score;
+      best_lex = lex;
+      best_ham = h;
     }
-    out->ties = ties;
   }
   out->rank = best_score < 0 ? 0 : best_score;
   out->lexical = best_lex;
@@ -336,10 +328,10 @@ char *ng_motive_format(const ng_motive *m) {
            "\"plate\":\"%s\",\"forward\":%s,\"rank\":%d,"
            "\"hamming\":%d,\"lexical\":%d,\"lex_w\":%d,"
            "\"concept\":\"%s\",\"line\":\"%s\","
-           "\"ties\":%d,\"concepts\":%d,\"python\":0}",
+           "\"concepts\":%d,\"python\":0}",
            ng_motive_plate_name(m->plate), m->forward ? "true" : "false", m->rank,
            m->hamming, m->lexical, m->lex_w, concept ? concept : "", line ? line : "",
-           m->ties, NG_MOTIVE_CONCEPTS);
+           NG_MOTIVE_CONCEPTS);
   free(line);
   free(concept);
   return out ? out
