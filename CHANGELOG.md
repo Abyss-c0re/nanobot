@@ -90,6 +90,7 @@
 - **lean:** a lean listener reopens that same fd before the next accept, so the worker inherits the live path. The reopen writes nothing. The open file is not cut. CubalC board: `programs/log_sync.cubalc`.
 - **lean:** the listener counts a worker before the fork, while the child-exit signal is held, so a worker that exits first still occupies one slot. That slot is released when the worker is reaped. The child cap is unchanged. CubalC board: `programs/fork_slot.cubalc`.
 - **hive:** the one peer POST quotes the plate, lexical count, Hamming, and concept of the posted line. The sender's plate keeps the rank of the act. A partial act still reports that act. `hop` `1` stores locally and does not POST. Generate does not POST. CubalC board: `programs/motive_body.cubalc`.
+- **hive:** the content word `confess` also matches the whole word `confession`, once. A line that only says lied stays on the sketch. The plate cascade is unchanged. CubalC board: `programs/motive_confess.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

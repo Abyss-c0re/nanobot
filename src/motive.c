@@ -235,7 +235,10 @@ static int lexical_hits(const char *norm, const char *concept) {
     if (!strcmp(tok, "the") || !strcmp(tok, "and") || !strcmp(tok, "then") ||
         !strcmp(tok, "a") || !strcmp(tok, "to"))
       continue;
-    if (bounded(norm, tok)) hits++;
+    /* The cascade word confession is the content word confess, once. */
+    if (bounded(norm, tok) ||
+        (!strcmp(tok, "confess") && bounded(norm, "confession")))
+      hits++;
   }
   return hits;
 }
