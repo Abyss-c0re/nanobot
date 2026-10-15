@@ -689,6 +689,23 @@ int main(void) {
          "a unicode NUL does not cut the law line");
   free(js);
 
+  /* A JSON backspace or form feed is a separator before the rank. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"read the law\\band prove\"}");
+  expect(js && strstr(js, "\"rank\":256"), "backspace still ranks 256");
+  expect(js && strstr(js, "\"lexical\":3"), "backspace keeps lexical 3");
+  expect(js && strstr(js, "\"hamming\":0"), "backspace keeps hamming 0");
+  expect(js && strstr(js, "\"concept\":\"read the law and prove\""),
+         "backspace names the law concept");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"read the law\\fand prove\"}");
+  expect(js && strstr(js, "\"rank\":256") && strstr(js, "\"lexical\":3") &&
+             strstr(js, "\"hamming\":0") &&
+             strstr(js, "\"concept\":\"read the law and prove\""),
+         "a form feed still names the law concept");
+  free(js);
+
   /* No model line: report the concept. Do not store it. A purge stays empty. */
   js = ng_augogen_handle(
       NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\"}");

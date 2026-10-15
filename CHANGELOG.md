@@ -82,6 +82,7 @@
 - **wire:** every cli-chat-proxy call sends `x-grok-client-identifier` (default `nanobot`, then `NANOBOT_CLIENT_NAME`, then `GROK_CLIENT_NAME`) and `x-authenticateresponse: authenticate-response`.
 - **wire:** suggestPrompt transcript packer uses a 24000-character budget and a 1500-character cap on older turns. The user-message JSON object is closed. Request and response fields are unchanged.
 - **hive:** a motive text decodes a JSON `\u` escape of four hex digits before the rank. A unicode space in the law line still ranks 256, lexical 3, Hamming 0. A NUL from that escape is not written into the line. The hop is unchanged. CubalC board: `programs/motive_space.cubalc`.
+- **hive:** a motive text decodes a JSON backspace or form feed before the rank. Either separator in the law line still ranks 256, lexical 3, Hamming 0. Plain ASCII ranks are unchanged. The hop is unchanged. CubalC board: `programs/motive_feed.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

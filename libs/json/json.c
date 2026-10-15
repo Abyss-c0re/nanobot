@@ -140,6 +140,12 @@ char *nb_json_get_string(const char *json, const char *key) {
       } else if (*p == 't') {
         *d++ = '\t';
         p++;
+      } else if (*p == 'b') {
+        *d++ = '\b';
+        p++;
+      } else if (*p == 'f') {
+        *d++ = '\f';
+        p++;
       } else if (*p == 'u') {
         unsigned cp = 0;
         if (!json_hex4(p + 1, &cp)) {
