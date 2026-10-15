@@ -17,8 +17,6 @@ An accepted request worker retitles its command line. The listener command line 
 
 On a lean host, a regular stderr file at the lean log cap is cut to empty before the next line. A terminal or a pipe stays. The rotated log file is unchanged.
 
-A secret temp left beside the session file is removed at startup when its process is dead. A temp whose process is still alive stays. The session file stays.
-
 ## Run caps
 
 Per-run model, effort, completion cap, context estimate, and compaction are in [ASYNC.md](ASYNC.md). Process defaults:

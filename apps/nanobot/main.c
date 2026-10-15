@@ -627,15 +627,6 @@ int main(int argc, char **argv) {
 
   ng_set_workdir(home);
   mkdir(home, 0755);
-  if (home && home[0]) {
-    char sweep[700];
-    snprintf(sweep, sizeof sweep, "%s/session", home);
-    nb_sweep_dead_temps(sweep);
-    snprintf(sweep, sizeof sweep, "%s/device_login", home);
-    nb_sweep_dead_temps(sweep);
-    snprintf(sweep, sizeof sweep, "%s/peer_token", home);
-    nb_sweep_dead_temps(sweep);
-  }
   /* Mesh focus loop paths — avoid ENOENT on fresh home (reports/titan-loop). */
   {
     char p[700];

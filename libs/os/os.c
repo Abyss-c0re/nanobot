@@ -5,8 +5,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <dirent.h>
-#include <signal.h>
 #include <sys/stat.h>
 
 static char g_workdir[512] = "/tmp/nanobot";
@@ -68,54 +66,6 @@ int nb_write_secret_file(const char *path, const char *data, size_t len) {
     return -1;
   }
   return 0;
-}
-
-int nb_sweep_dead_temps(const char *path) {
-  const char *slash;
-  const char *base;
-  char dir[512];
-  char prefix[256];
-  size_t plen;
-  DIR *dp;
-  struct dirent *de;
-  int n = 0;
-  if (!path || !path[0]) return 0;
-  slash = strrchr(path, '/');
-  if (!slash || slash == path) {
-    snprintf(dir, sizeof dir, ".");
-    base = slash ? slash + 1 : path;
-  } else {
-    size_t dlen = (size_t)(slash - path);
-    if (dlen >= sizeof dir) return 0;
-    memcpy(dir, path, dlen);
-    dir[dlen] = 0;
-    base = slash + 1;
-  }
-  if (!base[0]) return 0;
-  plen = (size_t)snprintf(prefix, sizeof prefix, "%s.tmp.", base);
-  if (plen == 0 || plen >= sizeof prefix) return 0;
-  dp = opendir(dir);
-  if (!dp) return 0;
-  while ((de = readdir(dp)) != NULL) {
-    const char *name = de->d_name;
-    const char *suf;
-    char *end = NULL;
-    long pid;
-    char full[768];
-    if (strncmp(name, prefix, plen) != 0) continue;
-    suf = name + plen;
-    if (!suf[0]) continue;
-    pid = strtol(suf, &end, 10);
-    if (end == suf || *end != '\0' || pid <= 0) continue;
-    if ((pid_t)pid == getpid()) continue;
-    if (kill((pid_t)pid, 0) == 0) continue;
-    if (errno != ESRCH) continue;
-    if (snprintf(full, sizeof full, "%s/%s", dir, name) >= (int)sizeof full)
-      continue;
-    if (unlink(full) == 0) n++;
-  }
-  closedir(dp);
-  return n;
 }
 
 char *nb_getenv_dup(const char *k) {
