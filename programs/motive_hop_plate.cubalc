@@ -1,0 +1,16 @@
+// The hop names the plate. A disagreed plate does not land.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hop  ROLE nanobot  PROTON 1
+CUBE plate ROLE observer PROTON 1
+
+PLUG hop plate
+
+IMPULSE hop 1
+IMPULSE plate 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY plate
+DECIDE plate
+ASSERT CUBES >= 2
+PRINT "platehop" UNITY DECIDE ENERGY

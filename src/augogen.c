@@ -618,11 +618,12 @@ static int write_budget(int fd, const char *buf, size_t n) {
 }
 
 /* One configured peer, one POST, no retry. The body carries hop=1.
- * lex_w 0-255 is quoted on that POST. A negative value omits the field. */
-static void motive_nudge(const char *line, int lex_w) {
+ * lex_w 0-255 is quoted on that POST. A negative value omits the field.
+ * plate is the ranked plate name. The peer stores only when it agrees. */
+static void motive_nudge(const char *line, int lex_w, const char *plate) {
   char spec[96], token[96], host[16];
-  char body[224], req[512];
-  char *esc = NULL;
+  char body[256], req[640];
+  char *esc = NULL, *pesc = NULL;
   int port = 0, fd = -1, bl, rl;
   struct sockaddr_in sa;
   knob_copy(spec, sizeof spec, "NANOBOT_MOTIVE_PEER", "MOTIVE_PEER");
@@ -633,16 +634,32 @@ static void motive_nudge(const char *line, int lex_w) {
   if (!peer_ipv4(spec, host, sizeof host, &port)) return;
   esc = ng_json_escape(line ? line : "");
   if (!esc) return;
-  if (lex_w >= 0 && lex_w <= 255)
+  pesc = ng_json_escape(plate && plate[0] ? plate : "");
+  if (!pesc) {
+    free(esc);
+    return;
+  }
+  if (lex_w >= 0 && lex_w <= 255 && pesc[0])
+    bl = snprintf(body, sizeof body,
+                  "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
+                  "\"hop\":\"1\",\"lex_w\":\"%d\",\"plate\":\"%s\"}",
+                  esc, lex_w, pesc);
+  else if (lex_w >= 0 && lex_w <= 255)
     bl = snprintf(body, sizeof body,
                   "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
                   "\"hop\":\"1\",\"lex_w\":\"%d\"}",
                   esc, lex_w);
+  else if (pesc[0])
+    bl = snprintf(body, sizeof body,
+                  "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
+                  "\"hop\":\"1\",\"plate\":\"%s\"}",
+                  esc, pesc);
   else
     bl = snprintf(body, sizeof body,
                   "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\",\"hop\":\"1\"}",
                   esc);
   free(esc);
+  free(pesc);
   if (bl < 0 || (size_t)bl >= sizeof body) return;
   rl = snprintf(req, sizeof req,
                 "POST /peer/v1/augogen HTTP/1.0\r\n"
@@ -795,9 +812,10 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char *enq = ng_json_get_string(json_body, "enqueue");
     char *hopv = ng_json_get_string(json_body, "hop");
     char *lwv = ng_json_get_string(json_body, "lex_w");
+    char *platev = ng_json_get_string(json_body, "plate");
     ng_motive m;
     char *js;
-    int asked = 0, hop = 0, over = -1;
+    int asked = 0, hop = 0, over = -1, plate_ok = 1;
     if (!text) text = ng_json_get_string(json_body, "act");
     if (!text) text = strdup("");
     if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
@@ -813,8 +831,11 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       if (end && end != lwv && !*end && v >= 0 && v <= 255) over = (int)v;
     }
     ng_motive_rank_w(text ? text : "", &m, over);
+    /* A quoted plate that disagrees with this rank is not stored. */
+    if (platev && platev[0] && strcmp(platev, ng_motive_plate_name(m.plate)) != 0)
+      plate_ok = 0;
     /* Report every plate. Store a line only when the plate is forward. */
-    if (asked && m.forward && m.line[0] && !suggestion_forbidden(m.line) &&
+    if (asked && plate_ok && m.forward && m.line[0] && !suggestion_forbidden(m.line) &&
         !ng_motive_blocks(m.line)) {
       unsigned long gen = p.generation + 1;
       plate_clear(&p);
@@ -839,13 +860,14 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       save_plate(&p);
       /* A hop already arrived from one peer. Do not POST it onward.
        * over is the quoted lex_w, or -1 when this call keeps the env weight. */
-      if (!hop) motive_nudge(m.line, over);
+      if (!hop) motive_nudge(m.line, over, ng_motive_plate_name(m.plate));
     }
     js = ng_motive_format(&m);
     free(text);
     free(enq);
     free(hopv);
     free(lwv);
+    free(platev);
     free(action);
     return js ? js
               : strdup("{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":false,"

@@ -26,6 +26,8 @@
  * Generate keeps the process weight. The plate file omits lex_w.
  * When that motive request quoted lex_w, the one peer POST quotes it too.
  * A missing or bad value omits lex_w on the hop.
+ * That POST also quotes the ranked plate name.
+ * A quoted plate that disagrees with the peer rank is not stored.
  * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */

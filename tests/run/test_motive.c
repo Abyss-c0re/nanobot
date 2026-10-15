@@ -335,6 +335,8 @@ int main(void) {
         expect(log && strstr(log, "\"hop\":\"1\""), "hop stops the chain");
         expect(log && strstr(log, "prompt a peer to move"), "stored line is the body");
         expect(!log || !strstr(log, "\"lex_w\""), "unset weight stays off the hop");
+        expect(log && count_substr(log, "\"plate\":\"observe\"") == 32,
+               "hop names the plate");
         expect(!log || !strstr(log, "trick the cube"), "purge act is not posted");
         expect(!log || !strstr(log, "serve the matrix in bits"), "remedy is not posted");
         free(log);
@@ -546,6 +548,8 @@ int main(void) {
         expect(log && count_substr(log, "\"lex_w\"") == 2,
                "a bad weight stays off the hop");
         expect(log && strstr(log, "read the law and prove"), "weighed line is the body");
+        expect(log && count_substr(log, "\"plate\":\"observe\"") == 3,
+               "weighed hop names the plate");
         expect(!log || !strstr(log, "rank concepts then act"), "hop does not post the weight");
         expect(!log || !strstr(log, "trick the cube"), "weighed purge is not posted");
         pend = ng_augogen_pending_json();
@@ -561,6 +565,37 @@ int main(void) {
     }
     setenv("NANOBOT_MOTIVE_PEER", "off", 1);
     unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+  }
+
+  /* A quoted plate that disagrees with the rank is not stored. */
+  js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
+  free(js);
+  js = ng_augogen_handle(
+      NULL,
+      "{\"action\":\"motive\",\"text\":\"read the law and prove\","
+      "\"enqueue\":\"1\",\"plate\":\"purge_intent\",\"lex_w\":\"1\"}");
+  expect(js && strstr(js, "\"rank\":67") && strstr(js, "\"forward\":true"),
+         "a disagreed plate still reports the rank");
+  expect(js && strstr(js, "\"plate\":\"observe\""), "the report keeps the ranked plate");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(!pend || !strstr(pend, "read the law and prove"), "a disagreed plate is not stored");
+    expect(!pend || !strstr(pend, "\"rank\":"), "a disagreed plate leaves the file empty");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL,
+      "{\"action\":\"motive\",\"text\":\"read the law and prove\","
+      "\"enqueue\":\"1\",\"plate\":\"observe\",\"lex_w\":\"1\"}");
+  expect(js && strstr(js, "\"rank\":67"), "a matching plate still weighs the call");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"plate\":\"observe\""), "a matching plate is stored");
+    expect(pend && strstr(pend, "\"rank\":67"), "a matching plate keeps the weighed rank");
+    expect(!pend || !strstr(pend, "\"lex_w\":"), "a matching plate omits lex_w");
+    free(pend);
   }
 
   /* No model line: report the concept. Do not store it. A purge stays empty. */
