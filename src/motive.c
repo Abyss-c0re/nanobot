@@ -218,6 +218,30 @@ static int ham64(uint64_t a, uint64_t b) {
   return n;
 }
 
+static int glue_tok(const char *tok) {
+  return !strcmp(tok, "the") || !strcmp(tok, "and") || !strcmp(tok, "then") ||
+         !strcmp(tok, "a") || !strcmp(tok, "to");
+}
+
+/* Content words in one catalog line. Glue words are not content. */
+static int content_n(const char *concept) {
+  char tmp[NG_MOTIVE_TEXT];
+  char tok[32];
+  size_t i = 0;
+  int n = 0;
+  if (!concept) return 0;
+  norm_text(concept, tmp, sizeof tmp);
+  while (tmp[i]) {
+    size_t k = 0;
+    while (tmp[i] == ' ') i++;
+    if (!tmp[i]) break;
+    while (tmp[i] && tmp[i] != ' ' && k + 1 < sizeof tok) tok[k++] = tmp[i++];
+    tok[k] = 0;
+    if (k && !glue_tok(tok)) n++;
+  }
+  return n;
+}
+
 static int lexical_hits(const char *norm, const char *concept) {
   char tmp[NG_MOTIVE_TEXT];
   char tok[32];
@@ -232,9 +256,7 @@ static int lexical_hits(const char *norm, const char *concept) {
     tok[n] = 0;
     if (n == 0) continue;
     /* Drop glue words so the distinctive tokens decide the rank. */
-    if (!strcmp(tok, "the") || !strcmp(tok, "and") || !strcmp(tok, "then") ||
-        !strcmp(tok, "a") || !strcmp(tok, "to"))
-      continue;
+    if (glue_tok(tok)) continue;
     if (bounded(norm, tok)) hits++;
   }
   return hits;
@@ -290,7 +312,12 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
     int lex = lexical_hits(norm, kConcept[i]);
     int h = ham64(qh, simhash_text(kConcept[i]));
+    int full = content_n(kConcept[i]);
     int score = lex * lw + (64 - h);
+    /* A partial content match borrows a quarter of the dense term.
+     * A complete match adds nothing, so an exact concept stays put.
+     * Hamming and the lexical count stay the raw features. */
+    if (lex > 0 && full > 0 && lex < full) score += (64 - h) >> 2;
     if (score > best_score) {
       best = i;
       best_score = score;

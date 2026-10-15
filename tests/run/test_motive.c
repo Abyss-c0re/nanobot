@@ -172,6 +172,19 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 256 && m.lex_w == 64, "the env rank is unchanged");
 
+  ng_motive_rank("read the law", &m);
+  expect(strcmp(m.concept, "read the law and prove") == 0, "partial law stays the law concept");
+  expect(m.rank == 199 && m.lexical == 2 && m.hamming == 7,
+         "a partial match borrows a quarter of the dense term");
+  expect(m.plate == NG_PLATE_OBSERVE && m.forward, "a partial law line stays observe");
+  ng_motive_rank_w("read the law", &m, 1);
+  expect(m.rank == 73 && m.lexical == 2 && m.hamming == 7,
+         "the borrowed term is not scaled by the lexical weight");
+  ng_motive_rank("please read the law and prove it", &m);
+  expect(strcmp(m.concept, "read the law and prove") == 0, "a wrapped law line stays the law concept");
+  expect(m.rank == 248 && m.lexical == 3 && m.hamming == 8,
+         "a complete match keeps the whole sketch");
+
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
   expect(m.forward, "silence may prompt");
