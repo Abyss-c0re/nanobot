@@ -1,0 +1,16 @@
+// Full auto runs a prompt job only when an agent is present.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE agent ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG agent rank
+
+IMPULSE agent 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "agent" UNITY DECIDE ENERGY

@@ -168,6 +168,8 @@ static void try_auto_run(ng_augogen *p, ng_agent_cfg *agent) {
     p->executed = 0;
     return;
   }
+  /* No agent: keep the plate. A hollow reply must not mark it run. */
+  if (!agent) return;
   snprintf(p->status, sizeof p->status, "applied");
   if (enqueue_prompt(agent, p->suggestion, p->job_id, sizeof p->job_id))
     p->executed = 1;
@@ -248,11 +250,10 @@ static char *plate_json(const ng_augogen *p) {
   score[0] = 0;
   if (p->score_kept && p->plate_name[0])
     snprintf(score, sizeof score,
-             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,\"stored\":true,",
+             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
              p->plate_name, p->motive_rank, p->motive_lex, p->motive_ham);
   else if (p->score_kept)
-    snprintf(score, sizeof score,
-             "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,\"stored\":true,",
+    snprintf(score, sizeof score, "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
              p->motive_rank, p->motive_lex, p->motive_ham);
   asprintf(&out,
            "{\"schema\":\"" NG_AUGOGEN_SCHEMA "\",\"ok\":true,"
@@ -845,7 +846,6 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     ng_motive m;
     char *js;
     int asked = 0, hop = 0, over = -1, plate_ok = 1, score_ok = 1, concept_ok = 1;
-    int stored = 0;
     if (!text) text = ng_json_get_string(json_body, "act");
     if (!text) text = strdup("");
     if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
@@ -889,7 +889,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         recompute(&p);
         if (p.confirmed && agent) try_auto_run(&p, agent);
       }
-      if (save_plate(&p) == 0) stored = 1;
+      save_plate(&p);
       /* A hop already arrived from one peer. Do not POST it onward.
        * over is the quoted lex_w, or -1 when this call keeps the env weight. */
       if (!hop)
@@ -897,15 +897,6 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
                      m.hamming, m.concept);
     }
     js = ng_motive_format(&m);
-    if (js) {
-      char *cut = strstr(js, "\"python\":0}");
-      char *tagged = NULL;
-      if (cut && asprintf(&tagged, "%.*s\"stored\":%s,\"python\":0}",
-                          (int)(cut - js), js, stored ? "true" : "false") >= 0) {
-        free(js);
-        js = tagged;
-      }
-    }
     free(text);
     free(enq);
     free(hopv);

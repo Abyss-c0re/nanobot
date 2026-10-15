@@ -35,13 +35,10 @@ Score is token overlap plus a 64-bit sketch distance. A priority cascade names
 the plate first. The JSON reports that plate and a 2–12 word line. A forward
 plate's line is the winning concept. Every other plate reports a remedy and
 is not stored. With `enqueue` `1` only a forward line is stored. The act text
-itself is never stored. The motive response names `stored`. An enqueued forward
-line reports `stored` true, and the plate file names `stored` true beside rank,
-lexical, and hamming. A bare motive, a purge, and a disagreed quote report
-`stored` false. An empty plate omits `stored`. The plate file still omits `lex_w`.
-The hop does not quote `stored`.
-Full auto runs a stored line only when the caller
-passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
+itself is never stored. Full auto runs a stored line only when the caller
+passed an agent. Generate, vote, and apply do not fork that job when no agent
+was passed, and the plate stays unexecuted. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`)
+leaves that line pending.
 When `generate` has no model line, the same ranker reports a forward concept in the response, plus the plate name, `rank`, `lexical`, and `hamming`.
 `enqueue` `1` stores that concept line and keeps the plate name, `rank`, `lexical`, and `hamming` on the plate. Generate does not POST. Without `enqueue` the plate stays empty and omits those fields.
 `NANOBOT_MOTIVE_LEX_W` sets the lexical weight from 0 to 255. Unset stays 64, so an exact concept still ranks 256. A value outside that range stays 64. The weight does not open a purge or protect plate. The motive JSON and a generate report name that weight as `lex_w`. The plate file omits `lex_w`. A motive request may pass a quoted `lex_w` from 0 to 255 for that call only. A missing or bad value keeps the process weight. Generate keeps the process weight.
@@ -62,11 +59,12 @@ quotes the ranked plate name, `lexical`, `hamming`, and `concept`. A quoted plat
 A missing value keeps the store. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, and `programs/motive_stored.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, and `programs/motive_agent.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode
-then forks a `kind=prompt` job (`executed`, `job_id`). Vote-only never runs.
+then forks a `kind=prompt` job (`executed`, `job_id`) when an agent is present.
+No agent leaves the plate unexecuted. Vote-only never runs.
 
 ## Pair = one braincube
 
