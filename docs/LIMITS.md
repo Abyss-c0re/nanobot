@@ -17,6 +17,8 @@ An accepted request worker retitles its command line. The listener command line 
 
 On a lean host, a regular stderr file at the lean log cap is cut to empty before the next line. A terminal or a pipe stays. The rotated log file is unchanged.
 
+On a lean host, a failed session refresh waits one minute before the next refresh. A valid session refreshes as before.
+
 ## Run caps
 
 Per-run model, effort, completion cap, context estimate, and compaction are in [ASYNC.md](ASYNC.md). Process defaults:

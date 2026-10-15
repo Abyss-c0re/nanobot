@@ -45,8 +45,14 @@ void ng_session_clear_pending(void);
 int ng_session_valid(const ng_session *s);
 
 /* Ensure valid token: refresh if needed. Returns 0 on success.
- * A failed refresh still succeeds while the access token is unexpired. */
+ * A failed refresh still succeeds while the access token is unexpired.
+ * On a lean host a failed refresh waits one minute before the next try. */
 int ng_session_ensure(ng_session *s);
+
+/* Stamp file helpers. A stamp younger than one minute is cooled. */
+int ng_auth_cool_active(const char *path, time_t now);
+int ng_auth_cool_mark(const char *path, time_t now);
+void ng_auth_cool_clear(const char *path);
 
 /* Import access/refresh from Grok Build CLI (~/.grok/auth.json) if present.
  * Same OIDC client as device login. Returns:
