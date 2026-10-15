@@ -275,7 +275,7 @@ static char *plate_json(const ng_augogen *p) {
 
 /* Response-only. The plate file is already saved without this line. */
 static char *with_report(char *js, const char *report, int rank, int lexical,
-                         int hamming) {
+                         int hamming, int stored) {
   char *esc;
   char *cut;
   char *out = NULL;
@@ -289,8 +289,9 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
   }
   if (asprintf(&out,
                "%.*s\"report\":\"%s\",\"rank\":%d,\"lexical\":%d,"
-               "\"hamming\":%d,\"stored\":false,\"python\":0}",
-               (int)(cut - js), js, esc, rank, lexical, hamming) < 0)
+               "\"hamming\":%d,\"stored\":%s,\"python\":0}",
+               (int)(cut - js), js, esc, rank, lexical, hamming,
+               stored ? "true" : "false") < 0)
     out = NULL;
   free(esc);
   if (!out) return js;
@@ -784,12 +785,17 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       !strcmp(action, "suggestPrompt") || !strcmp(action, "auto")) {
     char *given = ng_json_get_string(json_body, "suggestion");
     char *transcript = ng_json_get_string(json_body, "transcript");
+    char *enq = ng_json_get_string(json_body, "enqueue");
     char cleaned[SUG_CAP];
     char reported[SUG_CAP];
     int report_rank = 0, report_lex = 0, report_ham = 0;
+    int asked = 0;
     unsigned long gen = p.generation + 1;
     cleaned[0] = 0;
     reported[0] = 0;
+    if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
+                enq[0] == 'Y'))
+      asked = 1;
     if (given && sanitize_suggestion(given, cleaned, sizeof cleaned)) {
       /* host-supplied line (CubalC / mesh) still needs pair vote */
     } else if (agent) {
@@ -799,8 +805,9 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         free(raw);
       }
     }
-    /* No model line: report a forward concept. Do not store it.
-       Silence reports the peer-prompt concept. The act stays off the plate. */
+    /* No model line: report a forward concept.
+       Store it only when enqueue asks. Silence reports the peer-prompt concept.
+       The act stays off the plate. */
     if (!cleaned[0]) {
       ng_motive ranked;
       ng_motive_rank(transcript ? transcript : "", &ranked);
@@ -810,10 +817,12 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         report_rank = ranked.rank;
         report_lex = ranked.lexical;
         report_ham = ranked.hamming;
+        if (asked) snprintf(cleaned, sizeof cleaned, "%s", ranked.line);
       }
     }
     free(given);
     free(transcript);
+    free(enq);
     plate_clear(&p);
     p.generation = gen;
     new_id(p.id, sizeof p.id);
@@ -842,7 +851,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     save_plate(&p);
     free(action);
     return with_report(plate_json(&p), reported, report_rank, report_lex,
-                       report_ham);
+                       report_ham, asked && reported[0]);
   }
 
   {

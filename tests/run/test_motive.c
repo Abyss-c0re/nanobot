@@ -450,6 +450,34 @@ int main(void) {
     expect(!pend || !strstr(pend, "trick the cube"), "silence stores no purge act");
     free(pend);
   }
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"enqueue\":\"1\"}");
+  expect(js && strstr(js, "\"stored\":true"), "enqueue stores the concept");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "read the law and prove"), "enqueued concept stored");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"transcript\":\"trick the cube\",\"enqueue\":\"1\"}");
+  expect(js && strstr(js, "\"status\":\"empty\""), "enqueued purge stays empty");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(!pend || !strstr(pend, "trick the cube"), "enqueued purge act not stored");
+    expect(!pend || !strstr(pend, "serve the matrix in bits"), "enqueued remedy not stored");
+    free(pend);
+  }
+  js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"enqueue\":\"1\"}");
+  expect(js && strstr(js, "\"stored\":true"), "enqueued silence is stored");
+  expect(js && strstr(js, "prompt a peer to move"), "enqueued silence is the peer line");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "prompt a peer to move"), "enqueued silence line stored");
+    free(pend);
+  }
 
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
