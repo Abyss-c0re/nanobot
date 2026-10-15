@@ -40,6 +40,7 @@ typedef struct {
   int motive_rank;
   int motive_lex;
   int motive_ham;
+  char plate_name[16];
 } ng_augogen;
 
 #if NANOBOT_HAS_BRAINCUBE
@@ -241,11 +242,15 @@ static char *plate_json(const ng_augogen *p) {
   char *st = escape_or_empty(p->status);
   char *jid = escape_or_empty(p->job_id);
   char *out = NULL;
-  char score[96];
+  char score[128];
   int auto_on = augogen_auto_enabled();
   const char *np = (p->confirmed && p->suggestion[0]) ? (sug ? sug : "") : NULL;
   score[0] = 0;
-  if (p->score_kept)
+  if (p->score_kept && p->plate_name[0])
+    snprintf(score, sizeof score,
+             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
+             p->plate_name, p->motive_rank, p->motive_lex, p->motive_ham);
+  else if (p->score_kept)
     snprintf(score, sizeof score, "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
              p->motive_rank, p->motive_lex, p->motive_ham);
   asprintf(&out,
@@ -290,6 +295,7 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
   char *cut;
   char *out = NULL;
   int have_rank;
+  int have_plate;
   if (!js || !report || !report[0]) return js;
   esc = ng_json_escape(report);
   if (!esc) return js;
@@ -305,7 +311,13 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
     return js;
   }
   have_rank = strstr(js, "\"rank\":") != NULL;
-  if (have_rank) {
+  have_plate = strstr(js, "\"plate\":") != NULL;
+  if (have_rank && have_plate) {
+    if (asprintf(&out,
+                 "%.*s\"report\":\"%s\",\"stored\":%s,\"python\":0}",
+                 (int)(cut - js), js, esc, stored ? "true" : "false") < 0)
+      out = NULL;
+  } else if (have_rank) {
     if (asprintf(&out,
                  "%.*s\"report\":\"%s\",\"plate\":\"%s\",\"stored\":%s,\"python\":0}",
                  (int)(cut - js), js, esc, pesc, stored ? "true" : "false") < 0)
@@ -378,6 +390,11 @@ static void load_plate(ng_augogen *p) {
     if (r) p->motive_rank = (int)strtol(r + 7, NULL, 10);
     if (lx) p->motive_lex = (int)strtol(lx + 10, NULL, 10);
     if (hm) p->motive_ham = (int)strtol(hm + 10, NULL, 10);
+    s = ng_json_get_string(raw, "plate");
+    if (s) {
+      snprintf(p->plate_name, sizeof p->plate_name, "%s", s);
+      free(s);
+    }
   }
   p->pair_ok = (p->guide_vote == 1 && p->oversee_vote == 1);
   p->confirmed = p->pair_ok && (p->mesh_vote != 0);
@@ -795,6 +812,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       p.motive_rank = m.rank;
       p.motive_lex = m.lexical;
       p.motive_ham = m.hamming;
+      snprintf(p.plate_name, sizeof p.plate_name, "%s", ng_motive_plate_name(m.plate));
       if (augogen_auto_enabled()) {
         if (!pair_confirm_suggestion(&p)) {
           p.guide_vote = 1;
@@ -877,6 +895,8 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
           p.motive_rank = report_rank;
           p.motive_lex = report_lex;
           p.motive_ham = report_ham;
+          snprintf(p.plate_name, sizeof p.plate_name, "%s",
+                   ng_motive_plate_name(report_plate));
         }
         if (augogen_auto_enabled()) {
           /* Full auto: try braincube pair; if it withholds, operator-authorized
