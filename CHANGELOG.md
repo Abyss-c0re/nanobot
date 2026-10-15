@@ -78,10 +78,10 @@
 - **hive:** that peer POST also quotes the ranked plate name. A quoted plate that disagrees with the peer rank is not stored. A missing plate keeps the store. Generate does not POST. The plate file still omits `lex_w`. CubalC board: `programs/motive_hop_plate.cubalc`.
 - **hive:** that peer POST also quotes `lexical` and `hamming`. A quoted value that disagrees with the peer rank is not stored. A missing value keeps the store. Generate does not POST. The plate file still omits `lex_w`. CubalC board: `programs/motive_hop_score.cubalc`.
 - **hive:** that peer POST also quotes the ranked `concept`. A quoted concept that disagrees with the peer rank is not stored. A missing concept keeps the store. Generate does not POST. The plate file still omits `lex_w`. CubalC board: `programs/motive_hop_concept.cubalc`.
-- **hive:** the motive sketch hashes every token in the 192-byte norm. A token after the first 24 still moves the Hamming distance. The law line stays rank 256, lexical 3, Hamming 0. The hop is unchanged. CubalC board: `programs/motive_sketch.cubalc`.
 - **wire:** CLI floor `NG_CLI_VERSION_DEFAULT` / `x-grok-client-version` is `1.0.52` (installed Grok Build; the public crate may lag). Product version stays 0.5.6. Runtime auto-bump is unchanged.
 - **wire:** every cli-chat-proxy call sends `x-grok-client-identifier` (default `nanobot`, then `NANOBOT_CLIENT_NAME`, then `GROK_CLIENT_NAME`) and `x-authenticateresponse: authenticate-response`.
 - **wire:** suggestPrompt transcript packer uses a 24000-character budget and a 1500-character cap on older turns. The user-message JSON object is closed. Request and response fields are unchanged.
+- **wire:** an outdated suggest reply bumps the cli version and retries that call once. Motive rank and the hop are unchanged. CubalC board: `programs/suggest_once.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

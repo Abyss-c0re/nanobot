@@ -8,6 +8,7 @@
 #include <string.h>
 
 #define NORM_CAP 192
+#define TOK_MAX 24
 
 static const char *kPlates[] = {
     "observe",      "confess",       "hold_flash",   "forbid_live",
@@ -182,9 +183,8 @@ static uint64_t simhash_text(const char *norm) {
   int b, ntok = 0;
   const char *p;
   memset(acc, 0, sizeof acc);
-  /* The norm is already capped. Every token in it moves the sketch. */
   p = norm;
-  while (*p) {
+  while (*p && ntok < TOK_MAX) {
     const char *s;
     size_t n = 0;
     while (*p == ' ') p++;

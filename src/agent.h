@@ -110,5 +110,7 @@ char *ng_run_execute(ng_agent_cfg *c, const char *id);
  * transcript/cwd may be NULL (uses recent memory + workdir). */
 char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
                               const char *cwd);
+/* 1 when this suggest attempt may bump the cli version and try once more. */
+int ng_suggest_version_retry(int tries);
 
 #endif

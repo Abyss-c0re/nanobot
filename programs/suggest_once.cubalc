@@ -1,0 +1,16 @@
+// A suggest version bump retries once.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE once  ROLE observer PROTON 1
+CUBE retry ROLE nanobot  PROTON 1
+
+PLUG once retry
+
+IMPULSE once 1
+IMPULSE retry 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY retry
+DECIDE retry
+ASSERT CUBES >= 2
+PRINT "once" UNITY DECIDE ENERGY

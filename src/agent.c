@@ -2831,8 +2831,10 @@ static char *suggest_transcript_from_memory(void) {
   return out;
 }
 
-char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
-                              const char *cwd) {
+int ng_suggest_version_retry(int tries) { return tries < 1; }
+
+static char *suggest_prompt_try(ng_agent_cfg *c, const char *transcript,
+                                const char *cwd, int tries) {
   char *own_tr = NULL;
   char *sys_esc, *user_esc, *body = NULL, *resp, *text;
   char url[768];
@@ -2931,13 +2933,18 @@ char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
   if (!resp)
     return strdup("{\"schema\":\"nanobot.transport.v1\",\"ok\":false,"
                   "\"error\":\"no_resp\",\"python\":0}");
-  if (grok && ng_cli_version_handle_error(resp)) {
-    /* one retry after version bump */
+  /* The first outdated reply retries once. */
+  if (grok && ng_suggest_version_retry(tries) && ng_cli_version_handle_error(resp)) {
     free(resp);
-    return ng_agent_suggest_prompt(c, transcript, cwd);
+    return suggest_prompt_try(c, transcript, cwd, tries + 1);
   }
   text = ng_json_message_content(resp);
   free(resp);
   if (!text) text = strdup("");
   return text;
+}
+
+char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
+                              const char *cwd) {
+  return suggest_prompt_try(c, transcript, cwd, 0);
 }
