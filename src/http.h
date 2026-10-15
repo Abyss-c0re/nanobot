@@ -26,8 +26,6 @@ int ng_http_serve(ng_http_cfg *cfg);
 void ng_jobs_mark_orphans(const char *jdir);
 /* Done and error jobs past 48 drop. Digit ids and auto ids keep separate caps. */
 void ng_jobs_gc(const char *jdir);
-/* A second peer job in the same second keeps its own file. */
-int ng_peer_job_reserve(const char *jdir, const char *kind, char *id_out, size_t id_n);
 
 /* The accept loop counts a worker before fork. A failed fork releases it. */
 void ng_http_worker_slots_reset(void);

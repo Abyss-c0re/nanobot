@@ -98,7 +98,6 @@
 - **hive:** a done auto job past 48 drops. A queued auto job stays. The ranker is unchanged. CubalC board: `programs/motive_reap.cubalc`.
 - **hive:** a queued auto job left by a restart is marked error on listen. A done auto job stays done. The ranker is unchanged. CubalC board: `programs/motive_orphan.cubalc`.
 - **hive:** a done or error auto job past 48 drops on its own cap. A digit job keeps its own cap. A queued job stays. The ranker is unchanged. CubalC board: `programs/motive_cap.cubalc`.
-- **hive:** a second peer job in the same second keeps its own file. The first id shape stays. The first body stays. The ranker is unchanged. CubalC board: `programs/job_keep.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

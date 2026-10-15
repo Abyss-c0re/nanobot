@@ -32,7 +32,6 @@
 #include <signal.h>
 #include <time.h>
 #include <dirent.h>
-#include <fcntl.h>
 
 /* Set once listen succeeds — health plate (parent listener, not fork workers). */
 static time_t g_serve_started = 0;
@@ -164,63 +163,6 @@ static void jobs_gc(const char *jdir) {
 }
 
 void ng_jobs_gc(const char *jdir) { jobs_gc(jdir); }
-
-/* The first id is the second and the pid. A taken id keeps two more digits. */
-int ng_peer_job_reserve(const char *jdir, const char *kind, char *id_out, size_t id_n) {
-  char id[32];
-  char meta[768];
-  long sec;
-  int pid4;
-  int attempt;
-  if (!jdir || !jdir[0] || !kind || !kind[0] || !id_out || id_n < 8) return 0;
-  sec = (long)time(NULL);
-  pid4 = (int)(getpid() % 10000);
-  for (attempt = 0; attempt < 16; attempt++) {
-    char mpath[700];
-    int kn, mn, fd, spins;
-    size_t off;
-    if (attempt == 0)
-      kn = snprintf(id, sizeof id, "%ld%04d", sec, pid4);
-    else
-      kn = snprintf(id, sizeof id, "%ld%04d%02d", sec, pid4, attempt);
-    if (kn < 0 || (size_t)kn >= sizeof id || (size_t)kn >= id_n) return 0;
-    if (snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, id) >= (int)sizeof mpath)
-      return 0;
-    mn = snprintf(meta, sizeof meta,
-                  "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job\","
-                  "\"id\":\"%s\",\"status\":\"queued\",\"kind\":\"%s\","
-                  NG_PEER_HTTP_DUAL_WIRE "}\n",
-                  id, kind);
-    if (mn < 0 || (size_t)mn >= sizeof meta) return 0;
-    fd = -1;
-    for (spins = 0; spins < 4; spins++) {
-      fd = open(mpath, O_CREAT | O_EXCL | O_WRONLY, 0666);
-      if (fd >= 0 || errno != EINTR) break;
-    }
-    if (fd < 0) {
-      if (errno == EEXIST) continue;
-      return 0;
-    }
-    off = 0;
-    while (off < (size_t)mn) {
-      ssize_t wrote = write(fd, meta + off, (size_t)mn - off);
-      if (wrote < 0) {
-        if (errno == EINTR) continue;
-        close(fd);
-        unlink(mpath);
-        return 0;
-      }
-      off += (size_t)wrote;
-    }
-    if (close(fd) != 0) {
-      unlink(mpath);
-      return 0;
-    }
-    memcpy(id_out, id, (size_t)kn + 1);
-    return 1;
-  }
-  return 0;
-}
 
 /* Residual: cool_restart / SIGTERM kills job worker children; metas stay
  * status=running|queued forever (jobs_gc never drops live). Mesh poll spins.
@@ -8171,19 +8113,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     mkdir(jdir, 0755);
     jobs_gc(jdir); /* residual: mesh leaves dozens of done job files */
     char id[32];
-    char mpath[700], rpath[700], pp[700];
+    snprintf(id, sizeof id, "%ld%04d", (long)time(NULL), (int)(getpid() % 10000));
     /* Dual-wire job meta — polled via GET /peer/v1/jobs/{id}. */
-    if (!ng_peer_job_reserve(jdir, kind, id, sizeof id)) {
-      free(prompt);
-      free(cmd);
-      http_peer_err(cfd, 503, "job_id_busy");
-      free(req);
-      close(cfd);
-      return;
-    }
+    char meta[768];
+    int mn = snprintf(meta, sizeof meta,
+      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,\"action\":\"job\","
+      "\"id\":\"%s\",\"status\":\"queued\",\"kind\":\"%s\","
+      NG_PEER_HTTP_DUAL_WIRE "}\n", id, kind);
+    char mpath[700], rpath[700], pp[700];
     snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, id);
     snprintf(rpath, sizeof rpath, "%s/%s.out", jdir, id);
     snprintf(pp, sizeof pp, "%s/%s.in", jdir, id);
+    ng_write_file(mpath, meta, (size_t)mn);
     if (prompt && prompt[0]) ng_write_file(pp, prompt, strlen(prompt));
     else if (cmd) ng_write_file(pp, cmd, strlen(cmd));
     ng_hub_event("job.queued", "id", id, "kind", kind);
