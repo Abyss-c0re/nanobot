@@ -1064,6 +1064,23 @@ int main(void) {
     free(pend);
   }
 
+  /* A torn byte drops, so a quote behind it still drops. The words stay. */
+  {
+    char body[240];
+    char *pend;
+    snprintf(body, sizeof body,
+             "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"%s%sread the law and prove%s\"}",
+             "\xE2", "\xE2\x80\x9C", "\xE2\x80\x9D");
+    js = ng_augogen_handle(NULL, body);
+    expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+           "a torn byte does not keep the quote");
+    free(js);
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"read the law and prove\",\"status\""),
+           "the stored suggestion drops the torn byte and the quote");
+    free(pend);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

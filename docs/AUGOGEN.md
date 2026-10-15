@@ -7,9 +7,9 @@ Predicts the **next user line** after a turn. Tab-accept in Grok Build; here the
 (no enqueue). Mesh vote `0` still vetoes. HOLD_FLASH=1. Suggestions that
 name flash/wipe/cycle-stop are rejected. A leading or trailing typographic
 quote trims with the ASCII quotes. A space, a tab, or a unicode space at the
-edge trims with them, so a quote behind that space still drops. The words
-stay. An em dash stays. A unicode space inside the line is a space. The
-2–12 word bound stays.
+edge trims with them, so a quote behind that space still drops. A unicode
+space inside the line is a space. A torn byte drops, so a quote behind that
+byte still drops. The words stay. An em dash stays. The 2–12 word bound stays.
 
 ## Wire
 
@@ -62,7 +62,7 @@ The sender's response and plate keep the rank of the act. A quoted plate,
 A missing value keeps the store. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, `programs/motive_space.cubalc`, `programs/motive_feed.cubalc`, `programs/motive_body.cubalc`, `programs/motive_quote.cubalc`, `programs/motive_pad.cubalc`, and `programs/motive_sep.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, `programs/motive_space.cubalc`, `programs/motive_feed.cubalc`, `programs/motive_body.cubalc`, `programs/motive_quote.cubalc`, `programs/motive_pad.cubalc`, `programs/motive_sep.cubalc`, and `programs/motive_torn.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode

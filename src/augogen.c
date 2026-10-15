@@ -446,6 +446,25 @@ static int edge_quote(const char *p) {
   return 0;
 }
 
+/* Byte length of one well-formed UTF-8 sequence, or 0.
+ * A lead plus its continuation bytes stay. A torn lead does not. */
+static int utf8_seq(const char *p, size_t avail) {
+  unsigned char c;
+  int need, i;
+  if (!p || avail == 0) return 0;
+  c = (unsigned char)p[0];
+  if (c < 0x80) return 1;
+  if ((c & 0xE0) == 0xC0) need = 2;
+  else if ((c & 0xF0) == 0xE0) need = 3;
+  else if ((c & 0xF8) == 0xF0) need = 4;
+  else return 0;
+  if ((size_t)need > avail) return 0;
+  for (i = 1; i < need; i++) {
+    if (((unsigned char)p[i] & 0xC0) != 0x80) return 0;
+  }
+  return need;
+}
+
 /* Byte length of one unicode space, or 0. ASCII space is not included.
  * Quote bytes E2 80 98/99/9C/9D stay out of this set. An em dash stays out. */
 static int utf8_space(const char *p) {
@@ -482,6 +501,22 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   while (*raw && *raw != '\n' && *raw != '\r' && i + 1 < sizeof line)
     line[i++] = *raw++;
   line[i] = 0;
+  /* A torn byte drops. A quote behind it still drops. The words stay. */
+  {
+    size_t r = 0, w = 0;
+    while (r < i) {
+      int n = utf8_seq(line + r, i - r);
+      if (n <= 0) {
+        r++;
+        continue;
+      }
+      if (w != r) memmove(line + w, line + r, (size_t)n);
+      w += (size_t)n;
+      r += (size_t)n;
+    }
+    i = w;
+    line[i] = 0;
+  }
   /* Trim quotes and edge whitespace. A quote behind a unicode space still drops.
    * The words stay. An em dash stays. */
   p = line;
