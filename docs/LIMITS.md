@@ -19,7 +19,7 @@ On a lean host, a regular stderr file at the lean log cap is cut to empty before
 
 On a lean host, `GET /peer/v1/info` reports the sealed session. The exit-node flag on that plate uses the same seal. Prompt, chat, jobs, and runs still refresh.
 
-On a lean host, a worker whose log fd names a renamed file reopens the live path before the next line. The open file is not cut. The host still renames a full log to a `.1` sibling.
+On a lean host, a worker whose log fd names a renamed file reopens the live path before the next line. The listener reopens that fd before the next accept, so the worker inherits the live path. The open file is not cut. The host still renames a full log to a `.1` sibling.
 
 ## Run caps
 

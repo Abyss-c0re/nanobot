@@ -170,7 +170,7 @@ void ng_log_init(const char *path) {
   g_logf = fopen(g_logpath, "a");
 }
 
-/* A lean worker reopens a log fd that names a renamed file.
+/* A lean log fd that names a renamed file reopens the live path.
  * The bytes stay. The host rename to a .1 sibling stays. */
 static void ng_log_adopt_live(void) {
   struct stat st_fd, st_path;
@@ -183,6 +183,21 @@ static void ng_log_adopt_live(void) {
   if (st_fd.st_dev == st_path.st_dev && st_fd.st_ino == st_path.st_ino) return;
   fclose(g_logf);
   g_logf = fopen(g_logpath, "a");
+}
+
+void ng_log_sync_live(void) {
+  ng_log_adopt_live();
+}
+
+int ng_log_fd_is_live(void) {
+  struct stat st_fd, st_path;
+  int fd;
+  if (!g_logpath[0] || !g_logf) return 0;
+  fd = fileno(g_logf);
+  if (fd < 0 || fstat(fd, &st_fd) != 0) return 0;
+  if (!S_ISREG(st_fd.st_mode)) return 1;
+  if (stat(g_logpath, &st_path) != 0) return 0;
+  return st_fd.st_dev == st_path.st_dev && st_fd.st_ino == st_path.st_ino;
 }
 
 static void ng_log_maybe_rotate(void) {

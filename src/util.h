@@ -82,6 +82,10 @@ int ng_json_first_tool_call(const char *json, char **name, char **args, char **i
 char *ng_json_message_content(const char *json);
 void ng_log(const char *fmt, ...);
 void ng_log_init(const char *path);
+/* Lean only. Reopen a log fd that names a renamed file. The bytes stay. */
+void ng_log_sync_live(void);
+/* 1 when the open log fd names the live path. */
+int ng_log_fd_is_live(void);
 const char *ng_log_path(void);
 /* 0 = no stderr (file still gets logs) — for TUI / embedded hosts. Default 1. */
 void ng_log_set_stderr(int enabled);

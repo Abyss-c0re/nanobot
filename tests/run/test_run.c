@@ -786,9 +786,11 @@ static void test_lean_log_live_path(void) {
   ng_log_init(path);
   ng_log("HOSTONE");
   expect(rename(path, moved) == 0, "host rename aside");
+  ng_log_sync_live();
   ng_log("HOSTTWO");
   expect(file_has(moved, "HOSTONE"), "host archive keeps the first line");
   expect(file_has(moved, "HOSTTWO"), "host keeps the open log inode");
+  expect(!file_has(path, "HOSTTWO"), "host sync leaves the renamed inode");
 
   setenv("NANOBOT_LEAN", "1", 1);
   ng_limits_init();
@@ -801,6 +803,15 @@ static void test_lean_log_live_path(void) {
   nfd = open(path, O_CREAT | O_WRONLY, 0644);
   expect(nfd >= 0, "live log path");
   if (nfd >= 0) close(nfd);
+  expect(ng_log_fd_is_live() == 0, "renamed log fd is not the live path");
+  expect(stat(moved, &st) == 0, "renamed log stays");
+  {
+    off_t kept = st.st_size;
+    ng_log_sync_live();
+    expect(ng_log_fd_is_live() == 1, "listener reopens the live path");
+    expect(stat(path, &st) == 0 && st.st_size == 0, "reopen writes nothing");
+    expect(stat(moved, &st) == 0 && st.st_size == kept, "reopen keeps the renamed bytes");
+  }
   ng_log("LEANTHREE");
   expect(file_has(path, "LEANTHREE"), "lean reopens the live log path");
   expect(file_has(moved, "LEANONE"), "renamed log keeps its bytes");

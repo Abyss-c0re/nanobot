@@ -9221,6 +9221,8 @@ int ng_http_serve(ng_http_cfg *cfg) {
       snprintf(envpath, sizeof envpath, "%s/env", ng_workdir());
       ng_agent_load_env(cfg->agent, envpath);
     }
+    /* The worker inherits this fd. Reopen a renamed lean log first. */
+    ng_log_sync_live();
 
     pid_t pid = fork();
     if (pid < 0) {
