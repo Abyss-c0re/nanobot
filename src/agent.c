@@ -2833,6 +2833,15 @@ static char *suggest_transcript_from_memory(void) {
 
 int ng_suggest_version_retry(int tries) { return tries < 1; }
 
+int ng_suggest_reply_outdated(const char *resp) {
+  if (!resp) return 0;
+  if (strstr(resp, "outdated")) return 1;
+  if (strstr(resp, "CLI version")) return 1;
+  if (strstr(resp, "cli version")) return 1;
+  if (strstr(resp, "Grok CLI version")) return 1;
+  return 0;
+}
+
 static char *suggest_prompt_try(ng_agent_cfg *c, const char *transcript,
                                 const char *cwd, int tries) {
   char *own_tr = NULL;
@@ -2933,10 +2942,14 @@ static char *suggest_prompt_try(ng_agent_cfg *c, const char *transcript,
   if (!resp)
     return strdup("{\"schema\":\"nanobot.transport.v1\",\"ok\":false,"
                   "\"error\":\"no_resp\",\"python\":0}");
-  /* The first outdated reply retries once. */
-  if (grok && ng_suggest_version_retry(tries) && ng_cli_version_handle_error(resp)) {
+  /* The first outdated reply retries once. The next outdated body is dropped. */
+  if (grok && ng_suggest_reply_outdated(resp)) {
+    if (ng_suggest_version_retry(tries) && ng_cli_version_handle_error(resp)) {
+      free(resp);
+      return suggest_prompt_try(c, transcript, cwd, tries + 1);
+    }
     free(resp);
-    return suggest_prompt_try(c, transcript, cwd, tries + 1);
+    return strdup("");
   }
   text = ng_json_message_content(resp);
   free(resp);

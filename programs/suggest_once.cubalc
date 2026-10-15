@@ -1,4 +1,4 @@
-// A suggest version bump retries once.
+// A suggest version bump retries once. The next outdated body is dropped.
 // Ordinary program: no HOLD_FLASH line.
 
 CUBE once  ROLE observer PROTON 1

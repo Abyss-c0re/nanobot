@@ -112,5 +112,7 @@ char *ng_agent_suggest_prompt(ng_agent_cfg *c, const char *transcript,
                               const char *cwd);
 /* 1 when this suggest attempt may bump the cli version and try once more. */
 int ng_suggest_version_retry(int tries);
+/* 1 when the body is an outdated cli reply. The check does not bump. */
+int ng_suggest_reply_outdated(const char *resp);
 
 #endif
