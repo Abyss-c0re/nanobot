@@ -497,7 +497,21 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
       "none", "n/a", "no suggestion", "nothing", "(silence)", "silence", "null",
       NULL};
   if (!raw || !out || cap < 2) return 0;
-  while (*raw == ' ' || *raw == '\t' || *raw == '\n' || *raw == '\r') raw++;
+  /* A blank unicode line does not hide the suggestion. The next line is the line. */
+  while (*raw) {
+    int n;
+    if (*raw == ' ' || *raw == '\t' || *raw == '\n' || *raw == '\r' ||
+        *raw == '\v' || *raw == '\f') {
+      raw++;
+      continue;
+    }
+    n = utf8_space(raw);
+    if (n > 0) {
+      raw += n;
+      continue;
+    }
+    break;
+  }
   while (*raw && *raw != '\n' && *raw != '\r' && i + 1 < sizeof line)
     line[i++] = *raw++;
   line[i] = 0;
