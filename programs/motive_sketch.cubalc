@@ -1,0 +1,16 @@
+// The sketch hashes every token in the norm.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE sketch ROLE observer PROTON 1
+CUBE rank   ROLE nanobot  PROTON 1
+
+PLUG sketch rank
+
+IMPULSE sketch 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "sketch" UNITY DECIDE ENERGY

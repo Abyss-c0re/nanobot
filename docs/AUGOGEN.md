@@ -30,7 +30,7 @@ POST /peer/v1/augogen
 
 `action` `motive` (alias `rank`) answers `nanobot.motive.v1`.
 
-The ranker holds eight concepts on the stack (192-byte norm, 24 tokens, no heap).
+The ranker holds eight concepts on the stack (192-byte norm, every token in that norm, no heap).
 Score is token overlap plus a 64-bit sketch distance. A priority cascade names
 the plate first. The JSON reports that plate and a 2–12 word line. A forward
 plate's line is the winning concept. Every other plate reports a remedy and
@@ -57,7 +57,7 @@ quotes the ranked plate name, `lexical`, `hamming`, and `concept`. A quoted plat
 A missing value keeps the store. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, and `programs/motive_hop_concept.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, and `programs/motive_sketch.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode

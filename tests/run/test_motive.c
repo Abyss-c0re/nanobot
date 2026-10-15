@@ -172,6 +172,26 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 256 && m.lex_w == 64, "the env rank is unchanged");
 
+  {
+    /* 24 tokens. The law tokens keep the concept; the last one is past the old sketch cap. */
+    const char *pref =
+        "read law prove hh bb ww tt ss vv ww nnn cc mm nn cc yy hh bb yy ss uu dd oo zz";
+    char more[192];
+    ng_motive head, tail;
+    int ntok = 1;
+    const char *p;
+    for (p = pref; *p; p++)
+      if (*p == ' ') ntok++;
+    snprintf(more, sizeof more, "%s aa", pref);
+    ng_motive_rank(pref, &head);
+    ng_motive_rank(more, &tail);
+    expect(ntok == 24, "the prefix holds 24 tokens");
+    expect(head.lexical == 3 && tail.lexical == 3, "a fresh tail token adds no lexical hit");
+    expect(head.hamming == 25 && tail.hamming == 26, "a token after the first 24 moves the sketch");
+    expect(strcmp(head.concept, tail.concept) == 0, "that tail keeps the same concept");
+    expect(strcmp(head.concept, "read the law and prove") == 0, "that sketch stays on the law");
+  }
+
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
   expect(m.forward, "silence may prompt");
