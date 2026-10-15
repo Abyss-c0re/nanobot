@@ -94,7 +94,6 @@
 - **hive:** a space, a tab, or a unicode space at the edge of a suggestion trims with those quotes, so a quote behind that space still drops. The words stay. An em dash stays. The 2–12 word bound stays. CubalC board: `programs/motive_pad.cubalc`.
 - **hive:** a unicode space inside a suggestion is a space. The words stay. An em dash stays. The 2–12 word bound stays. CubalC board: `programs/motive_sep.cubalc`.
 - **hive:** a torn byte on a suggestion drops, so a quote behind that byte still drops. The words stay. An em dash stays. The 2–12 word bound stays. CubalC board: `programs/motive_torn.cubalc`.
-- **hive:** a unicode space at the edge of a packed turn drops. An interior unicode space stays. An em dash stays. The suggestion line is unchanged. CubalC board: `programs/turn_edge.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

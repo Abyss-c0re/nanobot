@@ -9,32 +9,6 @@
 #define SUG_MSG_CAP 1500u
 #define SUG_MARK "\n…"
 
-/* Byte length of one unicode space, or 0. ASCII space is not included.
- * Quote bytes stay out of this set. An em dash stays out. */
-static int turn_unicode_space(const char *p) {
-  unsigned char a, b, c;
-  if (!p || !p[0]) return 0;
-  a = (unsigned char)p[0];
-  if (a == 0xC2 && p[1]) {
-    b = (unsigned char)p[1];
-    if (b == 0x85 || b == 0xA0) return 2; /* U+0085, U+00A0 */
-  }
-  if (!p[1] || !p[2]) return 0;
-  b = (unsigned char)p[1];
-  c = (unsigned char)p[2];
-  if (a == 0xE1 && b == 0x9A && c == 0x80) return 3; /* U+1680 */
-  if (a == 0xE2 && b == 0x80 &&
-      ((c >= 0x80 && c <= 0x8A) || c == 0xA8 || c == 0xA9 || c == 0xAF))
-    return 3; /* U+2000–U+200A, U+2028, U+2029, U+202F */
-  if (a == 0xE2 && b == 0x81 && c == 0x9F) return 3; /* U+205F */
-  if (a == 0xE3 && b == 0x80 && c == 0x80) return 3; /* U+3000 */
-  return 0;
-}
-
-static int turn_edge_byte(unsigned char c) {
-  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
-}
-
 static int ci_eq(const char *a, const char *b) {
   if (!a || !b) return 0;
   while (*a && *b) {
@@ -125,37 +99,11 @@ char *ng_suggest_truncate(const char *text, size_t max_len) {
   const char *mark = SUG_MARK;
   char *out;
   if (!text) return NULL;
-  /* A unicode space at the edge of this turn drops. An interior one stays. */
-  for (;;) {
-    int u;
-    if (turn_edge_byte((unsigned char)*text)) {
-      text++;
-      continue;
-    }
-    u = turn_unicode_space(text);
-    if (u > 0) {
-      text += u;
-      continue;
-    }
-    break;
-  }
+  while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r') text++;
   n = strlen(text);
-  for (;;) {
-    int u;
-    if (n && turn_edge_byte((unsigned char)text[n - 1])) {
-      n--;
-      continue;
-    }
-    if (n >= 3 && (u = turn_unicode_space(text + n - 3)) == 3) {
-      n -= 3;
-      continue;
-    }
-    if (n >= 2 && (u = turn_unicode_space(text + n - 2)) == 2) {
-      n -= 2;
-      continue;
-    }
-    break;
-  }
+  while (n && (text[n - 1] == ' ' || text[n - 1] == '\t' ||
+               text[n - 1] == '\n' || text[n - 1] == '\r'))
+    n--;
   if (n <= max_len) return dup_n(text, n);
   mlen = strlen(mark);
   if (max_len <= mlen) return dup_n(text, max_len ? max_len : 0);
