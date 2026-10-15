@@ -214,6 +214,9 @@ int main(void) {
   {
     char *pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "prompt a peer to move"), "peer line stored");
+    expect(pend && strstr(pend, "\"rank\":256"), "stored peer keeps rank");
+    expect(pend && strstr(pend, "\"lexical\":3"), "stored peer keeps lexical");
+    expect(pend && strstr(pend, "\"hamming\":0"), "stored peer keeps hamming");
     expect(pend && strstr(pend, "\"executed\":false"), "vote-only does not run");
     free(pend);
   }
@@ -419,12 +422,14 @@ int main(void) {
   expect(js && strstr(js, "\"rank\":256"), "law self-rank");
   expect(js && strstr(js, "\"lexical\":3"), "law lexical");
   expect(js && strstr(js, "\"hamming\":0"), "law hamming");
+  expect(js && count_substr(js, "\"rank\":") == 1, "report has one rank");
   expect(js && strstr(js, "\"stored\":false"), "rank report is not stored");
   expect(js && strstr(js, "\"status\":\"empty\""), "rank report leaves the plate empty");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
     expect(!pend || !strstr(pend, "read the law and prove"), "ranked concept not stored");
+    expect(!pend || !strstr(pend, "\"rank\":"), "empty plate omits rank");
     free(pend);
   }
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"transcript\":\"trick the cube\"}");
@@ -453,10 +458,14 @@ int main(void) {
   js = ng_augogen_handle(
       NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"enqueue\":\"1\"}");
   expect(js && strstr(js, "\"stored\":true"), "enqueue stores the concept");
+  expect(js && count_substr(js, "\"rank\":") == 1, "stored response has one rank");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "read the law and prove"), "enqueued concept stored");
+    expect(pend && strstr(pend, "\"rank\":256"), "stored concept keeps rank");
+    expect(pend && strstr(pend, "\"lexical\":3"), "stored concept keeps lexical");
+    expect(pend && strstr(pend, "\"hamming\":0"), "stored concept keeps hamming");
     free(pend);
   }
   js = ng_augogen_handle(
@@ -467,6 +476,7 @@ int main(void) {
     char *pend = ng_augogen_pending_json();
     expect(!pend || !strstr(pend, "trick the cube"), "enqueued purge act not stored");
     expect(!pend || !strstr(pend, "serve the matrix in bits"), "enqueued remedy not stored");
+    expect(!pend || !strstr(pend, "\"rank\":"), "purge plate omits rank");
     free(pend);
   }
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"enqueue\":\"1\"}");
@@ -476,6 +486,9 @@ int main(void) {
   {
     char *pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "prompt a peer to move"), "enqueued silence line stored");
+    expect(pend && strstr(pend, "\"rank\":0"), "stored silence keeps a zero rank");
+    expect(pend && strstr(pend, "\"lexical\":0"), "stored silence keeps lexical");
+    expect(pend && strstr(pend, "\"hamming\":0"), "stored silence keeps hamming");
     free(pend);
   }
   /* enqueue on generate posts the stored concept once. A purge does not. */

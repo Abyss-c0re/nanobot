@@ -20,6 +20,7 @@
  * skips that file.
  * A generate with no model line reports a forward concept.
  * enqueue=1 stores that concept and may POST it once to the motive peer.
+ * The stored plate keeps rank, lexical, and hamming. An empty plate omits them.
  * Without enqueue the plate stays empty and nothing is posted.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */
