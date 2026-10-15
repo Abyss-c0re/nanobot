@@ -755,6 +755,38 @@ static void test_lean_info_skips_refresh(void) {
   ng_limits_init();
 }
 
+static void test_temp_mode(void) {
+  char home[] = "/tmp/ng-mode-XXXXXX";
+  char path[640];
+  char *old_tmp;
+  struct stat st;
+  int fd;
+
+  expect(mkdtemp(home) != NULL, "temp home");
+  ng_set_workdir(home);
+  old_tmp = getenv("TMPDIR");
+  if (old_tmp) old_tmp = strdup(old_tmp);
+  unsetenv("TMPDIR");
+  fd = ng_mkstemp_home(path, sizeof path, "ng_auth_");
+  expect(fd >= 0, "temp fd");
+  if (fd >= 0) {
+    expect(fstat(fd, &st) == 0 && (st.st_mode & 0777) == 0600,
+           "home temp is owner-only");
+    close(fd);
+    unlink(path);
+  }
+  if (old_tmp) {
+    setenv("TMPDIR", old_tmp, 1);
+    free(old_tmp);
+  }
+  {
+    char sub[640];
+    snprintf(sub, sizeof sub, "%s/tmp", home);
+    rmdir(sub);
+  }
+  rmdir(home);
+}
+
 static void test_worker_title(void) {
   char path[] = "/tmp/bin/nanobot";
   char home_flag[] = "--home";
@@ -782,6 +814,7 @@ int main(void) {
   test_cap_regular_fd();
   test_worker_title();
   test_lean_info_skips_refresh();
+  test_temp_mode();
   test_routes();
   test_control();
   test_long_record();
