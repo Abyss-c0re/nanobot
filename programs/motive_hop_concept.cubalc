@@ -1,0 +1,16 @@
+// The hop names the concept. A disagreed concept does not land.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hop     ROLE nanobot  PROTON 1
+CUBE concept ROLE observer PROTON 1
+
+PLUG hop concept
+
+IMPULSE hop 1
+IMPULSE concept 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY concept
+DECIDE concept
+ASSERT CUBES >= 2
+PRINT "concepthop" UNITY DECIDE ENERGY

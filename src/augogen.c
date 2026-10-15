@@ -630,12 +630,13 @@ static int quoted_eq(const char *s, int want) {
 /* One configured peer, one POST, no retry. The body carries hop=1.
  * lex_w 0-255 is quoted on that POST. A negative value omits the field.
  * plate is the ranked plate name. lexical and hamming are the rank parts.
- * The peer stores only when a quoted value agrees. */
+ * concept is the ranked concept line. The peer stores only when a quoted
+ * value agrees. */
 static void motive_nudge(const char *line, int lex_w, const char *plate,
-                         int lexical, int hamming) {
+                         int lexical, int hamming, const char *concept) {
   char spec[96], token[96], host[16];
-  char body[320], req[768];
-  char *esc = NULL, *pesc = NULL;
+  char body[384], req[768];
+  char *esc = NULL, *pesc = NULL, *cesc = NULL;
   int port = 0, fd = -1, bl, rl;
   struct sockaddr_in sa;
   knob_copy(spec, sizeof spec, "NANOBOT_MOTIVE_PEER", "MOTIVE_PEER");
@@ -651,31 +652,39 @@ static void motive_nudge(const char *line, int lex_w, const char *plate,
     free(esc);
     return;
   }
+  cesc = ng_json_escape(concept && concept[0] ? concept : "");
+  if (!cesc) {
+    free(esc);
+    free(pesc);
+    return;
+  }
   if (lex_w >= 0 && lex_w <= 255 && pesc[0])
     bl = snprintf(body, sizeof body,
                   "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
                   "\"hop\":\"1\",\"lex_w\":\"%d\",\"plate\":\"%s\","
-                  "\"lexical\":\"%d\",\"hamming\":\"%d\"}",
-                  esc, lex_w, pesc, lexical, hamming);
+                  "\"lexical\":\"%d\",\"hamming\":\"%d\",\"concept\":\"%s\"}",
+                  esc, lex_w, pesc, lexical, hamming, cesc);
   else if (lex_w >= 0 && lex_w <= 255)
     bl = snprintf(body, sizeof body,
                   "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
                   "\"hop\":\"1\",\"lex_w\":\"%d\","
-                  "\"lexical\":\"%d\",\"hamming\":\"%d\"}",
-                  esc, lex_w, lexical, hamming);
+                  "\"lexical\":\"%d\",\"hamming\":\"%d\",\"concept\":\"%s\"}",
+                  esc, lex_w, lexical, hamming, cesc);
   else if (pesc[0])
     bl = snprintf(body, sizeof body,
                   "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
                   "\"hop\":\"1\",\"plate\":\"%s\","
-                  "\"lexical\":\"%d\",\"hamming\":\"%d\"}",
-                  esc, pesc, lexical, hamming);
+                  "\"lexical\":\"%d\",\"hamming\":\"%d\",\"concept\":\"%s\"}",
+                  esc, pesc, lexical, hamming, cesc);
   else
     bl = snprintf(body, sizeof body,
                   "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
-                  "\"hop\":\"1\",\"lexical\":\"%d\",\"hamming\":\"%d\"}",
-                  esc, lexical, hamming);
+                  "\"hop\":\"1\",\"lexical\":\"%d\",\"hamming\":\"%d\","
+                  "\"concept\":\"%s\"}",
+                  esc, lexical, hamming, cesc);
   free(esc);
   free(pesc);
+  free(cesc);
   if (bl < 0 || (size_t)bl >= sizeof body) return;
   rl = snprintf(req, sizeof req,
                 "POST /peer/v1/augogen HTTP/1.0\r\n"
@@ -831,9 +840,10 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char *platev = ng_json_get_string(json_body, "plate");
     char *lexn = ng_json_get_string(json_body, "lexical");
     char *hamn = ng_json_get_string(json_body, "hamming");
+    char *conceptv = ng_json_get_string(json_body, "concept");
     ng_motive m;
     char *js;
-    int asked = 0, hop = 0, over = -1, plate_ok = 1, score_ok = 1;
+    int asked = 0, hop = 0, over = -1, plate_ok = 1, score_ok = 1, concept_ok = 1;
     if (!text) text = ng_json_get_string(json_body, "act");
     if (!text) text = strdup("");
     if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
@@ -849,12 +859,13 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       if (end && end != lwv && !*end && v >= 0 && v <= 255) over = (int)v;
     }
     ng_motive_rank_w(text ? text : "", &m, over);
-    /* A quoted plate, lexical, or hamming that disagrees is not stored. */
+    /* A quoted plate, lexical, hamming, or concept that disagrees is not stored. */
     if (platev && platev[0] && strcmp(platev, ng_motive_plate_name(m.plate)) != 0)
       plate_ok = 0;
     if (!quoted_eq(lexn, m.lexical) || !quoted_eq(hamn, m.hamming)) score_ok = 0;
+    if (conceptv && conceptv[0] && strcmp(conceptv, m.concept) != 0) concept_ok = 0;
     /* Report every plate. Store a line only when the plate is forward. */
-    if (asked && plate_ok && score_ok && m.forward && m.line[0] &&
+    if (asked && plate_ok && score_ok && concept_ok && m.forward && m.line[0] &&
         !suggestion_forbidden(m.line) && !ng_motive_blocks(m.line)) {
       unsigned long gen = p.generation + 1;
       plate_clear(&p);
@@ -880,7 +891,8 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       /* A hop already arrived from one peer. Do not POST it onward.
        * over is the quoted lex_w, or -1 when this call keeps the env weight. */
       if (!hop)
-        motive_nudge(m.line, over, ng_motive_plate_name(m.plate), m.lexical, m.hamming);
+        motive_nudge(m.line, over, ng_motive_plate_name(m.plate), m.lexical,
+                     m.hamming, m.concept);
     }
     js = ng_motive_format(&m);
     free(text);
@@ -890,6 +902,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     free(platev);
     free(lexn);
     free(hamn);
+    free(conceptv);
     free(action);
     return js ? js
               : strdup("{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":false,"

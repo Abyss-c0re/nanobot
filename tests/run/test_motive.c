@@ -341,6 +341,8 @@ int main(void) {
                "hop names the lexical count");
         expect(log && count_substr(log, "\"hamming\":\"0\"") == 32,
                "hop names the hamming");
+        expect(log && count_substr(log, "\"concept\":\"prompt a peer to move\"") == 32,
+               "hop names the concept");
         expect(!log || !strstr(log, "trick the cube"), "purge act is not posted");
         expect(!log || !strstr(log, "serve the matrix in bits"), "remedy is not posted");
         free(log);
@@ -558,6 +560,10 @@ int main(void) {
                "weighed hop names the lexical count");
         expect(log && count_substr(log, "\"hamming\":\"0\"") == 3,
                "weighed hop names the hamming");
+        expect(log && count_substr(log, "\"concept\":") == 3,
+               "weighed hop names the concept");
+        expect(log && strstr(log, "\"concept\":\"read the law and prove\""),
+               "weighed hop names the law concept");
         expect(!log || !strstr(log, "rank concepts then act"), "hop does not post the weight");
         expect(!log || !strstr(log, "trick the cube"), "weighed purge is not posted");
         pend = ng_augogen_pending_json();
@@ -632,6 +638,38 @@ int main(void) {
     expect(pend && strstr(pend, "\"lexical\":3"), "a matching lexical keeps the count");
     expect(pend && strstr(pend, "\"hamming\":0"), "a matching lexical keeps the hamming");
     expect(!pend || !strstr(pend, "\"lex_w\":"), "a matching lexical omits lex_w");
+    free(pend);
+  }
+  js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
+  free(js);
+  js = ng_augogen_handle(
+      NULL,
+      "{\"action\":\"motive\",\"text\":\"read the law and prove\","
+      "\"enqueue\":\"1\",\"concept\":\"prompt a peer to move\"}");
+  expect(js && strstr(js, "\"rank\":256") && strstr(js, "\"lexical\":3"),
+         "a disagreed concept still reports the rank");
+  expect(js && strstr(js, "\"concept\":\"read the law and prove\""),
+         "the report keeps the ranked concept");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(!pend || !strstr(pend, "read the law and prove"),
+           "a disagreed concept is not stored");
+    expect(!pend || !strstr(pend, "\"rank\":"), "a disagreed concept leaves the file empty");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL,
+      "{\"action\":\"motive\",\"text\":\"read the law and prove\","
+      "\"enqueue\":\"1\",\"concept\":\"read the law and prove\"}");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"rank\":256"), "a matching concept is stored");
+    expect(pend && strstr(pend, "read the law and prove"), "a matching concept keeps the line");
+    expect(pend && strstr(pend, "\"lexical\":3"), "a matching concept keeps the count");
+    expect(pend && strstr(pend, "\"hamming\":0"), "a matching concept keeps the hamming");
+    expect(!pend || !strstr(pend, "\"lex_w\":"), "a matching concept omits lex_w");
     free(pend);
   }
 
