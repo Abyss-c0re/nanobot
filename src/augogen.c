@@ -464,10 +464,12 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   }
   lowered[i] = 0;
   for (i = 0; meta[i]; i++) {
-    if (strcmp(lowered, meta[i]) == 0) return 0;
-    if (strncmp(lowered, meta[i], strlen(meta[i])) == 0 &&
-        lowered[strlen(meta[i])] == '.')
+    if (strcmp(lowered, meta[i]) == 0 ||
+        (strncmp(lowered, meta[i], strlen(meta[i])) == 0 &&
+         lowered[strlen(meta[i])] == '.')) {
+      out[0] = 0;
       return 0;
+    }
   }
   /* 2–12 words, matching grok-build eval bound */
   {
@@ -482,7 +484,10 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
         inw = 0;
       }
     }
-    if (words < 2 || words > 12) return 0;
+    if (words < 2 || words > 12) {
+      out[0] = 0;
+      return 0;
+    }
   }
   return 1;
 }

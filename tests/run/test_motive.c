@@ -731,6 +731,29 @@ int main(void) {
     expect(!pend || !strstr(pend, "serve the matrix in bits"), "remedy not a suggestion");
     free(pend);
   }
+  js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"suggestion\":\"NONE\"}");
+  expect(js && strstr(js, "\"status\":\"empty\""), "NONE leaves the plate empty");
+  expect(js && !strstr(js, "\"suggestion\":\"NONE\""), "NONE is not the suggestion");
+  free(js);
+  js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"suggestion\":\"one\"}");
+  expect(js && strstr(js, "\"status\":\"empty\""), "one word leaves the plate empty");
+  expect(js && !strstr(js, "\"suggestion\":\"one\""), "one word is not the suggestion");
+  free(js);
+  js = ng_augogen_handle(
+      NULL,
+      "{\"action\":\"generate\",\"suggestion\":\"one two three four five six seven eight nine ten eleven twelve thirteen\"}");
+  expect(js && strstr(js, "\"status\":\"empty\""), "thirteen words leave the plate empty");
+  expect(js && !strstr(js, "thirteen"), "thirteen words are not stored");
+  free(js);
+  setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+  js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"suggestion\":\"rank concepts\"}");
+  expect(js && strstr(js, "\"suggestion\":\"rank concepts\""), "two words stay");
+  expect(js && strstr(js, "\"status\":\"pending\""), "two words stay pending");
+  expect(js && strstr(js, "\"executed\":false"), "two words do not run");
+  free(js);
+  unsetenv("NANOBOT_AUGOGEN_AUTO");
+  js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
+  free(js);
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\"}");
   expect(js && strstr(js, "prompt a peer to move"), "blank generate reports a peer");
   expect(js && strstr(js, "\"plate\":\"observe\""), "silence report names observe");

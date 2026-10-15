@@ -1,0 +1,16 @@
+// A suggest line of 2 to 12 words may be kept.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE span ROLE observer PROTON 1
+CUBE keep ROLE nanobot  PROTON 1
+
+PLUG span keep
+
+IMPULSE span 1
+IMPULSE keep 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY keep
+DECIDE keep
+ASSERT CUBES >= 2
+PRINT "span" UNITY DECIDE ENERGY

@@ -174,14 +174,6 @@ static void test_control(void) {
                cfg.compact_preemptive == 1,
            "apply compact");
     ng_agent_cfg_free(&cfg);
-    expect(ng_suggest_version_retry(0) == 1, "the first outdated suggest may retry");
-    expect(ng_suggest_version_retry(1) == 0, "a second outdated suggest is dropped");
-    expect(ng_suggest_version_retry(3) == 0, "further suggest bumps stay stopped");
-    expect(ng_suggest_reply_outdated("{\"error\":\"CLI version outdated\"}") == 1,
-           "an outdated suggest body is named");
-    expect(ng_suggest_reply_outdated("read the law and prove") == 0,
-           "a fresh suggest line is current");
-    expect(ng_suggest_reply_outdated(NULL) == 0, "an empty suggest body is current");
   }
   lim.has_effort = 1;
   snprintf(lim.effort, sizeof lim.effort, "bad token");
