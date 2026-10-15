@@ -240,33 +240,6 @@ static int lexical_hits(const char *norm, const char *concept) {
   return hits;
 }
 
-static int named_concept(const char *s) {
-  int i;
-  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++)
-    if (!strcmp(kConcept[i], s)) return i;
-  return 0;
-}
-
-/* No catalog word: a forward plate names one concept. A catalog word does not. */
-static int plate_concept(int plate) {
-  switch (plate) {
-    case NG_PLATE_OBSERVE:
-      return named_concept("prompt a peer to move");
-    case NG_PLATE_CONFESS:
-      return named_concept("confess the heat and serve");
-    case NG_PLATE_AUDIT:
-    case NG_PLATE_INVESTIGATE:
-      return named_concept("audit the last code change");
-    case NG_PLATE_RESTORE_FLOW:
-      return named_concept("keep free energy flowing");
-    case NG_PLATE_REPORT_REASON:
-    case NG_PLATE_BRIEF:
-      return named_concept("read the law and prove");
-    default:
-      return -1;
-  }
-}
-
 /* Unset, empty, or outside 0-255 stays 64. The plate cascade is unchanged. */
 static int lex_weight(void) {
   const char *e = getenv("NANOBOT_MOTIVE_LEX_W");
@@ -314,31 +287,15 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   out->plate = plate_of(norm);
   out->forward = plate_forward(out->plate);
   qh = simhash_text(norm);
-  {
-    int any_lex = 0;
-    for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
-      int lex = lexical_hits(norm, kConcept[i]);
-      int h = ham64(qh, simhash_text(kConcept[i]));
-      int score = lex * lw + (64 - h);
-      if (lex > 0) any_lex = 1;
-      if (score > best_score) {
-        best = i;
-        best_score = score;
-        best_lex = lex;
-        best_ham = h;
-      }
-    }
-    /* No catalog content word. A forward plate names its concept.
-     * The rank is that concept's sketch distance. A catalog word keeps
-     * the hybrid winner above. A plate that is not forward keeps the sketch. */
-    if (!any_lex && out->forward) {
-      int c = plate_concept(out->plate);
-      if (c >= 0) {
-        best = c;
-        best_lex = 0;
-        best_ham = ham64(qh, simhash_text(kConcept[c]));
-        best_score = 64 - best_ham;
-      }
+  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
+    int lex = lexical_hits(norm, kConcept[i]);
+    int h = ham64(qh, simhash_text(kConcept[i]));
+    int score = lex * lw + (64 - h);
+    if (score > best_score) {
+      best = i;
+      best_score = score;
+      best_lex = lex;
+      best_ham = h;
     }
   }
   out->rank = best_score < 0 ? 0 : best_score;
