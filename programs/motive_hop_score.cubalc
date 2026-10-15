@@ -1,0 +1,16 @@
+// The hop names lexical and hamming. A disagreed count does not land.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hop   ROLE nanobot  PROTON 1
+CUBE score ROLE observer PROTON 1
+
+PLUG hop score
+
+IMPULSE hop 1
+IMPULSE score 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY score
+DECIDE score
+ASSERT CUBES >= 2
+PRINT "scorehop" UNITY DECIDE ENERGY
