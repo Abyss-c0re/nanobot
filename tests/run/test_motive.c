@@ -1064,6 +1064,14 @@ int main(void) {
     free(pend);
   }
 
+  /* A blank unicode line stays off this suggestion. The next line is not taken. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"\\u00a0\\nread the law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"prompt a peer to move\""),
+         "a blank unicode line stays off the suggestion");
+  free(js);
+
   /* A torn byte drops, so a quote behind it still drops. The words stay. */
   {
     char body[240];

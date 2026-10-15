@@ -70,6 +70,18 @@ static void test_truncate(void) {
   utf = ng_suggest_truncate("abcd\xC3\xA9wxyz", 9);
   expect(utf && strcmp(utf, "abcd\n\xE2\x80\xA6") == 0, "utf-8 boundary");
   free(utf);
+  utf = ng_suggest_truncate("\xC2\xA0read the law and prove\xC2\xA0", 80);
+  expect(utf && strcmp(utf, "read the law and prove") == 0,
+         "a unicode space at the turn edge drops");
+  free(utf);
+  utf = ng_suggest_truncate("read\xC2\xA0the law and prove", 80);
+  expect(utf && strcmp(utf, "read\xC2\xA0the law and prove") == 0,
+         "an interior unicode space stays in the turn");
+  free(utf);
+  utf = ng_suggest_truncate("read the law and prove\xE2\x80\x94", 80);
+  expect(utf && strcmp(utf, "read the law and prove\xE2\x80\x94") == 0,
+         "an em dash stays on the turn");
+  free(utf);
 }
 
 static void test_pack(void) {
