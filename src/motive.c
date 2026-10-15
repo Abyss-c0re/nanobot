@@ -218,11 +218,18 @@ static int ham64(uint64_t a, uint64_t b) {
   return n;
 }
 
-static int lexical_hits(const char *norm, const char *concept) {
+/* hits is the content-word overlap. span is the longest matched word.
+ * head is 1 when the concept's first content word matched.
+ * Glue words stay out of all three. */
+static void lexical_measure(const char *norm, const char *concept, int *hits,
+                            int *span, int *head) {
   char tmp[NG_MOTIVE_TEXT];
   char tok[32];
   size_t i = 0;
-  int hits = 0;
+  int first = 1;
+  *hits = 0;
+  *span = 0;
+  *head = 0;
   norm_text(concept, tmp, sizeof tmp);
   while (tmp[i]) {
     size_t n = 0;
@@ -231,13 +238,16 @@ static int lexical_hits(const char *norm, const char *concept) {
     while (tmp[i] && tmp[i] != ' ' && n + 1 < sizeof tok) tok[n++] = tmp[i++];
     tok[n] = 0;
     if (n == 0) continue;
-    /* Drop glue words so the distinctive tokens decide the rank. */
     if (!strcmp(tok, "the") || !strcmp(tok, "and") || !strcmp(tok, "then") ||
         !strcmp(tok, "a") || !strcmp(tok, "to"))
       continue;
-    if (bounded(norm, tok)) hits++;
+    if (bounded(norm, tok)) {
+      (*hits)++;
+      if ((int)n > *span) *span = (int)n;
+      if (first) *head = 1;
+    }
+    first = 0;
   }
-  return hits;
 }
 
 /* Unset, empty, or outside 0-255 stays 64. The plate cascade is unchanged. */
@@ -266,6 +276,7 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
   int i, best = 0, best_score = -1, best_lex = 0, best_ham = 64;
+  int best_span = -1, best_head = 0;
   int lw;
   if (!out) return;
   memset(out, 0, sizeof *out);
@@ -288,15 +299,32 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   out->forward = plate_forward(out->plate);
   qh = simhash_text(norm);
   for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
-    int lex = lexical_hits(norm, kConcept[i]);
-    int h = ham64(qh, simhash_text(kConcept[i]));
-    int score = lex * lw + (64 - h);
-    if (score > best_score) {
-      best = i;
-      best_score = score;
-      best_lex = lex;
-      best_ham = h;
-    }
+    int lex = 0, span = 0, head = 0;
+    int h, score, take;
+    lexical_measure(norm, kConcept[i], &lex, &span, &head);
+    h = ham64(qh, simhash_text(kConcept[i]));
+    score = lex * lw + (64 - h);
+    /* Same positive overlap: the concept name wins, then the longer
+     * matched word, then this score. The earliest concept stays on a tie.
+     * A different overlap, including zero, stays on the score. */
+    if (best_score < 0)
+      take = 1;
+    else if (lex > 0 && lex == best_lex) {
+      if (head != best_head)
+        take = head > best_head;
+      else if (span != best_span)
+        take = span > best_span;
+      else
+        take = score > best_score;
+    } else
+      take = score > best_score;
+    if (!take) continue;
+    best = i;
+    best_score = score;
+    best_lex = lex;
+    best_ham = h;
+    best_span = span;
+    best_head = head;
   }
   out->rank = best_score < 0 ? 0 : best_score;
   out->lexical = best_lex;

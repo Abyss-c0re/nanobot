@@ -3,6 +3,8 @@
 
 /* Hive motive. Hybrid rank of eight concepts plus a priority cascade.
  * Rank uses the caller stack: 192-byte norm, 24 tokens, no heap.
+ * When concepts share a positive overlap, the one whose first content
+ * word matched wins, then the longer matched word. Rank is that score.
  * NANOBOT_MOTIVE_LEX_W is the lexical weight, 0-255. Unset stays 64.
  * A forward plate may become a 2–12 word self-prompt. Destructive plates
  * stay on the wire as a remedy line and are not applied.
