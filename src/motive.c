@@ -178,33 +178,25 @@ static uint64_t token_hash(const char *s, size_t n) {
   return h;
 }
 
-static int glue_tok(const char *tok) {
-  return !strcmp(tok, "the") || !strcmp(tok, "and") || !strcmp(tok, "then") ||
-         !strcmp(tok, "a") || !strcmp(tok, "to");
-}
-
-/* Hash tokens [tok_from, tok_to) inside the first 24. The whole sketch is 0, 24. */
-static uint64_t simhash_range(const char *norm, int tok_from, int tok_to) {
+static uint64_t simhash_text(const char *norm) {
   int acc[64];
-  int b, ntok = 0, idx = 0;
+  int b, ntok = 0;
   const char *p;
   memset(acc, 0, sizeof acc);
-  if (!norm) return 0;
-  if (tok_from < 0) tok_from = 0;
-  if (tok_to > TOK_MAX) tok_to = TOK_MAX;
   p = norm;
-  while (*p && idx < TOK_MAX) {
+  while (*p && ntok < TOK_MAX) {
+    const char *s;
     size_t n = 0;
     while (*p == ' ') p++;
     if (!*p) break;
+    s = p;
     while (p[n] && p[n] != ' ') n++;
-    if (idx >= tok_from && idx < tok_to) {
-      uint64_t h = token_hash(p, n);
+    {
+      uint64_t h = token_hash(s, n);
       for (b = 0; b < 64; b++)
         acc[b] += (h & (1ull << b)) ? 1 : -1;
-      ntok++;
     }
-    idx++;
+    ntok++;
     p += n;
   }
   if (!ntok) return 0;
@@ -214,53 +206,6 @@ static uint64_t simhash_range(const char *norm, int tok_from, int tok_to) {
       if (acc[b] > 0) out |= (1ull << b);
     return out;
   }
-}
-
-static uint64_t simhash_text(const char *norm) {
-  return simhash_range(norm, 0, TOK_MAX);
-}
-
-/* Content words in catalog order, inside the 24-token sketch.
- * from/to are token indexes. A missing word leaves the span unset. */
-static int span_of(const char *norm, const char *concept, int *from, int *to) {
-  char tmp[NG_MOTIVE_TEXT];
-  char want[8][32];
-  int nw = 0, seen = 0, idx = 0, start = -1, end = 0;
-  size_t i = 0;
-  const char *p;
-  if (!norm || !concept || !from || !to) return 0;
-  norm_text(concept, tmp, sizeof tmp);
-  while (tmp[i] && nw < 8) {
-    size_t n = 0;
-    char tok[32];
-    while (tmp[i] == ' ') i++;
-    if (!tmp[i]) break;
-    while (tmp[i] && tmp[i] != ' ' && n + 1 < sizeof tok) tok[n++] = tmp[i++];
-    tok[n] = 0;
-    if (n && !glue_tok(tok)) {
-      memcpy(want[nw], tok, n + 1);
-      nw++;
-    }
-  }
-  if (!nw) return 0;
-  p = norm;
-  while (*p && idx < TOK_MAX) {
-    size_t n = 0;
-    while (*p == ' ') p++;
-    if (!*p) break;
-    while (p[n] && p[n] != ' ') n++;
-    if (seen < nw && n == strlen(want[seen]) && memcmp(p, want[seen], n) == 0) {
-      if (start < 0) start = idx;
-      seen++;
-      end = idx + 1;
-    }
-    idx++;
-    p += n;
-  }
-  if (seen != nw || start < 0) return 0;
-  *from = start;
-  *to = end;
-  return 1;
 }
 
 static int ham64(uint64_t a, uint64_t b) {
@@ -287,7 +232,9 @@ static int lexical_hits(const char *norm, const char *concept) {
     tok[n] = 0;
     if (n == 0) continue;
     /* Drop glue words so the distinctive tokens decide the rank. */
-    if (glue_tok(tok)) continue;
+    if (!strcmp(tok, "the") || !strcmp(tok, "and") || !strcmp(tok, "then") ||
+        !strcmp(tok, "a") || !strcmp(tok, "to"))
+      continue;
     if (bounded(norm, tok)) hits++;
   }
   return hits;
@@ -342,18 +289,8 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   qh = simhash_text(norm);
   for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
     int lex = lexical_hits(norm, kConcept[i]);
-    int from = 0, to = 0;
-    int h;
-    int score;
-    uint64_t ch = simhash_text(kConcept[i]);
-    /* Dense term is the in-order content span when that span sits in the
-     * sketch. A missing content word keeps the whole sketch. The plate
-     * stays on the full norm. */
-    if (span_of(norm, kConcept[i], &from, &to))
-      h = ham64(simhash_range(norm, from, to), ch);
-    else
-      h = ham64(qh, ch);
-    score = lex * lw + (64 - h);
+    int h = ham64(qh, simhash_text(kConcept[i]));
+    int score = lex * lw + (64 - h);
     if (score > best_score) {
       best = i;
       best_score = score;

@@ -172,29 +172,6 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 256 && m.lex_w == 64, "the env rank is unchanged");
 
-  ng_motive_rank("please read the law and prove it", &m);
-  expect(strcmp(m.concept, "read the law and prove") == 0, "span keeps the law concept");
-  expect(m.rank == 256, "span of the law line ranks 256");
-  expect(m.lexical == 3 && m.hamming == 0, "span matches the law sketch");
-  expect(m.forward, "span leaves the plate forward");
-  expect(strcmp(m.line, "read the law and prove") == 0, "span line is the concept");
-  ng_motive_rank_w("please read the law and prove it", &m, 1);
-  expect(m.rank == 67 && m.lexical == 3 && m.hamming == 0, "span keeps the weight-1 rank");
-  ng_motive_rank("read the law", &m);
-  expect(strcmp(m.concept, "read the law and prove") == 0, "partial law stays the law concept");
-  expect(m.rank == 185 && m.lexical == 2 && m.hamming == 7,
-         "a missing word keeps the full sketch");
-  ng_motive_rank("read the law then prove the matrix", &m);
-  expect(strcmp(m.concept, "read the law and prove") == 0, "ordered span stays the law concept");
-  expect(m.rank == 245 && m.lexical == 3 && m.hamming == 11,
-         "the span drops the trailing words");
-  ng_motive_rank("prove it then read the law", &m);
-  expect(m.rank == 237 && m.lexical == 3 && m.hamming == 19,
-         "out of order keeps the full sketch");
-  ng_motive_rank("read law prove", &m);
-  expect(m.rank == 248 && m.lexical == 3 && m.hamming == 8,
-         "a span that is the whole sketch is unchanged");
-
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
   expect(m.forward, "silence may prompt");
