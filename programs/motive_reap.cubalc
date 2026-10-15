@@ -1,0 +1,16 @@
+// A done auto job past the keep cap drops. A queued job stays.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE reap ROLE observer PROTON 1
+CUBE law ROLE nanobot PROTON 1
+
+PLUG reap law
+
+IMPULSE reap 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "reap" UNITY DECIDE ENERGY

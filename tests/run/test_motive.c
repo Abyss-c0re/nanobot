@@ -4,6 +4,7 @@
 #include <nanobot/os.h>
 
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -1163,6 +1164,74 @@ int main(void) {
     ng_motive_rank("read the law and prove", &m);
     expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
            "a second job leaves the law rank");
+  }
+
+  /* A done auto job past the keep cap drops. A queued job stays. */
+  {
+    char path[256];
+    int i, before = 0;
+    DIR *d = opendir("/tmp/nb-motive-test/jobs");
+    struct dirent *de;
+    if (d) {
+      while ((de = readdir(d)) != NULL) {
+        size_t n = strlen(de->d_name);
+        if (n > 5 && strcmp(de->d_name + n - 5, ".json") == 0) before++;
+      }
+      closedir(d);
+    }
+    expect(before < 40, "the job plate has room under the keep cap");
+    for (i = 1; i <= 49; i++) {
+      FILE *f;
+      char id[40];
+      snprintf(id, sizeof id, "agrun-%010d-1", i);
+      snprintf(path, sizeof path, "%s/jobs/%s.json", home, id);
+      f = fopen(path, "wb");
+      expect(f != NULL, "seed a done auto job");
+      if (f) {
+        fprintf(f, "{\"status\":\"done\",\"id\":\"%s\"}\n", id);
+        fclose(f);
+      }
+      snprintf(path, sizeof path, "%s/jobs/%s.in", home, id);
+      f = fopen(path, "wb");
+      if (f) {
+        fputs("old prompt", f);
+        fclose(f);
+      }
+    }
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000000-9.json", home);
+    {
+      FILE *f = fopen(path, "wb");
+      expect(f != NULL, "seed a queued auto job");
+      if (f) {
+        fputs("{\"status\":\"queued\",\"id\":\"agrun-0000000000-9\"}\n", f);
+        fclose(f);
+      }
+    }
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000000-9.in", home);
+    {
+      FILE *f = fopen(path, "wb");
+      if (f) {
+        fputs("stay queued", f);
+        fclose(f);
+      }
+    }
+    setenv("NANOBOT_AUGOGEN_AUTO", "1", 1);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"suggestion\":\"read the law and prove\"}");
+    free(js);
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    for (i = 0; i < 8; i++) {
+      if (waitpid(-1, NULL, WNOHANG) < 0) break;
+    }
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000001-1.in", home);
+    expect(access(path, F_OK) != 0, "the oldest done auto job drops");
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000049-1.in", home);
+    expect(file_eq(path, "old prompt"), "a newer done auto job stays");
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000000-9.in", home);
+    expect(file_eq(path, "stay queued"), "a queued auto job stays");
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a reaped job leaves the law rank");
   }
 
   if (g_fail) {

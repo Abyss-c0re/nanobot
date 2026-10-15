@@ -95,6 +95,7 @@
 - **hive:** a unicode space inside a suggestion is a space. The words stay. An em dash stays. The 2–12 word bound stays. CubalC board: `programs/motive_sep.cubalc`.
 - **hive:** a torn byte on a suggestion drops, so a quote behind that byte still drops. The words stay. An em dash stays. The 2–12 word bound stays. CubalC board: `programs/motive_torn.cubalc`.
 - **hive:** a second full-auto prompt in the same second keeps its own job file. The first prompt stays. The ranker is unchanged. CubalC board: `programs/motive_job.cubalc`.
+- **hive:** a done auto job past 48 drops. A queued auto job stays. The ranker is unchanged. CubalC board: `programs/motive_reap.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

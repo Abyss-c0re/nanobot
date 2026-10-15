@@ -4,6 +4,7 @@
 #include "memory.h"
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -106,8 +107,85 @@ static int pair_confirm_suggestion(ng_augogen *p) {
   return 0;
 }
 
+/* Done auto jobs past this cap drop. A queued or running job stays. */
+enum { AUTO_JOB_KEEP = 48, AUTO_JOB_SCAN = 256 };
+
+static int auto_job_stem(const char *stem, size_t n) {
+  size_t i;
+  int digit = 0;
+  if (n < 8 || n >= 40) return 0;
+  if (strncmp(stem, "agrun-", 6) != 0) return 0;
+  for (i = 6; i < n; i++) {
+    unsigned char c = (unsigned char)stem[i];
+    if (c == '-') continue;
+    if (!isdigit(c)) return 0;
+    digit = 1;
+  }
+  return digit;
+}
+
+static void reap_done_auto_jobs(const char *jdir) {
+  DIR *d;
+  struct dirent *de;
+  char ids[AUTO_JOB_SCAN][40];
+  int n = 0;
+  int i;
+  if (!jdir || !jdir[0]) return;
+  d = opendir(jdir);
+  if (!d) return;
+  while ((de = readdir(d)) != NULL && n < AUTO_JOB_SCAN) {
+    const char *name = de->d_name;
+    size_t len = strlen(name);
+    size_t idlen;
+    char mpath[700];
+    char *meta;
+    char *st;
+    int live;
+    if (len < 6 || strcmp(name + len - 5, ".json") != 0) continue;
+    idlen = len - 5;
+    if (!auto_job_stem(name, idlen)) continue;
+    if (snprintf(mpath, sizeof mpath, "%s/%s", jdir, name) >= (int)sizeof mpath)
+      continue;
+    meta = ng_read_file(mpath, NULL);
+    if (!meta) continue;
+    st = ng_json_get_string(meta, "status");
+    live = (st && (!strcmp(st, "queued") || !strcmp(st, "running")));
+    free(st);
+    free(meta);
+    if (live) continue;
+    memset(ids[n], 0, sizeof ids[n]);
+    memcpy(ids[n], name, idlen);
+    n++;
+  }
+  closedir(d);
+  if (n <= AUTO_JOB_KEEP) return;
+  for (i = 1; i < n; i++) {
+    char tmp[40];
+    int j = i;
+    memcpy(tmp, ids[i], sizeof tmp);
+    while (j > 0 && strcmp(ids[j - 1], tmp) > 0) {
+      memcpy(ids[j], ids[j - 1], sizeof ids[j]);
+      j--;
+    }
+    memcpy(ids[j], tmp, sizeof tmp);
+  }
+  {
+    int drop = n - AUTO_JOB_KEEP;
+    for (i = 0; i < drop; i++) {
+      char p[700];
+      if (snprintf(p, sizeof p, "%s/%s.json", jdir, ids[i]) < (int)sizeof p)
+        unlink(p);
+      if (snprintf(p, sizeof p, "%s/%s.in", jdir, ids[i]) < (int)sizeof p)
+        unlink(p);
+      if (snprintf(p, sizeof p, "%s/%s.out", jdir, ids[i]) < (int)sizeof p)
+        unlink(p);
+    }
+  }
+}
+
 /* Fork a prompt job (same shape as POST /peer/v1/jobs). Never blocks HTTP.
- * A second prompt in the same second keeps its own file. The first stays. */
+ * A second prompt in the same second keeps its own file. The first stays.
+ * A done auto job past the keep cap drops. A queued job stays. */
 static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
                           size_t id_n) {
   char jdir[640], mpath[700], rpath[700], pp[700], meta[768];
@@ -121,6 +199,7 @@ static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
   if (!prompt || !prompt[0]) return 0;
   snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
   mkdir(jdir, 0755);
+  reap_done_auto_jobs(jdir);
   sec = (long)time(NULL);
   pid = (int)(getpid() & 0xFFFF);
   for (attempt = 0; attempt < 16; attempt++) {
