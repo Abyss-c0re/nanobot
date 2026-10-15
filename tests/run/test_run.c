@@ -1,5 +1,4 @@
 #include "agent.h"
-#include "auth.h"
 #include "hub_local.h"
 #include "runctl.h"
 #include "shell.h"
@@ -727,35 +726,8 @@ static void test_worker_title(void) {
   expect(strcmp(short_path, "nb") == 0, "a short argv0 stays");
 }
 
-static void test_auth_cool(void) {
-  char path[] = "/tmp/ng-cool-XXXXXX";
-  int fd;
-  time_t now = 1700000000;
-  FILE *f;
-  fd = mkstemp(path);
-  expect(fd >= 0, "cool template");
-  if (fd < 0) return;
-  close(fd);
-  unlink(path);
-  expect(ng_auth_cool_active(path, now) == 0, "missing stamp is not cooled");
-  expect(ng_auth_cool_mark(path, now) == 0, "stamp written");
-  expect(ng_auth_cool_active(path, now) == 1, "fresh stamp is cooled");
-  expect(ng_auth_cool_active(path, now + 59) == 1, "inside the minute stays cooled");
-  expect(ng_auth_cool_active(path, now + 60) == 0, "the minute opens another refresh");
-  f = fopen(path, "w");
-  expect(f != NULL, "garbage stamp");
-  if (f) {
-    fputs("nope\n", f);
-    fclose(f);
-    expect(ng_auth_cool_active(path, now) == 0, "a bad stamp is not cooled");
-  }
-  ng_auth_cool_clear(path);
-  expect(ng_auth_cool_active(path, now) == 0, "cleared stamp is not cooled");
-}
-
 int main(void) {
   test_cap_regular_fd();
-  test_auth_cool();
   test_worker_title();
   test_routes();
   test_control();

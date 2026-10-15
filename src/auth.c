@@ -894,69 +894,19 @@ int ng_session_poll_login(ng_session *s) {
   return 0;
 }
 
-static char *auth_cool_path(void) {
-  static char p[640];
-  snprintf(p, sizeof p, "%s/auth.cool", ng_workdir());
-  return p;
-}
-
-int ng_auth_cool_active(const char *path, time_t now) {
-  FILE *f;
-  char buf[32];
-  char *end = NULL;
-  long stamp;
-  if (!path || !path[0]) return 0;
-  f = fopen(path, "r");
-  if (!f) return 0;
-  if (!fgets(buf, sizeof buf, f)) {
-    fclose(f);
-    return 0;
-  }
-  fclose(f);
-  stamp = strtol(buf, &end, 10);
-  if (end == buf || stamp <= 0) return 0;
-  if (now >= (time_t)stamp && now - (time_t)stamp < 60) return 1;
-  return 0;
-}
-
-int ng_auth_cool_mark(const char *path, time_t now) {
-  FILE *f;
-  if (!path || !path[0]) return -1;
-  f = fopen(path, "w");
-  if (!f) return -1;
-  fprintf(f, "%ld\n", (long)now);
-  if (fclose(f) != 0) return -1;
-  return 0;
-}
-
-void ng_auth_cool_clear(const char *path) {
-  if (!path || !path[0]) return;
-  unlink(path);
-}
-
 int ng_session_ensure(ng_session *s) {
-  int lean;
   if (ng_session_valid(s)) return 0;
-  lean = ng_is_lean();
-  /* One failed refresh pins a lean worker on curl. Later calls wait. */
-  if (lean && ng_auth_cool_active(auth_cool_path(), time(NULL))) return -1;
-  if (lean) (void)ng_auth_cool_mark(auth_cool_path(), time(NULL));
   /* Soft-expired access: refresh (JWT often ~30m; not "lost login"). */
   if (s->refresh_token && s->refresh_token[0]) {
-    if (session_refresh_token_once(s) == 0) {
-      if (lean) ng_auth_cool_clear(auth_cool_path());
-      return 0;
-    }
+    if (session_refresh_token_once(s) == 0) return 0;
     /* Refresh failed. The 60s skew already treats a still-live token as due.
      * Keep using it until the real expiry. */
     if (s->access_token && s->access_token[0] &&
         s->expires_at && time(NULL) < s->expires_at) {
-      if (lean) ng_auth_cool_clear(auth_cool_path());
       ng_log("auth: refresh failed — access token still valid, using cached");
       return 0;
     }
   } else if (s->access_token && s->access_token[0] && !s->expires_at) {
-    if (lean) ng_auth_cool_clear(auth_cool_path());
     return 0; /* unknown expiry */
   } else if (!s->refresh_token || !s->refresh_token[0]) {
     ng_log("auth: session not valid and no refresh_token — try CLI import");
@@ -969,15 +919,10 @@ int ng_session_ensure(ng_session *s) {
   {
     int imp = ng_session_try_import_grok_cli(s);
     if (imp == 1) {
-      if (ng_session_valid(s)) {
-        if (lean) ng_auth_cool_clear(auth_cool_path());
-        return 0;
-      }
+      if (ng_session_valid(s)) return 0;
       if (s->refresh_token && s->refresh_token[0] &&
-          session_refresh_token_once(s) == 0) {
-        if (lean) ng_auth_cool_clear(auth_cool_path());
+          session_refresh_token_once(s) == 0)
         return 0;
-      }
     }
   }
   ng_log("auth: ensure failed — need --import-grok-cli, --login, or browser /activate");
