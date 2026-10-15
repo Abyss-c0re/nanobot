@@ -771,6 +771,15 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         free(raw);
       }
     }
+    /* No model line and a real transcript: the ranker supplies a forward concept.
+       A blank transcript stays empty. The act stays off the plate. */
+    if (!cleaned[0] && transcript && transcript[0]) {
+      ng_motive ranked;
+      ng_motive_rank(transcript, &ranked);
+      if (ranked.forward && ranked.line[0] && !suggestion_forbidden(ranked.line) &&
+          !ng_motive_blocks(ranked.line))
+        snprintf(cleaned, sizeof cleaned, "%s", ranked.line);
+    }
     free(given);
     free(transcript);
     plate_clear(&p);

@@ -405,6 +405,30 @@ int main(void) {
     unsetenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE");
   }
 
+  /* No model line: a forward transcript becomes the concept. A purge stays empty. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\"}");
+  expect(js && strstr(js, "read the law and prove"), "rank fills an empty suggestion");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "read the law and prove"), "ranked concept stored");
+    free(pend);
+  }
+  js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"transcript\":\"trick the cube\"}");
+  expect(js && strstr(js, "\"status\":\"empty\""), "purge transcript stays empty");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(!pend || !strstr(pend, "trick the cube"), "purge transcript not stored");
+    expect(!pend || !strstr(pend, "serve the matrix in bits"), "remedy not a suggestion");
+    free(pend);
+  }
+  js = ng_augogen_handle(NULL, "{\"action\":\"generate\"}");
+  expect(js && strstr(js, "\"status\":\"empty\""), "blank generate stays empty");
+  expect(js && strstr(js, "\"suggestion\":\"\""), "blank generate stores no line");
+  free(js);
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
