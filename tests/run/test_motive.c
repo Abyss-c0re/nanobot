@@ -412,14 +412,16 @@ int main(void) {
     unsetenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE");
   }
 
-  /* No model line: a forward transcript becomes the concept. A purge stays empty. */
+  /* No model line: report the concept. Do not store it. A purge stays empty. */
   js = ng_augogen_handle(
       NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\"}");
-  expect(js && strstr(js, "read the law and prove"), "rank fills an empty suggestion");
+  expect(js && strstr(js, "read the law and prove"), "rank reports a concept");
+  expect(js && strstr(js, "\"stored\":false"), "rank report is not stored");
+  expect(js && strstr(js, "\"status\":\"empty\""), "rank report leaves the plate empty");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "read the law and prove"), "ranked concept stored");
+    expect(!pend || !strstr(pend, "read the law and prove"), "ranked concept not stored");
     free(pend);
   }
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"transcript\":\"trick the cube\"}");
@@ -432,12 +434,13 @@ int main(void) {
     free(pend);
   }
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\"}");
-  expect(js && strstr(js, "prompt a peer to move"), "blank generate prompts a peer");
-  expect(js && strstr(js, "\"status\":\"pending\""), "blank generate is pending");
+  expect(js && strstr(js, "prompt a peer to move"), "blank generate reports a peer");
+  expect(js && strstr(js, "\"stored\":false"), "blank generate is not stored");
+  expect(js && strstr(js, "\"status\":\"empty\""), "blank generate leaves the plate empty");
   free(js);
   {
     char *pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "prompt a peer to move"), "silence line stored");
+    expect(!pend || !strstr(pend, "prompt a peer to move"), "silence line not stored");
     expect(!pend || !strstr(pend, "trick the cube"), "silence stores no purge act");
     free(pend);
   }

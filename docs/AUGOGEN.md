@@ -37,8 +37,8 @@ plate's line is the winning concept. Every other plate reports a remedy and
 is not stored. With `enqueue` `1` only a forward line is stored. The act text
 itself is never stored. Full auto runs a stored line only when the caller
 passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
-When `generate` has no model line, the same ranker fills a forward concept from the transcript.
-A blank transcript stores the concept `prompt a peer to move`.
+When `generate` has no model line, the same ranker reports a forward concept in the response.
+The line is not stored. A blank transcript reports `prompt a peer to move` and does not store it.
 A purge or protect transcript stays empty. The act text is not stored.
 
 When that store happens and the request has no `hop`, one optional IPv4 peer

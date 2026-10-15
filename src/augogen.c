@@ -273,6 +273,28 @@ static char *plate_json(const ng_augogen *p) {
                       "\"error\":\"oom\",\"python\":0}");
 }
 
+/* Response-only. The plate file is already saved without this line. */
+static char *with_report(char *js, const char *report) {
+  char *esc;
+  char *cut;
+  char *out = NULL;
+  if (!js || !report || !report[0]) return js;
+  esc = ng_json_escape(report);
+  if (!esc) return js;
+  cut = strstr(js, "\"python\":0}");
+  if (!cut) {
+    free(esc);
+    return js;
+  }
+  if (asprintf(&out, "%.*s\"report\":\"%s\",\"stored\":false,\"python\":0}",
+               (int)(cut - js), js, esc) < 0)
+    out = NULL;
+  free(esc);
+  if (!out) return js;
+  free(js);
+  return out;
+}
+
 static void load_plate(ng_augogen *p) {
   char path[640];
   size_t len = 0;
@@ -760,8 +782,10 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char *given = ng_json_get_string(json_body, "suggestion");
     char *transcript = ng_json_get_string(json_body, "transcript");
     char cleaned[SUG_CAP];
+    char reported[SUG_CAP];
     unsigned long gen = p.generation + 1;
     cleaned[0] = 0;
+    reported[0] = 0;
     if (given && sanitize_suggestion(given, cleaned, sizeof cleaned)) {
       /* host-supplied line (CubalC / mesh) still needs pair vote */
     } else if (agent) {
@@ -771,14 +795,14 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         free(raw);
       }
     }
-    /* No model line: the ranker supplies a forward concept.
-       Silence selects the peer-prompt concept. The act stays off the plate. */
+    /* No model line: report a forward concept. Do not store it.
+       Silence reports the peer-prompt concept. The act stays off the plate. */
     if (!cleaned[0]) {
       ng_motive ranked;
       ng_motive_rank(transcript ? transcript : "", &ranked);
       if (ranked.forward && ranked.line[0] && !suggestion_forbidden(ranked.line) &&
           !ng_motive_blocks(ranked.line))
-        snprintf(cleaned, sizeof cleaned, "%s", ranked.line);
+        snprintf(reported, sizeof reported, "%s", ranked.line);
     }
     free(given);
     free(transcript);
@@ -809,7 +833,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     }
     save_plate(&p);
     free(action);
-    return plate_json(&p);
+    return with_report(plate_json(&p), reported);
   }
 
   {
