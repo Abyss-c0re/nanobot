@@ -4,8 +4,7 @@
 /* Hive motive. Hybrid rank of eight concepts plus a priority cascade.
  * Rank uses the caller stack: 192-byte norm, 24 tokens, no heap.
  * NANOBOT_MOTIVE_LEX_W is the lexical weight, 0-255. Unset stays 64.
- * A longer act keeps a 192-byte head and a 192-byte tail. The earlier
- * cascade plate of those windows is the plate. Concept rank uses the tail.
+ * ties counts concepts that share the winning score. A unique rank has ties 1.
  * A forward plate may become a 2–12 word self-prompt. Destructive plates
  * stay on the wire as a remedy line and are not applied.
  * Schema: nanobot.motive.v1
@@ -37,6 +36,7 @@ typedef struct {
   int hamming;
   int lexical;
   int lex_w; /* NANOBOT_MOTIVE_LEX_W used for this rank. Unset is 64. */
+  int ties;  /* concepts that share the winning score. One is a unique rank. */
   char concept[NG_MOTIVE_TEXT];
   char line[NG_MOTIVE_TEXT];
 } ng_motive;

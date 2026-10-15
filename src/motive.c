@@ -30,13 +30,6 @@ const char *ng_motive_plate_name(int plate) {
   return kPlates[plate];
 }
 
-static int norm_char(unsigned char c) {
-  if (c == '\'') return 0;
-  if (c >= 'A' && c <= 'Z') c = (unsigned char)(c - 'A' + 'a');
-  if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') return (int)c;
-  return -1;
-}
-
 static void norm_text(const char *in, char *out, size_t cap) {
   size_t o = 0;
   int sp = 1;
@@ -44,89 +37,19 @@ static void norm_text(const char *in, char *out, size_t cap) {
   out[0] = 0;
   if (!in) return;
   for (; *in && o + 1 < cap; in++) {
-    int k = norm_char((unsigned char)*in);
-    if (k > 0) {
-      out[o++] = (char)k;
+    unsigned char c = (unsigned char)*in;
+    if (c == '\'') continue;
+    if (c >= 'A' && c <= 'Z') c = (unsigned char)(c - 'A' + 'a');
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+      out[o++] = (char)c;
       sp = 0;
-    } else if (k < 0 && !sp) {
+    } else if (!sp) {
       out[o++] = ' ';
       sp = 1;
     }
   }
   while (o > 0 && out[o - 1] == ' ') o--;
   out[o] = 0;
-}
-
-/* Full normalized length. The rank windows stay NORM_CAP. */
-static size_t norm_len(const char *in) {
-  size_t o = 0;
-  int sp = 1;
-  if (!in) return 0;
-  for (; *in; in++) {
-    int k = norm_char((unsigned char)*in);
-    if (k > 0) {
-      o++;
-      sp = 0;
-    } else if (k < 0 && !sp) {
-      o++;
-      sp = 1;
-    }
-  }
-  if (o > 0 && sp) o--;
-  return o;
-}
-
-/* Last NORM_CAP-1 normalized bytes. Same folding as norm_text. */
-static void norm_tail(const char *in, char *out, size_t cap) {
-  size_t full, skip, o = 0;
-  int sp = 1;
-  if (!out || cap < 2) return;
-  out[0] = 0;
-  if (!in) return;
-  full = norm_len(in);
-  if (full < cap) {
-    norm_text(in, out, cap);
-    return;
-  }
-  skip = full - (cap - 1);
-  for (; *in; in++) {
-    int k = norm_char((unsigned char)*in);
-    char ch;
-    if (k > 0) {
-      ch = (char)k;
-      sp = 0;
-    } else if (k < 0 && !sp) {
-      ch = ' ';
-      sp = 1;
-    } else
-      continue;
-    if (skip) {
-      skip--;
-      continue;
-    }
-    if (o + 1 < cap) out[o++] = ch;
-  }
-  while (o > 0 && out[o - 1] == ' ') o--;
-  if (o > 0 && out[0] == ' ') {
-    memmove(out, out + 1, o - 1);
-    o--;
-  }
-  out[o] = 0;
-}
-
-/* Cascade order. The earlier plate of the head and the tail is the plate. */
-static int plate_earlier(int a, int b) {
-  static const int order[] = {
-      NG_PLATE_PURGE,        NG_PLATE_PROTECT,      NG_PLATE_BRIEF,
-      NG_PLATE_HOLD_FLASH,   NG_PLATE_FORBID_LIVE,  NG_PLATE_BAKE_ROM,
-      NG_PLATE_CONFESS,      NG_PLATE_AUDIT,        NG_PLATE_RESTORE_FLOW,
-      NG_PLATE_REPORT_REASON, NG_PLATE_INVESTIGATE, NG_PLATE_OBSERVE};
-  int ia = 12, ib = 12, i;
-  for (i = 0; i < 12; i++) {
-    if (order[i] == a) ia = i;
-    if (order[i] == b) ib = i;
-  }
-  return ia <= ib ? a : b;
 }
 
 static int bounded(const char *n, const char *p) {
@@ -341,12 +264,9 @@ static void copy_cap(char *dst, size_t cap, const char *src) {
 
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
-  char tail[NORM_CAP];
-  const char *use;
   uint64_t qh;
   int i, best = 0, best_score = -1, best_lex = 0, best_ham = 64;
   int lw;
-  size_t nlen;
   if (!out) return;
   memset(out, 0, sizeof *out);
   norm_text(text, norm, sizeof norm);
@@ -360,31 +280,31 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
     }
     out->plate = NG_PLATE_OBSERVE;
     out->forward = 1;
+    out->ties = 1;
     copy_cap(out->concept, sizeof out->concept, kConcept[peer]);
     copy_cap(out->line, sizeof out->line, kConcept[peer]);
     return;
   }
-  nlen = norm_len(text);
-  if (nlen >= NORM_CAP) {
-    norm_tail(text, tail, sizeof tail);
-    out->plate = plate_earlier(plate_of(norm), plate_of(tail[0] ? tail : norm));
-    use = tail[0] ? tail : norm;
-  } else {
-    out->plate = plate_of(norm);
-    use = norm;
-  }
+  out->plate = plate_of(norm);
   out->forward = plate_forward(out->plate);
-  qh = simhash_text(use);
-  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
-    int lex = lexical_hits(use, kConcept[i]);
-    int h = ham64(qh, simhash_text(kConcept[i]));
-    int score = lex * lw + (64 - h);
-    if (score > best_score) {
-      best = i;
-      best_score = score;
-      best_lex = lex;
-      best_ham = h;
+  qh = simhash_text(norm);
+  {
+    int ties = 0;
+    for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
+      int lex = lexical_hits(norm, kConcept[i]);
+      int h = ham64(qh, simhash_text(kConcept[i]));
+      int score = lex * lw + (64 - h);
+      if (score > best_score) {
+        best = i;
+        best_score = score;
+        best_lex = lex;
+        best_ham = h;
+        ties = 1;
+      } else if (score == best_score) {
+        ties++;
+      }
     }
+    out->ties = ties;
   }
   out->rank = best_score < 0 ? 0 : best_score;
   out->lexical = best_lex;
@@ -416,10 +336,10 @@ char *ng_motive_format(const ng_motive *m) {
            "\"plate\":\"%s\",\"forward\":%s,\"rank\":%d,"
            "\"hamming\":%d,\"lexical\":%d,\"lex_w\":%d,"
            "\"concept\":\"%s\",\"line\":\"%s\","
-           "\"concepts\":%d,\"python\":0}",
+           "\"ties\":%d,\"concepts\":%d,\"python\":0}",
            ng_motive_plate_name(m->plate), m->forward ? "true" : "false", m->rank,
            m->hamming, m->lexical, m->lex_w, concept ? concept : "", line ? line : "",
-           NG_MOTIVE_CONCEPTS);
+           m->ties, NG_MOTIVE_CONCEPTS);
   free(line);
   free(concept);
   return out ? out

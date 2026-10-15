@@ -1,0 +1,15 @@
+// A tied rank stays off the plate. Ordinary program: no HOLD_FLASH line.
+
+CUBE tie  ROLE observer PROTON 1
+CUBE one  ROLE nanobot  PROTON 1
+
+PLUG tie one
+
+IMPULSE tie 1
+IMPULSE one 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY one
+DECIDE one
+ASSERT CUBES >= 2
+PRINT "ties" UNITY DECIDE ENERGY

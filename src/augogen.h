@@ -29,8 +29,7 @@
  * That POST also quotes the ranked plate name, lexical, hamming, and concept.
  * A quoted plate, lexical, hamming, or concept that disagrees with the peer
  * rank is not stored. A missing value keeps the store.
- * A longer act keeps a 192-byte head and a 192-byte tail. The earlier
- * cascade plate of those windows is the plate. Concept rank uses the tail.
+ * A rank tied across concepts is reported and is not stored.
  * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */

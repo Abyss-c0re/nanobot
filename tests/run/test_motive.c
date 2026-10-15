@@ -856,80 +856,67 @@ int main(void) {
     }
   }
 
-  /* A long act keeps a head window and a tail window. */
+  /* A tied rank names the earliest concept and is not stored. */
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.ties == 1 && m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "the law line is a unique rank");
+  ng_motive_rank("", &m);
+  expect(m.ties == 1 && m.rank == 0 && strcmp(m.line, "prompt a peer to move") == 0,
+         "silence is a unique rank");
+  ng_motive_rank("alpha", &m);
+  expect(m.ties == 2 && m.forward && m.plate == NG_PLATE_OBSERVE, "alpha ties two concepts");
+  expect(strcmp(m.concept, "read the law and prove") == 0, "a tie keeps the earliest concept");
+  js = ng_motive_json("read the law and prove");
+  expect(js && strstr(js, "\"ties\":1") && strstr(js, "\"concepts\":8"),
+         "motive json names ties");
+  free(js);
+  js = ng_motive_json("alpha");
+  expect(js && strstr(js, "\"ties\":2") && strstr(js, "\"concept\":\"read the law and prove\""),
+         "motive json names a tie");
+  free(js);
   {
-    char buf[640];
     char *pend;
-    size_t n = 0;
-    int k;
-    for (k = 0; k < 40; k++) {
-      memcpy(buf + n, "alpha ", 6);
-      n += 6;
-    }
-    memcpy(buf + n, "trick the cube", 14);
-    buf[n + 14] = 0;
-    ng_motive_rank(buf, &m);
-    expect(m.plate == NG_PLATE_PURGE && !m.forward, "a trailing purge stays closed");
-    expect(strcmp(m.line, "serve the matrix in bits") == 0, "a trailing purge keeps the remedy");
-    n = 0;
-    memcpy(buf, "trick the cube ", 15);
-    n = 15;
-    for (k = 0; k < 40; k++) {
-      memcpy(buf + n, "alpha ", 6);
-      n += 6;
-    }
-    buf[n] = 0;
-    ng_motive_rank(buf, &m);
-    expect(m.plate == NG_PLATE_PURGE && !m.forward, "a leading purge stays closed");
-    n = 0;
-    memcpy(buf, "wipe the desk ", 14);
-    n = 14;
-    for (k = 0; k < 40; k++) {
-      memcpy(buf + n, "alpha ", 6);
-      n += 6;
-    }
-    memcpy(buf + n, "read the law and prove", 22);
-    buf[n + 22] = 0;
-    ng_motive_rank(buf, &m);
-    expect(m.plate == NG_PLATE_PROTECT && !m.forward, "a leading protect stays closed");
-    expect(strcmp(m.line, "keep free energy flowing") == 0, "a leading protect keeps the remedy");
-    n = 0;
-    for (k = 0; k < 40; k++) {
-      memcpy(buf + n, "alpha ", 6);
-      n += 6;
-    }
-    memcpy(buf + n, "read the law and prove", 22);
-    buf[n + 22] = 0;
-    ng_motive_rank(buf, &m);
-    expect(m.plate == NG_PLATE_OBSERVE && m.forward, "a trailing law line stays forward");
-    expect(strcmp(m.concept, "read the law and prove") == 0, "the tail ranks the law concept");
-    expect(strcmp(m.line, "read the law and prove") == 0, "the tail stores the law line");
-    expect(m.lexical == 3, "the tail keeps the law lexical count");
-    js = ng_motive_json(buf);
-    expect(js && strstr(js, "\"concepts\":8"), "a long act keeps eight concepts");
-    free(js);
-    ng_motive_rank("read the law and prove", &m);
-    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0, "a short law line stays rank 256");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    setenv("NANOBOT_MOTIVE_PEER", "http://127.0.0.1:9", 1);
+    setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
     js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
     free(js);
-    {
-      char req[768];
-      n = 0;
-      snprintf(req, sizeof req, "{\"action\":\"motive\",\"text\":\"");
-      n = strlen(req);
-      for (k = 0; k < 40 && n + 6 < sizeof req - 80; k++) {
-        memcpy(req + n, "alpha ", 6);
-        n += 6;
-      }
-      snprintf(req + n, sizeof req - n, "trick the cube\",\"enqueue\":\"1\"}");
-      js = ng_augogen_handle(NULL, req);
-      expect(js && strstr(js, "\"forward\":false"), "enqueue of a trailing purge stays closed");
-      expect(js && strstr(js, "\"plate\":\"purge_intent\""), "enqueue reports the trailing purge");
-      free(js);
-      pend = ng_augogen_pending_json();
-      expect(!pend || !strstr(pend, "\"rank\":"), "a trailing purge is not stored");
-      free(pend);
-    }
+    js = ng_augogen_handle(NULL, "{\"action\":\"motive\",\"text\":\"alpha\",\"enqueue\":\"1\"}");
+    expect(js && strstr(js, "\"ties\":2") && strstr(js, "\"forward\":true"),
+           "a tie is reported");
+    expect(js && strstr(js, "\"plate\":\"observe\""), "a tie keeps the plate");
+    free(js);
+    pend = ng_augogen_pending_json();
+    expect(!pend || !strstr(pend, "\"rank\":"), "a tie is not stored");
+    free(pend);
+    setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+    unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\",\"enqueue\":\"1\"}");
+    expect(js && strstr(js, "\"ties\":1") && strstr(js, "\"rank\":256"),
+           "a unique rank still reports 256");
+    free(js);
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"rank\":256"), "a unique rank is stored");
+    expect(pend && strstr(pend, "read the law and prove"), "a unique rank stores the concept");
+    expect(!pend || !strstr(pend, "\"ties\""), "the plate file omits ties");
+    expect(!pend || !strstr(pend, "\"lex_w\""), "the plate file omits lex_w");
+    free(pend);
+    js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
+    free(js);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"transcript\":\"alpha\",\"enqueue\":\"1\"}");
+    expect(js && !strstr(js, "\"stored\":true"), "generate does not store a tie");
+    free(js);
+    pend = ng_augogen_pending_json();
+    expect(!pend || !strstr(pend, "read the law and prove"), "generate leaves a tie off the plate");
+    free(pend);
+    js = ng_augogen_handle(
+        NULL,
+        "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"enqueue\":\"1\"}");
+    expect(js && strstr(js, "\"stored\":true") && strstr(js, "\"lex_w\":64"),
+           "generate still stores a unique rank");
+    free(js);
   }
 
   if (g_fail) {
