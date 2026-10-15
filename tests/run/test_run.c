@@ -755,6 +755,76 @@ static void test_lean_info_skips_refresh(void) {
   ng_limits_init();
 }
 
+static int file_has(const char *path, const char *needle) {
+  size_t n = 0;
+  char *b = ng_read_file(path, &n);
+  int hit;
+  if (!b) return 0;
+  hit = strstr(b, needle) != NULL;
+  free(b);
+  return hit;
+}
+
+static void test_lean_log_live_path(void) {
+  char dir[] = "/tmp/ng-live-XXXXXX";
+  char path[128], moved[160];
+  struct stat st;
+  int was_lean;
+  int stderr_on;
+  int i;
+  int nfd;
+
+  was_lean = ng_is_lean();
+  stderr_on = ng_log_stderr_enabled();
+  ng_log_set_stderr(0);
+  expect(mkdtemp(dir) != NULL, "live log home");
+  snprintf(path, sizeof path, "%s/nanobot.log", dir);
+  snprintf(moved, sizeof moved, "%s/nanobot.log.1", dir);
+
+  setenv("NANOBOT_LEAN", "0", 1);
+  ng_limits_init();
+  ng_log_init(path);
+  ng_log("HOSTONE");
+  expect(rename(path, moved) == 0, "host rename aside");
+  ng_log("HOSTTWO");
+  expect(file_has(moved, "HOSTONE"), "host archive keeps the first line");
+  expect(file_has(moved, "HOSTTWO"), "host keeps the open log inode");
+
+  setenv("NANOBOT_LEAN", "1", 1);
+  ng_limits_init();
+  ng_log_init(path);
+  ng_log("LEANONE");
+  ng_log("LEANTWO");
+  expect(file_has(path, "LEANONE") && file_has(path, "LEANTWO"),
+         "a short lean log is not cut");
+  expect(rename(path, moved) == 0, "lean rename aside");
+  nfd = open(path, O_CREAT | O_WRONLY, 0644);
+  expect(nfd >= 0, "live log path");
+  if (nfd >= 0) close(nfd);
+  ng_log("LEANTHREE");
+  expect(file_has(path, "LEANTHREE"), "lean reopens the live log path");
+  expect(file_has(moved, "LEANONE"), "renamed log keeps its bytes");
+  expect(!file_has(moved, "LEANTHREE"), "renamed log does not take the new line");
+
+  ng_log("LEANSEEDSTART xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+  for (i = 0; i < 180; i++)
+    ng_log("m xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+  ng_log("LEANLOGEND");
+  expect(file_has(moved, "LEANSEEDSTART") || file_has(path, "LEANSEEDSTART"),
+         "the seed line is archived or still live");
+  expect(file_has(path, "LEANLOGEND"), "the newest line is on the live path");
+  expect(stat(moved, &st) == 0 && (size_t)st.st_size >= ng_log_max(),
+         "the renamed sibling keeps a full segment");
+
+  ng_log_set_stderr(stderr_on);
+  if (was_lean) setenv("NANOBOT_LEAN", "1", 1);
+  else unsetenv("NANOBOT_LEAN");
+  ng_limits_init();
+  unlink(path);
+  unlink(moved);
+  rmdir(dir);
+}
+
 static void test_worker_title(void) {
   char path[] = "/tmp/bin/nanobot";
   char home_flag[] = "--home";
@@ -782,6 +852,7 @@ int main(void) {
   test_cap_regular_fd();
   test_worker_title();
   test_lean_info_skips_refresh();
+  test_lean_log_live_path();
   test_routes();
   test_control();
   test_long_record();
