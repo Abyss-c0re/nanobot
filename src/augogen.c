@@ -524,8 +524,22 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
     break;
   }
   if (i >= cap) i = cap - 1;
-  memcpy(out, p, i);
-  out[i] = 0;
+  /* A unicode space inside the line is a space. The words stay. */
+  {
+    char tmp[SUG_CAP];
+    size_t o = 0, k = 0;
+    while (k < i && o + 1 < cap && o + 1 < sizeof tmp) {
+      int n = utf8_space(p + k);
+      if (n > 0 && k + (size_t)n <= i) {
+        tmp[o++] = ' ';
+        k += (size_t)n;
+      } else {
+        tmp[o++] = p[k++];
+      }
+    }
+    memcpy(out, tmp, o);
+    out[o] = 0;
+  }
   if (!out[0]) return 0;
   for (i = 0; out[i] && i + 1 < sizeof lowered; i++) {
     char c = out[i];

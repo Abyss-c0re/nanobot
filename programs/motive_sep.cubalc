@@ -1,0 +1,16 @@
+// A unicode space inside a suggestion is a space.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE sep ROLE observer PROTON 1
+CUBE law ROLE nanobot  PROTON 1
+
+PLUG sep law
+
+IMPULSE sep 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "sep" UNITY DECIDE ENERGY

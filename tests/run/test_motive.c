@@ -1050,6 +1050,20 @@ int main(void) {
          "an em dash stays on the suggestion");
   free(js);
 
+  /* A unicode space inside the line is a space. The words stay. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read\\u00a0the law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a unicode space inside the line is a space");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"read the law and prove\",\"status\""),
+           "the stored suggestion keeps the separated law words");
+    free(pend);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
