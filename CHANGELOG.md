@@ -81,7 +81,7 @@
 - **wire:** CLI floor `NG_CLI_VERSION_DEFAULT` / `x-grok-client-version` is `1.0.52` (installed Grok Build; the public crate may lag). Product version stays 0.5.6. Runtime auto-bump is unchanged.
 - **wire:** every cli-chat-proxy call sends `x-grok-client-identifier` (default `nanobot`, then `NANOBOT_CLIENT_NAME`, then `GROK_CLIENT_NAME`) and `x-authenticateresponse: authenticate-response`.
 - **wire:** suggestPrompt transcript packer uses a 24000-character budget and a 1500-character cap on older turns. The user-message JSON object is closed. Request and response fields are unchanged.
-- **hive:** a suggest line of 2–12 words is kept and applied when full auto is on. NONE and any other length leave the plate empty. Motive rank and the hop are unchanged. CubalC board: `programs/suggest_span.cubalc`.
+- **hive:** NONE and any suggest line outside 2–12 words leave the plate empty. The run path is unchanged. Motive rank and the hop are unchanged. CubalC board: `programs/suggest_span.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

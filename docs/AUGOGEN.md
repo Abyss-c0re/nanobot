@@ -73,4 +73,4 @@ Together they are one BrainCube (`lhlam_cube_pair_confirm`). CubalC board:
 
 `x-grok-client-version` floor is `1.0.52` (installed Grok Build). The public grok-build crate may lag that binary. Runtime still auto-bumps if the proxy says the client is outdated.
 
-`x.ai/suggestPrompt` request and response stay `{ generation, sessionId?, model? }` → `{ suggestion?, generation }`. The transcript inside that chat call is packed to 24000 characters. Older turns cap at 1500 characters on a newline or whitespace. The newest agent reply is capped only by the remaining budget. A suggest line of 2–12 words is kept and applied when full auto is on. NONE and any other length leave the plate empty.
+`x.ai/suggestPrompt` request and response stay `{ generation, sessionId?, model? }` → `{ suggestion?, generation }`. The transcript inside that chat call is packed to 24000 characters. Older turns cap at 1500 characters on a newline or whitespace. The newest agent reply is capped only by the remaining budget. NONE and any suggest line outside 2–12 words leave the plate empty. The run path is unchanged.
