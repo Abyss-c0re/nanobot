@@ -432,6 +432,20 @@ static void recompute(ng_augogen *p) {
   }
 }
 
+/* 1 for an ASCII quote, 3 for a typographic quote, 0 otherwise. */
+static int edge_quote(const char *p) {
+  unsigned char a, b, c;
+  if (!p || !p[0]) return 0;
+  a = (unsigned char)p[0];
+  if (a == '"' || a == '\'' || a == '`') return 1;
+  if (!p[1] || !p[2]) return 0;
+  b = (unsigned char)p[1];
+  c = (unsigned char)p[2];
+  if (a == 0xE2 && b == 0x80 && (c == 0x9C || c == 0x9D || c == 0x98 || c == 0x99))
+    return 3;
+  return 0;
+}
+
 /* grok-build prompt_suggest::sanitize_suggestion */
 static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   char line[SUG_CAP];
@@ -446,14 +460,25 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   while (*raw && *raw != '\n' && *raw != '\r' && i + 1 < sizeof line)
     line[i++] = *raw++;
   line[i] = 0;
-  /* trim quotes */
+  /* Trim ASCII and typographic quotes. The words stay. */
   p = line;
-  while (*p == '"' || *p == '\'' || *p == '`' || (unsigned char)*p == 0xE2)
-    p++;
+  for (;;) {
+    int n = edge_quote(p);
+    if (!n) break;
+    p += n;
+  }
   i = strlen(p);
-  while (i > 0 && (p[i - 1] == '"' || p[i - 1] == '\'' || p[i - 1] == '`' ||
-                   p[i - 1] == ' ' || p[i - 1] == '.'))
-    i--;
+  for (;;) {
+    int n;
+    while (i > 0 && (p[i - 1] == '"' || p[i - 1] == '\'' || p[i - 1] == '`' ||
+                     p[i - 1] == ' ' || p[i - 1] == '.'))
+      i--;
+    if (i >= 3 && (n = edge_quote(p + i - 3)) == 3) {
+      i -= 3;
+      continue;
+    }
+    break;
+  }
   if (i >= cap) i = cap - 1;
   memcpy(out, p, i);
   out[i] = 0;

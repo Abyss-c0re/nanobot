@@ -998,6 +998,26 @@ int main(void) {
     }
   }
 
+  /* A typographic quote trims with the ASCII quotes. The words stay. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"\\u201cread the law and prove\\u201d\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a typographic quote stays off the suggestion");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"read the law and prove\",\"status\""),
+           "the stored suggestion keeps the law words");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"\\\"read the law and prove.\\\"\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "an ascii quote and a period stay off the suggestion");
+  free(js);
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
