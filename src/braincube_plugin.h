@@ -25,8 +25,6 @@ int ng_bc_auto_adapt(void);
 int ng_bc_continuous(void);
 int ng_bc_direct_io(void);
 int ng_bc_available(void);
-/* Copy an http://host:port URL into caller storage. Default is loopback port 8080. */
-void ng_bc_parse_rock_host(const char *url, char *host, size_t host_sz, int *port);
 
 /* Plugin identity (for VCS / about). */
 #define NG_BC_PLUGIN_VERSION "0.3.0-crimson-law"

@@ -88,7 +88,6 @@
 - **lean:** a lean host answers `GET /peer/v1/info` from the sealed session. The exit-node flag on that plate uses the same seal. Prompt, chat, jobs, and runs still refresh. CubalC board: `programs/lean_info.cubalc`.
 - **lean:** a lean worker whose log fd names a renamed file reopens the live path before the next line. The open file is not cut. The host still renames a full log to a `.1` sibling. CubalC board: `programs/log_live.cubalc`.
 - **lean:** a lean listener reopens that same fd before the next accept, so the worker inherits the live path. The reopen writes nothing. The open file is not cut. CubalC board: `programs/log_sync.cubalc`.
-- **status:** a status URL host is copied into the caller buffer before the connect. An empty URL stays loopback port 8080. A port outside 1..65535 stays 8080. CubalC board: `programs/rock_host.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

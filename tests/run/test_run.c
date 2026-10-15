@@ -1,7 +1,6 @@
 #include "agent.h"
 #include "api_share.h"
 #include "auth.h"
-#include "braincube_plugin.h"
 #include "hub_local.h"
 #include "runctl.h"
 #include "shell.h"
@@ -860,30 +859,8 @@ static void test_worker_title(void) {
   expect(strcmp(short_path, "nb") == 0, "a short argv0 stays");
 }
 
-static void test_rock_host_buffer(void) {
-  char host[128];
-  int port = 0;
-  ng_bc_parse_rock_host(NULL, host, sizeof host, &port);
-  expect(strcmp(host, "127.0.0.1") == 0 && port == 8080, "empty status host is loopback");
-  ng_bc_parse_rock_host("", host, sizeof host, &port);
-  expect(strcmp(host, "127.0.0.1") == 0 && port == 8080, "blank status host is loopback");
-  ng_bc_parse_rock_host("http://127.0.0.1:9090/api/v1/status", host, sizeof host, &port);
-  expect(strcmp(host, "127.0.0.1") == 0 && port == 9090, "status host keeps the port");
-  ng_bc_parse_rock_host("http://127.0.0.1/", host, sizeof host, &port);
-  expect(strcmp(host, "127.0.0.1") == 0 && port == 8080, "status host drops the path");
-  ng_bc_parse_rock_host("http://10.1.2.3", host, sizeof host, &port);
-  expect(strcmp(host, "10.1.2.3") == 0 && port == 8080, "status host without a port");
-  ng_bc_parse_rock_host("http://127.0.0.1:0", host, sizeof host, &port);
-  expect(strcmp(host, "127.0.0.1") == 0 && port == 8080, "a zero port stays 8080");
-  ng_bc_parse_rock_host("http://127.0.0.1:65536", host, sizeof host, &port);
-  expect(strcmp(host, "127.0.0.1") == 0 && port == 8080, "a port past 65535 stays 8080");
-  ng_bc_parse_rock_host("https://127.0.0.1:9", host, sizeof host, &port);
-  expect(strcmp(host, "127.0.0.1") == 0 && port == 8080, "a non-http url stays loopback");
-}
-
 int main(void) {
   test_cap_regular_fd();
-  test_rock_host_buffer();
   test_worker_title();
   test_lean_info_skips_refresh();
   test_lean_log_live_path();
