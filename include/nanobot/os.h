@@ -14,6 +14,8 @@ char *nb_read_file(const char *path, size_t *out_len);
 int nb_write_file(const char *path, const char *data, size_t len);
 /** Atomic write with mode 0600 (secrets). */
 int nb_write_secret_file(const char *path, const char *data, size_t len);
+/** Remove path.tmp.<pid> when that pid is dead. A live pid stays. */
+int nb_sweep_dead_temps(const char *path);
 
 char *nb_getenv_dup(const char *k);
 /** KEY=val lines; returns malloc'd value or NULL. */

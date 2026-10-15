@@ -3,8 +3,10 @@
 #include "runctl.h"
 #include "shell.h"
 #include "util.h"
+#include <nanobot/os.h>
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -726,7 +728,53 @@ static void test_worker_title(void) {
   expect(strcmp(short_path, "nb") == 0, "a short argv0 stays");
 }
 
+static int write_one(const char *path, const char *text) {
+  int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) return -1;
+  if (write(fd, text, strlen(text)) < 0) {
+    close(fd);
+    return -1;
+  }
+  close(fd);
+  return 0;
+}
+
+static void test_sweep_dead_temps(void) {
+  char dir[] = "/tmp/ng-sweep-XXXXXX";
+  char final[800], live[800], deadp[800], junk[800], bak[800];
+  long dead = 2147483646L;
+  int n;
+  if (mkdtemp(dir) == NULL) {
+    expect(0, "sweep dir");
+    return;
+  }
+  snprintf(final, sizeof final, "%s/session", dir);
+  snprintf(live, sizeof live, "%s/session.tmp.%d", dir, (int)getpid());
+  snprintf(deadp, sizeof deadp, "%s/session.tmp.%ld", dir, dead);
+  snprintf(junk, sizeof junk, "%s/session.tmp.nope", dir);
+  snprintf(bak, sizeof bak, "%s/session.bak", dir);
+  expect(write_one(final, "keep") == 0, "session file");
+  expect(write_one(live, "live") == 0, "live temp");
+  expect(write_one(deadp, "dead") == 0, "dead temp");
+  expect(write_one(junk, "junk") == 0, "non numeric temp");
+  expect(write_one(bak, "bak") == 0, "backup stays");
+  expect(kill((pid_t)dead, 0) != 0 && errno == ESRCH, "pid is dead");
+  n = nb_sweep_dead_temps(final);
+  expect(n == 1, "one dead temp is removed");
+  expect(access(deadp, F_OK) != 0, "dead temp is gone");
+  expect(access(live, F_OK) == 0, "live pid temp stays");
+  expect(access(junk, F_OK) == 0, "non numeric temp stays");
+  expect(access(bak, F_OK) == 0, "backup stays");
+  expect(access(final, F_OK) == 0, "session stays");
+  unlink(final);
+  unlink(live);
+  unlink(junk);
+  unlink(bak);
+  rmdir(dir);
+}
+
 int main(void) {
+  test_sweep_dead_temps();
   test_cap_regular_fd();
   test_worker_title();
   test_routes();
