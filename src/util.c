@@ -170,41 +170,8 @@ void ng_log_init(const char *path) {
   g_logf = fopen(g_logpath, "a");
 }
 
-/* A lean host caps the open log file. A renamed sibling is not the live path.
- * Prompt workers inherit the listener fd, so a rename would grow the old inode. */
-static void ng_log_prepare_file(void) {
-  struct stat st_fd, st_path;
-  int fd;
-  int stale;
-  if (!g_logpath[0]) return;
-  if (!g_logf) g_logf = fopen(g_logpath, "a");
-  if (!g_logf || !ng_is_lean()) return;
-  fd = fileno(g_logf);
-  if (fd < 0 || fstat(fd, &st_fd) != 0) return;
-  if (!S_ISREG(st_fd.st_mode)) return;
-  stale = stat(g_logpath, &st_path) != 0
-      || st_fd.st_dev != st_path.st_dev
-      || st_fd.st_ino != st_path.st_ino;
-  if (stale) {
-    fclose(g_logf);
-    g_logf = fopen(g_logpath, "a");
-    if (!g_logf) return;
-    fd = fileno(g_logf);
-    if (fd < 0 || fstat(fd, &st_fd) != 0) return;
-    if (!S_ISREG(st_fd.st_mode)) return;
-  }
-  if ((size_t)st_fd.st_size < ng_log_max()) return;
-  fflush(g_logf);
-  if (ftruncate(fd, 0) != 0) return;
-  if (lseek(fd, 0, SEEK_SET) < 0) return;
-  clearerr(g_logf);
-  fseek(g_logf, 0, SEEK_SET);
-}
-
 static void ng_log_maybe_rotate(void) {
   if (!g_logpath[0]) return;
-  /* Lean cuts the open file in ng_log_prepare_file. A rename stays on the host. */
-  if (ng_is_lean()) return;
   struct stat st;
   if (stat(g_logpath, &st) != 0) return;
   size_t maxb = ng_log_max();
@@ -245,7 +212,7 @@ void ng_log(const char *fmt, ...) {
     fprintf(stderr, "\n");
     va_end(ap);
   }
-  ng_log_prepare_file();
+  if (!g_logf) g_logf = fopen(g_logpath, "a");
   if (g_logf) {
     va_start(ap, fmt);
     fprintf(g_logf, "[%s] ", ts);
