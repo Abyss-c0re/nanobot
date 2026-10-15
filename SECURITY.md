@@ -14,7 +14,6 @@ treat a stolen peer token as full process privilege (often the same user that ru
 | peer token | required for mutating `/peer/v1/*` and non-loopback chat/settings |
 | constant-time compare | token check |
 | auto token | first start creates `$NANOBOT_HOME/peer_token` (mode 0600) |
-| request temps | `ng_mkstemp_home` leaves the file mode 0600 |
 | loopback | `127.0.0.1` may use some local APIs without token |
 | static files | path sanitization |
 | shell denylist | best-effort only — **not** a sandbox |

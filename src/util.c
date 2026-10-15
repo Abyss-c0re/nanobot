@@ -274,8 +274,7 @@ int ng_mkstemp_home(char *path, size_t path_sz, const char *prefix) {
     }
   }
   umask(old);
-  /* Owner-only. The body can hold a refresh. Shared-home seals stay on their own mode. */
-  if (fd >= 0) fchmod(fd, 0600);
+  if (fd >= 0) fchmod(fd, 0666);
   return fd;
 }
 
