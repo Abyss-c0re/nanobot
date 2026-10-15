@@ -106,27 +106,75 @@ static int pair_confirm_suggestion(ng_augogen *p) {
   return 0;
 }
 
-/* Fork a prompt job (same shape as POST /peer/v1/jobs). Never blocks HTTP. */
+/* Fork a prompt job (same shape as POST /peer/v1/jobs). Never blocks HTTP.
+ * A second prompt in the same second keeps its own file. The first stays. */
 static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
                           size_t id_n) {
   char jdir[640], mpath[700], rpath[700], pp[700], meta[768];
   char id[40];
   pid_t w;
-  int mn;
+  int mn = 0;
+  int attempt;
+  int reserved = 0;
+  long sec;
+  int pid;
   if (!prompt || !prompt[0]) return 0;
   snprintf(jdir, sizeof jdir, "%s/jobs", ng_workdir());
   mkdir(jdir, 0755);
-  snprintf(id, sizeof id, "agrun-%ld-%d", (long)time(NULL), (int)(getpid() & 0xFFFF));
-  snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, id);
+  sec = (long)time(NULL);
+  pid = (int)(getpid() & 0xFFFF);
+  for (attempt = 0; attempt < 16; attempt++) {
+    int kn, fd, spins;
+    if (attempt == 0)
+      kn = snprintf(id, sizeof id, "agrun-%ld-%d", sec, pid);
+    else
+      kn = snprintf(id, sizeof id, "agrun-%ld-%d-%d", sec, pid, attempt);
+    if (kn < 0 || (size_t)kn >= sizeof id) return 0;
+    if (snprintf(mpath, sizeof mpath, "%s/%s.json", jdir, id) >= (int)sizeof mpath)
+      return 0;
+    if (snprintf(pp, sizeof pp, "%s/%s.in", jdir, id) >= (int)sizeof pp) return 0;
+    mn = snprintf(meta, sizeof meta,
+                  "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+                  "\"action\":\"job\",\"id\":\"%s\",\"status\":\"queued\","
+                  "\"kind\":\"prompt\",\"via\":\"augogen_auto\"}\n",
+                  id);
+    if (mn < 0 || (size_t)mn >= sizeof meta) return 0;
+    fd = -1;
+    for (spins = 0; spins < 4; spins++) {
+      fd = open(mpath, O_CREAT | O_EXCL | O_WRONLY, 0666);
+      if (fd >= 0 || errno != EINTR) break;
+    }
+    if (fd < 0) {
+      if (errno == EEXIST) continue;
+      return 0;
+    }
+    {
+      size_t off = 0;
+      while (off < (size_t)mn) {
+        ssize_t wrote = write(fd, meta + off, (size_t)mn - off);
+        if (wrote < 0) {
+          if (errno == EINTR) continue;
+          close(fd);
+          unlink(mpath);
+          return 0;
+        }
+        off += (size_t)wrote;
+      }
+    }
+    if (close(fd) != 0) {
+      unlink(mpath);
+      return 0;
+    }
+    reserved = 1;
+    break;
+  }
+  if (!reserved) return 0;
+  if (ng_write_file(pp, prompt, strlen(prompt)) != 0) {
+    unlink(mpath);
+    unlink(pp);
+    return 0;
+  }
   snprintf(rpath, sizeof rpath, "%s/%s.out", jdir, id);
-  snprintf(pp, sizeof pp, "%s/%s.in", jdir, id);
-  mn = snprintf(meta, sizeof meta,
-                "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
-                "\"action\":\"job\",\"id\":\"%s\",\"status\":\"queued\","
-                "\"kind\":\"prompt\",\"via\":\"augogen_auto\"}\n",
-                id);
-  ng_write_file(mpath, meta, (size_t)mn);
-  ng_write_file(pp, prompt, strlen(prompt));
   w = fork();
   if (w == 0) {
     char *reply;

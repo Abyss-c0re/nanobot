@@ -1,0 +1,16 @@
+// A second prompt in the same second keeps its own file.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE job ROLE observer PROTON 1
+CUBE law ROLE nanobot PROTON 1
+
+PLUG job law
+
+IMPULSE job 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "job" UNITY DECIDE ENERGY

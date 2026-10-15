@@ -46,6 +46,56 @@ static double seconds_since(const struct timespec *a) {
   return (double)(b.tv_sec - a->tv_sec) + (double)(b.tv_nsec - a->tv_nsec) / 1e9;
 }
 
+static void job_id_of(const char *js, char *out, size_t n) {
+  const char *p;
+  size_t i = 0;
+  if (!out || n < 2) return;
+  out[0] = 0;
+  p = js ? strstr(js, "\"job_id\":\"") : NULL;
+  if (!p) return;
+  p += 10;
+  while (p[i] && p[i] != '"' && i + 1 < n) {
+    out[i] = p[i];
+    i++;
+  }
+  out[i] = 0;
+}
+
+/* agrun-<sec>-<pid> with an optional -N suffix share one second. */
+static int same_job_slot(const char *a, const char *b) {
+  const char *as, *bs, *ae, *be;
+  size_t an, bn;
+  if (!a || !b || strncmp(a, "agrun-", 6) != 0 || strncmp(b, "agrun-", 6) != 0)
+    return 0;
+  as = a + 6;
+  bs = b + 6;
+  ae = strchr(as, '-');
+  be = strchr(bs, '-');
+  if (!ae || !be) return 0;
+  if ((size_t)(ae - as) != (size_t)(be - bs) || memcmp(as, bs, (size_t)(ae - as)) != 0)
+    return 0;
+  as = ae + 1;
+  bs = be + 1;
+  ae = strchr(as, '-');
+  be = strchr(bs, '-');
+  an = ae ? (size_t)(ae - as) : strlen(as);
+  bn = be ? (size_t)(be - bs) : strlen(bs);
+  return an == bn && an > 0 && memcmp(as, bs, an) == 0;
+}
+
+static int file_eq(const char *path, const char *want) {
+  FILE *f;
+  char buf[80];
+  size_t n;
+  if (!path || !want) return 0;
+  f = fopen(path, "r");
+  if (!f) return 0;
+  n = fread(buf, 1, sizeof buf - 1, f);
+  fclose(f);
+  buf[n] = 0;
+  return strcmp(buf, want) == 0;
+}
+
 static int count_substr(const char *s, const char *n) {
   int c = 0;
   size_t L;
@@ -1079,6 +1129,40 @@ int main(void) {
     expect(pend && strstr(pend, "\"suggestion\":\"read the law and prove\",\"status\""),
            "the stored suggestion drops the torn byte and the quote");
     free(pend);
+  }
+
+  /* A second prompt in the same second keeps its own file. The first stays. */
+  {
+    int tries, got = 0;
+    setenv("NANOBOT_AUGOGEN_AUTO", "1", 1);
+    for (tries = 0; tries < 4 && !got; tries++) {
+      char ida[48], idb[48];
+      char *a = ng_augogen_handle(
+          NULL, "{\"action\":\"generate\",\"suggestion\":\"read the law and prove\"}");
+      char *b = ng_augogen_handle(
+          NULL, "{\"action\":\"generate\",\"suggestion\":\"rank concepts then act\"}");
+      job_id_of(a, ida, sizeof ida);
+      job_id_of(b, idb, sizeof idb);
+      if (same_job_slot(ida, idb)) {
+        char path[256];
+        got = 1;
+        expect(strcmp(ida, idb) != 0, "a second job in the same second keeps its own id");
+        snprintf(path, sizeof path, "%s/jobs/%s.in", home, ida);
+        expect(file_eq(path, "read the law and prove"), "the first prompt stays");
+        snprintf(path, sizeof path, "%s/jobs/%s.in", home, idb);
+        expect(file_eq(path, "rank concepts then act"), "the second prompt stays");
+      }
+      free(a);
+      free(b);
+    }
+    expect(got, "two auto jobs share a second");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    for (tries = 0; tries < 8; tries++) {
+      if (waitpid(-1, NULL, WNOHANG) < 0) break;
+    }
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a second job leaves the law rank");
   }
 
   if (g_fail) {
