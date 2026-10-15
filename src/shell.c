@@ -115,7 +115,7 @@ static int pattern_allowed(const char *pat) {
       char save = *p;
       *p = 0;
       char *t = trim_copy(start);
-      if (t && strcasecmp(t, pat) == 0) { free(t); free(env); if (save) *p = save; return 1; }
+      if (t && strcasecmp(t, pat) == 0) { free(t); free(env); return 1; }
       free(t);
       if (save) { *p = save; p++; }
     }

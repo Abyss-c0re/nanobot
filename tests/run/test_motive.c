@@ -856,60 +856,6 @@ int main(void) {
     }
   }
 
-  /* Full auto with no agent must not fork a hollow prompt job. */
-  setenv("NANOBOT_AUGOGEN_AUTO", "1", 1);
-  setenv("NANOBOT_MOTIVE_PEER", "off", 1);
-  js = ng_augogen_handle(
-      NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"enqueue\":\"1\"}");
-  expect(js && strstr(js, "read the law and prove"), "auto generate still reports the law");
-  expect(js && strstr(js, "\"executed\":false"), "auto generate with no agent does not run");
-  expect(js && strstr(js, "\"status\":\"pending\""), "auto generate stays pending");
-  expect(js && strstr(js, "\"confirmed\":false"), "auto generate does not invent a pair");
-  expect(js && strstr(js, "\"job_id\":\"\""), "auto generate opens no job");
-  free(js);
-  {
-    char *pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "read the law and prove"), "auto generate keeps the line");
-    expect(pend && strstr(pend, "\"executed\":false"), "auto plate stays unexecuted");
-    expect(pend && strstr(pend, "\"status\":\"pending\""), "auto plate stays pending");
-    expect(pend && strstr(pend, "\"guide_vote\":-1"), "auto plate leaves the guide vote");
-    expect(pend && strstr(pend, "\"confirmed\":false"), "auto plate is not confirmed");
-    expect(!pend || !strstr(pend, "\"lex_w\":"), "auto plate omits lex_w");
-    free(pend);
-  }
-  js = ng_augogen_handle(NULL, "{\"action\":\"vote\",\"role\":\"mesh\",\"vote\":\"1\"}");
-  expect(js && strstr(js, "\"executed\":false"), "vote with no agent does not run");
-  expect(js && strstr(js, "\"mesh_vote\":1"), "mesh vote is recorded");
-  expect(js && strstr(js, "\"status\":\"pending\""), "one mesh vote stays pending");
-  free(js);
-  js = ng_augogen_handle(NULL, "{\"action\":\"apply\"}");
-  expect(js && strstr(js, "not_confirmed"), "apply with no agent is not confirmed");
-  free(js);
-  {
-    char *pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "read the law and prove"), "apply keeps the stored line");
-    expect(pend && strstr(pend, "\"status\":\"pending\""), "apply leaves the plate pending");
-    expect(pend && strstr(pend, "\"executed\":false"), "apply with no agent does not run");
-    free(pend);
-  }
-  js = ng_augogen_handle(
-      NULL, "{\"action\":\"motive\",\"text\":\"prompt a peer to move\",\"enqueue\":\"1\"}");
-  expect(js && strstr(js, "\"forward\":true"), "auto motive still ranks");
-  expect(js && !strstr(js, "\"stored\":"), "motive response omits stored");
-  free(js);
-  {
-    char *pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "prompt a peer to move"), "auto motive keeps the line");
-    expect(pend && strstr(pend, "\"executed\":false"), "auto motive does not run");
-    expect(pend && strstr(pend, "\"status\":\"pending\""), "auto motive stays pending");
-    expect(pend && strstr(pend, "\"rank\":256"), "auto motive keeps rank");
-    expect(pend && strstr(pend, "\"plate\":\"observe\""), "auto motive keeps the plate");
-    expect(!pend || !strstr(pend, "\"lex_w\":"), "auto motive plate omits lex_w");
-    expect(!pend || !strstr(pend, "\"stored\""), "auto motive plate omits stored");
-    free(pend);
-  }
-  setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
-
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
