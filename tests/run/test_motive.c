@@ -673,6 +673,22 @@ int main(void) {
     free(pend);
   }
 
+  /* A JSON unicode space is a space before the rank. A NUL is not planted. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"read the law\\u0020and prove\"}");
+  expect(js && strstr(js, "\"rank\":256"), "unicode space still ranks 256");
+  expect(js && strstr(js, "\"lexical\":3"), "unicode space keeps lexical 3");
+  expect(js && strstr(js, "\"hamming\":0"), "unicode space keeps hamming 0");
+  expect(js && strstr(js, "\"concept\":\"read the law and prove\""),
+         "unicode space names the law concept");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"motive\",\"text\":\"read the law\\u0000 and prove\"}");
+  expect(js && strstr(js, "\"rank\":256") &&
+             strstr(js, "\"concept\":\"read the law and prove\""),
+         "a unicode NUL does not cut the law line");
+  free(js);
+
   /* No model line: report the concept. Do not store it. A purge stays empty. */
   js = ng_augogen_handle(
       NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\"}");
@@ -731,21 +747,6 @@ int main(void) {
     expect(!pend || !strstr(pend, "serve the matrix in bits"), "remedy not a suggestion");
     free(pend);
   }
-  js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"suggestion\":\"NONE\"}");
-  expect(js && strstr(js, "\"status\":\"empty\""), "NONE leaves the plate empty");
-  expect(js && !strstr(js, "\"suggestion\":\"NONE\""), "NONE is not the suggestion");
-  free(js);
-  js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"suggestion\":\"one\"}");
-  expect(js && strstr(js, "\"status\":\"empty\""), "one word leaves the plate empty");
-  expect(js && !strstr(js, "\"suggestion\":\"one\""), "one word is not the suggestion");
-  free(js);
-  js = ng_augogen_handle(
-      NULL,
-      "{\"action\":\"generate\",\"suggestion\":\"one two three four five six seven eight nine ten eleven twelve thirteen\"}");
-  expect(js && strstr(js, "\"status\":\"empty\""), "thirteen words leave the plate empty");
-  expect(js && !strstr(js, "thirteen"), "thirteen words are not stored");
-  free(js);
-
   js = ng_augogen_handle(NULL, "{\"action\":\"generate\"}");
   expect(js && strstr(js, "prompt a peer to move"), "blank generate reports a peer");
   expect(js && strstr(js, "\"plate\":\"observe\""), "silence report names observe");

@@ -12,6 +12,48 @@ static int utf8_seq_len(unsigned char c) {
   return 0; /* continuation or illegal lead */
 }
 
+/* Four hex digits, or 0. */
+static int json_hex4(const char *s, unsigned *out) {
+  unsigned v = 0;
+  int i;
+  if (!s || !out) return 0;
+  for (i = 0; i < 4; i++) {
+    unsigned char c = (unsigned char)s[i];
+    unsigned d;
+    if (c >= '0' && c <= '9') d = (unsigned)(c - '0');
+    else if (c >= 'a' && c <= 'f') d = (unsigned)(c - 'a' + 10);
+    else if (c >= 'A' && c <= 'F') d = (unsigned)(c - 'A' + 10);
+    else return 0;
+    v = (v << 4) | d;
+  }
+  *out = v;
+  return 1;
+}
+
+/* Write one scalar. The caller skips 0 and lone surrogates. */
+static int json_utf8_put(char *d, unsigned cp) {
+  if (cp < 0x80) {
+    d[0] = (char)cp;
+    return 1;
+  }
+  if (cp < 0x800) {
+    d[0] = (char)(0xC0 | (cp >> 6));
+    d[1] = (char)(0x80 | (cp & 0x3F));
+    return 2;
+  }
+  if (cp < 0x10000) {
+    d[0] = (char)(0xE0 | (cp >> 12));
+    d[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+    d[2] = (char)(0x80 | (cp & 0x3F));
+    return 3;
+  }
+  d[0] = (char)(0xF0 | (cp >> 18));
+  d[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+  d[2] = (char)(0x80 | ((cp >> 6) & 0x3F));
+  d[3] = (char)(0x80 | (cp & 0x3F));
+  return 4;
+}
+
 char *nb_json_escape(const char *s) {
   if (!s) s = "";
   /* Worst case: every byte becomes \\uXXXX (6). */
@@ -89,11 +131,39 @@ char *nb_json_get_string(const char *json, const char *key) {
   while (*p && *p != '"') {
     if (*p == '\\' && p[1]) {
       p++;
-      if (*p == 'n') *d++ = '\n';
-      else if (*p == 'r') *d++ = '\r';
-      else if (*p == 't') *d++ = '\t';
-      else *d++ = *p;
-      p++;
+      if (*p == 'n') {
+        *d++ = '\n';
+        p++;
+      } else if (*p == 'r') {
+        *d++ = '\r';
+        p++;
+      } else if (*p == 't') {
+        *d++ = '\t';
+        p++;
+      } else if (*p == 'u') {
+        unsigned cp = 0;
+        if (!json_hex4(p + 1, &cp)) {
+          *d++ = 'u';
+          p++;
+        } else {
+          p += 5;
+          if (cp >= 0xD800 && cp <= 0xDBFF && p[0] == '\\' && p[1] == 'u') {
+            unsigned lo = 0;
+            if (json_hex4(p + 2, &lo) && lo >= 0xDC00 && lo <= 0xDFFF) {
+              cp = 0x10000u + (((cp - 0xD800u) << 10) | (lo - 0xDC00u));
+              p += 6;
+            } else {
+              cp = 0;
+            }
+          } else if (cp >= 0xD800 && cp <= 0xDFFF) {
+            cp = 0;
+          }
+          if (cp != 0) d += json_utf8_put(d, cp);
+        }
+      } else {
+        *d++ = *p;
+        p++;
+      }
     } else {
       *d++ = *p++;
     }

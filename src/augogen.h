@@ -22,6 +22,7 @@
  * enqueue=1 stores that concept line and keeps the plate name,
  * rank, lexical, and hamming.
  * The motive JSON and the generate report name lex_w.
+ * A motive text decodes a JSON unicode escape before the rank.
  * A motive request may pass a quoted lex_w for that call only.
  * Generate keeps the process weight. The plate file omits lex_w.
  * When that motive request quoted lex_w, the one peer POST quotes it too.
