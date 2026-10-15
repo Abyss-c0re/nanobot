@@ -617,10 +617,11 @@ static int write_budget(int fd, const char *buf, size_t n) {
   return 1;
 }
 
-/* One configured peer, one POST, no retry. The body carries hop=1. */
-static void motive_nudge(const char *line) {
+/* One configured peer, one POST, no retry. The body carries hop=1.
+ * lex_w 0-255 is quoted on that POST. A negative value omits the field. */
+static void motive_nudge(const char *line, int lex_w) {
   char spec[96], token[96], host[16];
-  char body[192], req[512];
+  char body[224], req[512];
   char *esc = NULL;
   int port = 0, fd = -1, bl, rl;
   struct sockaddr_in sa;
@@ -632,9 +633,15 @@ static void motive_nudge(const char *line) {
   if (!peer_ipv4(spec, host, sizeof host, &port)) return;
   esc = ng_json_escape(line ? line : "");
   if (!esc) return;
-  bl = snprintf(body, sizeof body,
-                "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\",\"hop\":\"1\"}",
-                esc);
+  if (lex_w >= 0 && lex_w <= 255)
+    bl = snprintf(body, sizeof body,
+                  "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\","
+                  "\"hop\":\"1\",\"lex_w\":\"%d\"}",
+                  esc, lex_w);
+  else
+    bl = snprintf(body, sizeof body,
+                  "{\"action\":\"motive\",\"text\":\"%s\",\"enqueue\":\"1\",\"hop\":\"1\"}",
+                  esc);
   free(esc);
   if (bl < 0 || (size_t)bl >= sizeof body) return;
   rl = snprintf(req, sizeof req,
@@ -830,8 +837,9 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         if (p.confirmed && agent) try_auto_run(&p, agent);
       }
       save_plate(&p);
-      /* A hop already arrived from one peer. Do not POST it onward. */
-      if (!hop) motive_nudge(m.line);
+      /* A hop already arrived from one peer. Do not POST it onward.
+       * over is the quoted lex_w, or -1 when this call keeps the env weight. */
+      if (!hop) motive_nudge(m.line, over);
     }
     js = ng_motive_format(&m);
     free(text);

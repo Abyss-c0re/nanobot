@@ -334,6 +334,7 @@ int main(void) {
         expect(log && strstr(log, "hop-test"), "token header sent");
         expect(log && strstr(log, "\"hop\":\"1\""), "hop stops the chain");
         expect(log && strstr(log, "prompt a peer to move"), "stored line is the body");
+        expect(!log || !strstr(log, "\"lex_w\""), "unset weight stays off the hop");
         expect(!log || !strstr(log, "trick the cube"), "purge act is not posted");
         expect(!log || !strstr(log, "serve the matrix in bits"), "remedy is not posted");
         free(log);
@@ -446,6 +447,120 @@ int main(void) {
     setenv("NANOBOT_MOTIVE_PEER", "off", 1);
     unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
     unsetenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE");
+  }
+
+  /* A quoted lex_w rides the one hop. A missing value stays off that POST. */
+  {
+    int lfd, port = 0, st = 0, on = 1;
+    pid_t kid;
+    char url[64];
+    char path[] = "/tmp/nb-motive-hop-lex.log";
+    char *log = NULL;
+    struct sockaddr_in sa;
+    socklen_t sl = sizeof sa;
+    FILE *lf;
+    long sz;
+    unlink(path);
+    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    expect(lfd >= 0, "lex hop socket");
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    if (lfd >= 0 &&
+        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
+        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 8) == 0 &&
+        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
+      port = ntohs(sa.sin_port);
+      kid = fork();
+      expect(kid >= 0, "lex hop fork");
+      if (kid == 0) hop_sink(lfd, path);
+      if (kid > 0) {
+        char *pend;
+        close(lfd);
+        snprintf(url, sizeof url, "http://127.0.0.1:%d", port);
+        setenv("NANOBOT_MOTIVE_PEER", url, 1);
+        setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"motive\",\"text\":\"read the law and prove\","
+            "\"enqueue\":\"1\",\"lex_w\":\"1\"}");
+        expect(js && strstr(js, "\"rank\":67") && strstr(js, "\"lex_w\":1"),
+               "hop call still reports the quoted weight");
+        free(js);
+        pend = ng_augogen_pending_json();
+        expect(pend && strstr(pend, "\"plate\":\"observe\""), "lex hop stores the plate");
+        expect(pend && strstr(pend, "\"rank\":67"), "lex hop stores the weighed rank");
+        expect(!pend || !strstr(pend, "\"lex_w\":"), "lex hop plate omits lex_w");
+        free(pend);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"motive\",\"text\":\"prompt a peer to move\","
+            "\"enqueue\":\"1\",\"lex_w\":\"0\"}");
+        free(js);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"motive\",\"text\":\"prompt a peer to move\","
+            "\"enqueue\":\"1\",\"lex_w\":\"nope\"}");
+        free(js);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"motive\",\"text\":\"rank concepts then act\","
+            "\"enqueue\":\"1\",\"hop\":\"1\",\"lex_w\":\"1\"}");
+        expect(js && strstr(js, "\"forward\":true"), "weighted hop still stores");
+        free(js);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"motive\",\"text\":\"trick the cube\","
+            "\"enqueue\":\"1\",\"lex_w\":\"1\"}");
+        expect(js && strstr(js, "\"forward\":false"), "weighted purge stays closed");
+        free(js);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"generate\",\"transcript\":\"read the law and prove\","
+            "\"enqueue\":\"1\",\"lex_w\":\"1\"}");
+        free(js);
+        setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+        waitpid(kid, &st, 0);
+        lf = fopen(path, "r");
+        expect(lf != NULL, "lex hop log");
+        if (lf) {
+          fseek(lf, 0, SEEK_END);
+          sz = ftell(lf);
+          if (sz < 0) sz = 0;
+          fseek(lf, 0, SEEK_SET);
+          log = malloc((size_t)sz + 1);
+          if (log) {
+            size_t n = fread(log, 1, (size_t)sz, lf);
+            log[n] = 0;
+          }
+          fclose(lf);
+        }
+        expect(log && count_substr(log, "POST /peer/v1/augogen") == 3,
+               "quoted weight posts with the forward line");
+        expect(log && count_substr(log, "\"lex_w\":\"1\"") == 1,
+               "weight 1 is quoted once");
+        expect(log && count_substr(log, "\"lex_w\":\"0\"") == 1,
+               "weight 0 is quoted once");
+        expect(log && count_substr(log, "\"lex_w\"") == 2,
+               "a bad weight stays off the hop");
+        expect(log && strstr(log, "read the law and prove"), "weighed line is the body");
+        expect(!log || !strstr(log, "rank concepts then act"), "hop does not post the weight");
+        expect(!log || !strstr(log, "trick the cube"), "weighed purge is not posted");
+        pend = ng_augogen_pending_json();
+        expect(pend && strstr(pend, "\"plate\":\"observe\""), "later store keeps the plate");
+        expect(!pend || !strstr(pend, "\"lex_w\":"), "later store omits lex_w");
+        free(pend);
+        free(log);
+        unlink(path);
+      }
+    } else {
+      expect(0, "lex hop bind");
+      if (lfd >= 0) close(lfd);
+    }
+    setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+    unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
   }
 
   /* No model line: report the concept. Do not store it. A purge stays empty. */

@@ -1,0 +1,16 @@
+// A quoted lexical weight rides the one hop.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hop ROLE nanobot  PROTON 1
+CUBE lex ROLE observer PROTON 1
+
+PLUG hop lex
+
+IMPULSE hop 1
+IMPULSE lex 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY lex
+DECIDE lex
+ASSERT CUBES >= 2
+PRINT "lexhop" UNITY DECIDE ENERGY
