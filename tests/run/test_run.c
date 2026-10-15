@@ -660,6 +660,49 @@ static void test_tail_ping(void) {
   free(id);
 }
 
+static void test_cap_regular_fd(void) {
+  char path[] = "/tmp/ng-cap-XXXXXX";
+  char path_app[] = "/tmp/ng-app-XXXXXX";
+  int fd, afd, p[2];
+  struct stat st;
+  char b[4];
+  fd = mkstemp(path);
+  expect(fd >= 0, "cap fd");
+  if (fd < 0) return;
+  expect(write(fd, "0123456789", 10) == 10, "cap write");
+  expect(ng_cap_regular_fd(fd, 100) == 0, "under cap stays");
+  expect(write(fd, "abcdefghij", 10) == 10, "second write");
+  expect(ng_cap_regular_fd(fd, 10) == 1, "at cap the file is cut");
+  expect(fstat(fd, &st) == 0 && st.st_size == 0, "cut file is empty");
+  expect(write(fd, "Z", 1) == 1, "write after cut");
+  expect(lseek(fd, 0, SEEK_SET) == 0, "rewind");
+  memset(b, 0, sizeof b);
+  expect(read(fd, b, 3) == 1 && b[0] == 'Z', "new byte is at the start");
+  close(fd);
+  unlink(path);
+  afd = mkstemp(path_app);
+  expect(afd >= 0, "append template");
+  if (afd >= 0) {
+    expect(write(afd, "0123456789abcdefghij", 20) == 20, "append seed");
+    close(afd);
+    afd = open(path_app, O_WRONLY | O_APPEND);
+    expect(afd >= 0, "append fd");
+    expect(ng_cap_regular_fd(afd, 10) == 1, "append file is cut");
+    expect(write(afd, "Q", 1) == 1, "append write after cut");
+    close(afd);
+    afd = open(path_app, O_RDONLY);
+    memset(b, 0, sizeof b);
+    expect(afd >= 0 && read(afd, b, 3) == 1 && b[0] == 'Q',
+           "append write starts at the front");
+    if (afd >= 0) close(afd);
+    unlink(path_app);
+  }
+  expect(pipe(p) == 0, "pipe");
+  expect(ng_cap_regular_fd(p[1], 1) == 0, "a pipe is not cut");
+  close(p[0]);
+  close(p[1]);
+}
+
 static void test_worker_title(void) {
   char path[] = "/tmp/bin/nanobot";
   char home_flag[] = "--home";
@@ -684,6 +727,7 @@ static void test_worker_title(void) {
 }
 
 int main(void) {
+  test_cap_regular_fd();
   test_worker_title();
   test_routes();
   test_control();

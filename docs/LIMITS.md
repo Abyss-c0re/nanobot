@@ -15,6 +15,8 @@ Auto-on when `MemTotal < 400MB`, or force `NANOBOT_LEAN=1`.
 
 An accepted request worker retitles its command line. The listener command line stays. The worker is not a second listener.
 
+On a lean host, a regular stderr file at the lean log cap is cut to empty before the next line. A terminal or a pipe stays. The rotated log file is unchanged.
+
 ## Run caps
 
 Per-run model, effort, completion cap, context estimate, and compaction are in [ASYNC.md](ASYNC.md). Process defaults:

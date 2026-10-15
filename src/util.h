@@ -49,6 +49,8 @@ char *ng_resources_json(void);
 void ng_set_proc_argv(char **argv);
 /* Request child only. argv0 becomes a worker title. The listener argv stays. */
 void ng_mark_http_worker(void);
+/* A regular file at or past cap is cut to empty. A tty or pipe stays. */
+int ng_cap_regular_fd(int fd, size_t cap);
 
 char *ng_read_file(const char *path, size_t *out_len);
 int ng_write_file(const char *path, const char *data, size_t len);

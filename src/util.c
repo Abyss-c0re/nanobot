@@ -186,6 +186,17 @@ static void ng_log_maybe_rotate(void) {
 void ng_log_set_stderr(int enabled) { g_log_stderr = enabled ? 1 : 0; }
 int ng_log_stderr_enabled(void) { return g_log_stderr; }
 
+int ng_cap_regular_fd(int fd, size_t cap) {
+  struct stat st;
+  if (fd < 0 || cap == 0) return 0;
+  if (fstat(fd, &st) != 0) return 0;
+  if (!S_ISREG(st.st_mode)) return 0;
+  if ((size_t)st.st_size < cap) return 0;
+  if (ftruncate(fd, 0) != 0) return 0;
+  if (lseek(fd, 0, SEEK_SET) < 0) return 0;
+  return 1;
+}
+
 void ng_log(const char *fmt, ...) {
   time_t t = time(NULL);
   struct tm tm;
@@ -194,6 +205,7 @@ void ng_log(const char *fmt, ...) {
   strftime(ts, sizeof ts, "%H:%M:%S", &tm);
   va_list ap;
   if (g_log_stderr) {
+    if (ng_is_lean()) ng_cap_regular_fd(STDERR_FILENO, ng_log_max());
     va_start(ap, fmt);
     fprintf(stderr, "[%s] ", ts);
     vfprintf(stderr, fmt, ap);
