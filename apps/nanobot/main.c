@@ -458,6 +458,7 @@ static void print_auth_json(const ng_session *s, const ng_agent_cfg *agent,
 }
 
 int main(int argc, char **argv) {
+  ng_set_proc_argv(argv);
   /* port < 0 means HTTP peer not requested (CLI-first product path). */
   int port = -1;
   int want_peer = 0;

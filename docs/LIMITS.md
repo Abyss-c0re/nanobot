@@ -13,6 +13,8 @@ Auto-on when `MemTotal < 400MB`, or force `NANOBOT_LEAN=1`.
 | Shell capture | 64 KB | **12 KB** |
 | Log rotate | 256 KB | **24 KB** |
 
+An accepted request worker retitles its command line. The listener command line stays. The worker is not a second listener.
+
 ## Run caps
 
 Per-run model, effort, completion cap, context estimate, and compaction are in [ASYNC.md](ASYNC.md). Process defaults:

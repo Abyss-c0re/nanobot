@@ -16,6 +16,21 @@
 static char g_logpath[576] = "/tmp/nanobot/nanobot.log";
 static FILE *g_logf;
 static int g_log_stderr = 1;
+static char **g_proc_argv;
+
+void ng_set_proc_argv(char **argv) { g_proc_argv = argv; }
+
+/* The rest of argv0 becomes spaces so the title is the whole argument. */
+void ng_mark_http_worker(void) {
+  char *a;
+  size_t n;
+  if (!g_proc_argv || !g_proc_argv[0]) return;
+  a = g_proc_argv[0];
+  n = strlen(a);
+  if (n < 7) return;
+  memset(a, ' ', n);
+  memcpy(a, "nb-http", 7);
+}
 
 void ng_set_workdir(const char *dir) {
   nb_set_workdir(dir);

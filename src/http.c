@@ -9227,6 +9227,7 @@ int ng_http_serve(ng_http_cfg *cfg) {
       continue;
     }
     if (pid == 0) {
+      ng_mark_http_worker();
       close(sfd);
       signal(SIGCHLD, SIG_DFL);
       handle_client(cfd, cfg);

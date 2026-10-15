@@ -660,7 +660,31 @@ static void test_tail_ping(void) {
   free(id);
 }
 
+static void test_worker_title(void) {
+  char path[] = "/tmp/bin/nanobot";
+  char home_flag[] = "--home";
+  char home_val[] = "/tmp/nanobot";
+  char port_flag[] = "--port";
+  char port_val[] = "8787";
+  char *av[] = {path, home_flag, home_val, port_flag, port_val, NULL};
+  char joined[160];
+  char short_path[] = "nb";
+  char *short_av[] = {short_path, NULL};
+  ng_set_proc_argv(av);
+  ng_mark_http_worker();
+  snprintf(joined, sizeof joined, "%s %s %s %s %s", path, home_flag, home_val,
+           port_flag, port_val);
+  expect(strncmp(path, "nb-http", 7) == 0, "worker title is nb-http");
+  expect(strstr(joined, "nanobot --home") == NULL, "worker line is not a second listener");
+  expect(strstr(joined, "/bin/nanobot ") == NULL, "worker line drops the listener path");
+  expect(strcmp(home_flag, "--home") == 0, "listener flags stay on the other arguments");
+  ng_set_proc_argv(short_av);
+  ng_mark_http_worker();
+  expect(strcmp(short_path, "nb") == 0, "a short argv0 stays");
+}
+
 int main(void) {
+  test_worker_title();
   test_routes();
   test_control();
   test_long_record();
