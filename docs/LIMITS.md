@@ -21,6 +21,8 @@ On a lean host, `GET /peer/v1/info` reports the sealed session. The exit-node fl
 
 On a lean host, a worker whose log fd names a renamed file reopens the live path before the next line. The listener reopens that fd before the next accept, so the worker inherits the live path. The open file is not cut. The host still renames a full log to a `.1` sibling.
 
+The listener counts a worker before the fork, while the child-exit signal is held, so a worker that exits first still occupies one slot. That slot is released when the worker is reaped.
+
 ## Run caps
 
 Per-run model, effort, completion cap, context estimate, and compaction are in [ASYNC.md](ASYNC.md). Process defaults:

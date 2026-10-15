@@ -1,6 +1,7 @@
 #include "agent.h"
 #include "api_share.h"
 #include "auth.h"
+#include "http.h"
 #include "hub_local.h"
 #include "runctl.h"
 #include "shell.h"
@@ -859,9 +860,90 @@ static void test_worker_title(void) {
   expect(strcmp(short_path, "nb") == 0, "a short argv0 stays");
 }
 
+static int proc_is_zombie(pid_t pid) {
+  char path[64];
+  char buf[256];
+  char *r;
+  FILE *f;
+  snprintf(path, sizeof path, "/proc/%d/stat", (int)pid);
+  f = fopen(path, "r");
+  if (!f) return 0;
+  if (!fgets(buf, sizeof buf, f)) {
+    fclose(f);
+    return 0;
+  }
+  fclose(f);
+  r = strrchr(buf, ')');
+  return r && r[1] == ' ' && r[2] == 'Z';
+}
+
+static void test_on_worker_exit(int s) {
+  int st;
+  (void)s;
+  while (waitpid(-1, &st, WNOHANG) > 0) ng_http_worker_reaped();
+}
+
+static void test_worker_slot_before_exit(void) {
+  struct sigaction sa, old;
+  pid_t pid;
+  int i, z = 0;
+  ng_http_worker_slots_reset();
+  ng_http_arm_worker();
+  ng_http_worker_fork_failed();
+  expect(ng_http_worker_slots() == 0, "a failed fork releases the slot");
+
+  memset(&sa, 0, sizeof sa);
+  sa.sa_handler = test_on_worker_exit;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  if (sigaction(SIGCHLD, &sa, &old) != 0) {
+    expect(0, "worker slot handler installs");
+    return;
+  }
+  ng_http_worker_slots_reset();
+  ng_http_arm_worker();
+  pid = fork();
+  if (pid < 0) {
+    ng_http_worker_fork_failed();
+    sigaction(SIGCHLD, &old, NULL);
+    expect(0, "worker slot fork");
+    return;
+  }
+  if (pid == 0) {
+    signal(SIGCHLD, SIG_DFL);
+    ng_http_worker_child();
+    _exit(0);
+  }
+  for (i = 0; i < 200; i++) {
+    if (proc_is_zombie(pid)) {
+      z = 1;
+      break;
+    }
+    usleep(1000);
+  }
+  if (!z) {
+    int st = 0;
+    ng_http_worker_parent();
+    waitpid(pid, &st, 0);
+    if (ng_http_worker_slots() > 0) ng_http_worker_reaped();
+    sigaction(SIGCHLD, &old, NULL);
+    expect(0, "the worker exited while the slot is held");
+    return;
+  }
+  expect(ng_http_worker_slots() == 1, "a fast worker still holds one slot");
+  ng_http_worker_parent();
+  expect(ng_http_worker_slots() == 0, "reap releases that slot");
+  {
+    int st = 0;
+    waitpid(pid, &st, WNOHANG);
+  }
+  sigaction(SIGCHLD, &old, NULL);
+}
+
 int main(void) {
   test_cap_regular_fd();
   test_worker_title();
+  test_worker_slot_before_exit();
   test_lean_info_skips_refresh();
   test_lean_log_live_path();
   test_routes();

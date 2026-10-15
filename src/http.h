@@ -22,4 +22,13 @@ struct ng_http_cfg {
 
 int ng_http_serve(ng_http_cfg *cfg);
 
+/* The accept loop counts a worker before fork. A failed fork releases it. */
+void ng_http_worker_slots_reset(void);
+int ng_http_worker_slots(void);
+void ng_http_worker_reaped(void);
+void ng_http_arm_worker(void);
+void ng_http_worker_fork_failed(void);
+void ng_http_worker_parent(void);
+void ng_http_worker_child(void);
+
 #endif

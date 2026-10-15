@@ -9073,13 +9073,45 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
 
 /* sig_atomic_t: mutated from SIGCHLD handler and serve loop. */
 static volatile sig_atomic_t g_live_children = 0;
+static sigset_t g_chld_hold;
+
+void ng_http_worker_slots_reset(void) { g_live_children = 0; }
+
+int ng_http_worker_slots(void) { return (int)g_live_children; }
+
+void ng_http_worker_reaped(void) {
+  if (g_live_children > 0) g_live_children--;
+}
+
+/* Count the worker before fork. SIGCHLD stays blocked until the parent
+ * records the slot, so a fast exit still occupies one slot. */
+void ng_http_arm_worker(void) {
+  sigset_t block;
+  sigemptyset(&block);
+  sigaddset(&block, SIGCHLD);
+  sigprocmask(SIG_BLOCK, &block, &g_chld_hold);
+  g_live_children++;
+}
+
+void ng_http_worker_fork_failed(void) {
+  ng_http_worker_reaped();
+  sigprocmask(SIG_SETMASK, &g_chld_hold, NULL);
+}
+
+void ng_http_worker_parent(void) {
+  sigprocmask(SIG_SETMASK, &g_chld_hold, NULL);
+}
+
+void ng_http_worker_child(void) {
+  g_live_children = 0;
+  sigprocmask(SIG_SETMASK, &g_chld_hold, NULL);
+}
 
 static void reap_children(void) {
   int st;
   pid_t p;
-  while ((p = waitpid(-1, &st, WNOHANG)) > 0) {
-    if (g_live_children > 0) g_live_children--;
-  }
+  while ((p = waitpid(-1, &st, WNOHANG)) > 0)
+    ng_http_worker_reaped();
 }
 
 static void on_sigchld(int s) {
@@ -9089,9 +9121,8 @@ static void on_sigchld(int s) {
    * the parent is blocked in session/env reload between accepts. */
   int st;
   pid_t p;
-  while ((p = waitpid(-1, &st, WNOHANG)) > 0) {
-    if (g_live_children > 0) g_live_children--;
-  }
+  while ((p = waitpid(-1, &st, WNOHANG)) > 0)
+    ng_http_worker_reaped();
 }
 
 int ng_http_serve(ng_http_cfg *cfg) {
@@ -9224,21 +9255,25 @@ int ng_http_serve(ng_http_cfg *cfg) {
     /* The worker inherits this fd. Reopen a renamed lean log first. */
     ng_log_sync_live();
 
+    /* The slot is taken before fork. A worker that exits first still counts. */
+    ng_http_arm_worker();
     pid_t pid = fork();
     if (pid < 0) {
+      ng_http_worker_fork_failed();
       ng_log("fork: %s — handling inline", strerror(errno));
       handle_client(cfd, cfg);
       continue;
     }
     if (pid == 0) {
+      signal(SIGCHLD, SIG_DFL);
+      ng_http_worker_child();
       ng_mark_http_worker();
       close(sfd);
-      signal(SIGCHLD, SIG_DFL);
       handle_client(cfd, cfg);
       _exit(0);
     }
+    ng_http_worker_parent();
     close(cfd);
-    g_live_children++;
     reap_children();
     } /* while !stop */
   } /* last_sub_reap scope */
