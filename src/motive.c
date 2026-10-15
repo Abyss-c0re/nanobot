@@ -262,6 +262,39 @@ static void copy_cap(char *dst, size_t cap, const char *src) {
   dst[n] = 0;
 }
 
+/* One optional near line from NANOBOT_MOTIVE_NEAR. Unset, empty, outside
+ * 2-12 words, or a non-forward plate stays off the rank. The caller adopts
+ * it only when its score is strictly higher than the catalog. */
+static int near_concept(const char *norm, uint64_t qh, int lw, char *out, size_t cap,
+                        int *lex, int *ham, int *score) {
+  char mem[NORM_CAP];
+  const char *e;
+  int words = 0, sp = 1;
+  if (!out || cap < 2 || !lex || !ham || !score) return 0;
+  out[0] = 0;
+  e = getenv("NANOBOT_MOTIVE_NEAR");
+  if (!e || !e[0]) return 0;
+  norm_text(e, mem, sizeof mem);
+  for (e = mem; *e; e++) {
+    if (*e == ' ') {
+      sp = 1;
+      continue;
+    }
+    if (sp) {
+      words++;
+      sp = 0;
+    }
+  }
+  if (words < 2 || words > 12) return 0;
+  if (strlen(mem) >= cap) return 0;
+  if (!plate_forward(plate_of(mem))) return 0;
+  *lex = lexical_hits(norm, mem);
+  *ham = ham64(qh, simhash_text(mem));
+  *score = *lex * lw + (64 - *ham);
+  copy_cap(out, cap, mem);
+  return 1;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
@@ -296,6 +329,19 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
       best_score = score;
       best_lex = lex;
       best_ham = h;
+    }
+  }
+  if (out->forward) {
+    char near[NG_MOTIVE_TEXT];
+    int nlex = 0, nh = 64, nscore = -1;
+    if (near_concept(norm, qh, lw, near, sizeof near, &nlex, &nh, &nscore) &&
+        nscore > best_score) {
+      out->rank = nscore;
+      out->lexical = nlex;
+      out->hamming = nh;
+      copy_cap(out->concept, sizeof out->concept, near);
+      copy_cap(out->line, sizeof out->line, near);
+      return;
     }
   }
   out->rank = best_score < 0 ? 0 : best_score;
