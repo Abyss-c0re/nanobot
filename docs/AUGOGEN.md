@@ -40,7 +40,7 @@ passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
 When `generate` has no model line, the same ranker reports a forward concept in the response, plus the plate name, `rank`, `lexical`, and `hamming`.
 `enqueue` `1` stores that concept line and keeps the plate name, `rank`, `lexical`, and `hamming` on the plate. Generate does not POST. Without `enqueue` the plate stays empty and omits those fields.
 `NANOBOT_MOTIVE_LEX_W` sets the lexical weight from 0 to 255. Unset stays 64, so an exact concept still ranks 256. A value outside that range stays 64. The weight does not open a purge or protect plate. The motive JSON and a generate report name that weight as `lex_w`. The plate file omits `lex_w`. A motive request may pass a quoted `lex_w` from 0 to 255 for that call only. A missing or bad value keeps the process weight. Generate keeps the process weight.
-`NANOBOT_MOTIVE_NEAR` may name one line of 2 to 12 words. On a forward plate, a strictly higher hybrid score replaces the catalog concept and the stored line. A tie keeps the catalog. One word, thirteen words, an empty value, and a non-forward line stay off the rank. A purge stays closed. The motive request cannot supply that line. Generate uses the process value. The plate file still omits `lex_w`.
+An act that fits in the 192-byte norm is ranked as that window. A longer act keeps a 192-byte head and a 192-byte tail. The earlier cascade plate of those two windows is the plate, so a purge at either end stays closed. Concept rank uses the tail. The catalog stays eight concepts. Generate does not POST. The plate file still omits `lex_w`.
 A blank transcript reports `prompt a peer to move` with plate `observe` and rank 0. A purge or protect transcript stays empty. The act text is not stored.
 
 When a motive store happens and the request has no `hop`, one optional IPv4 peer
@@ -58,7 +58,7 @@ quotes the ranked plate name, `lexical`, `hamming`, and `concept`. A quoted plat
 A missing value keeps the store. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, and `programs/motive_near.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, `programs/motive_plate.cubalc`, `programs/motive_score.cubalc`, `programs/motive_weight.cubalc`, `programs/motive_lex.cubalc`, `programs/motive_hop_lex.cubalc`, `programs/motive_hop_plate.cubalc`, `programs/motive_hop_score.cubalc`, `programs/motive_hop_concept.cubalc`, and `programs/motive_tail.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode

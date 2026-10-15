@@ -856,157 +856,81 @@ int main(void) {
     }
   }
 
-  /* A near line outranks the eight only when its score is higher. */
-  unsetenv("NANOBOT_MOTIVE_NEAR");
-  ng_motive_rank("read the law and prove", &m);
-  expect(m.rank == 256 && strcmp(m.concept, "read the law and prove") == 0,
-         "unset near keeps the law");
-  setenv("NANOBOT_MOTIVE_NEAR", "read the law and prove", 1);
-  ng_motive_rank("read the law and prove", &m);
-  expect(m.rank == 256 && strcmp(m.concept, "read the law and prove") == 0,
-         "a tied near keeps the catalog");
-  setenv("NANOBOT_MOTIVE_NEAR", "bus", 1);
-  ng_motive_rank("read the law and prove", &m);
-  expect(m.rank == 256 && strcmp(m.concept, "read the law and prove") == 0,
-         "a one-word near stays off");
-  setenv("NANOBOT_MOTIVE_NEAR",
-         "one two three four five six seven eight nine ten eleven twelve thirteen", 1);
-  ng_motive_rank("read the law and prove", &m);
-  expect(strcmp(m.concept, "read the law and prove") == 0, "a long near stays off");
-  setenv("NANOBOT_MOTIVE_NEAR", "fold the peer bus now", 1);
-  ng_motive_rank("fold the peer bus now", &m);
-  expect(m.plate == NG_PLATE_OBSERVE && m.forward, "near line stays observe");
-  expect(strcmp(m.concept, "fold the peer bus now") == 0, "near line becomes the concept");
-  expect(strcmp(m.line, "fold the peer bus now") == 0, "near line becomes the prompt");
-  expect(m.rank == 320 && m.lexical == 4 && m.hamming == 0 && m.lex_w == 64,
-         "near exact rank");
-  ng_motive_rank_w("fold the peer bus now", &m, 1);
-  expect(m.rank == 68 && m.lex_w == 1 && m.lexical == 4 && m.hamming == 0,
-         "near rank uses the call weight");
-  ng_motive_rank("", &m);
-  expect(m.rank == 0 && strcmp(m.line, "prompt a peer to move") == 0,
-         "silence ignores the near line");
-  ng_motive_rank("trick the cube", &m);
-  expect(m.plate == NG_PLATE_PURGE && !m.forward, "near leaves a purge closed");
-  expect(strcmp(m.line, "serve the matrix in bits") == 0, "near leaves the remedy");
-  setenv("NANOBOT_MOTIVE_NEAR", "trick the cube please now", 1);
-  ng_motive_rank("fold the peer bus now", &m);
-  expect(m.plate == NG_PLATE_OBSERVE && m.forward, "a purge near stays off the plate");
-  expect(strcmp(m.concept, "trick the cube please now") != 0, "a purge near is not the concept");
-  js = ng_motive_json("fold the peer bus now");
-  expect(js && strstr(js, "\"concepts\":8"), "near keeps eight concepts");
-  free(js);
-  setenv("NANOBOT_MOTIVE_NEAR", "fold the peer bus now", 1);
+  /* A long act keeps a head window and a tail window. */
   {
-    int lfd, port = 0, st = 0, on = 1;
-    pid_t kid;
-    char url[64];
-    char path[] = "/tmp/nb-motive-near.log";
-    char *log = NULL;
-    struct sockaddr_in sa;
-    socklen_t sl = sizeof sa;
-    FILE *lf;
-    long sz;
-    unlink(path);
-    lfd = socket(AF_INET, SOCK_STREAM, 0);
-    expect(lfd >= 0, "near hop socket");
-    memset(&sa, 0, sizeof sa);
-    sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    sa.sin_port = 0;
-    if (lfd >= 0 &&
-        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
-        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 4) == 0 &&
-        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
-      port = ntohs(sa.sin_port);
-      kid = fork();
-      expect(kid >= 0, "near hop fork");
-      if (kid == 0) hop_sink(lfd, path);
-      if (kid > 0) {
-        char *pend;
-        close(lfd);
-        snprintf(url, sizeof url, "http://127.0.0.1:%d", port);
-        setenv("NANOBOT_MOTIVE_PEER", url, 1);
-        setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
-        js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
-        free(js);
-        js = ng_augogen_handle(
-            NULL, "{\"action\":\"motive\",\"text\":\"fold the peer bus now\",\"enqueue\":\"1\"}");
-        expect(js && strstr(js, "\"rank\":320") && strstr(js, "\"lexical\":4"),
-               "near hop reports the near rank");
-        expect(js && strstr(js, "\"concept\":\"fold the peer bus now\""),
-               "near hop reports the near concept");
-        free(js);
-        pend = ng_augogen_pending_json();
-        expect(pend && strstr(pend, "fold the peer bus now"), "near line is stored");
-        expect(pend && strstr(pend, "\"rank\":320"), "stored near keeps the rank");
-        expect(pend && strstr(pend, "\"plate\":\"observe\""), "stored near keeps the plate");
-        expect(!pend || !strstr(pend, "\"lex_w\":"), "stored near omits lex_w");
-        free(pend);
-        js = ng_augogen_handle(
-            NULL,
-            "{\"action\":\"motive\",\"text\":\"read the law and prove\",\"enqueue\":\"1\","
-            "\"concept\":\"fold the peer bus now\"}");
-        expect(js && strstr(js, "\"concept\":\"read the law and prove\""),
-               "a disagreed near concept still reports the law");
-        free(js);
-        pend = ng_augogen_pending_json();
-        expect(pend && strstr(pend, "fold the peer bus now"),
-               "a disagreed concept leaves the near line");
-        free(pend);
-        js = ng_augogen_handle(
-            NULL,
-            "{\"action\":\"motive\",\"text\":\"fold the peer bus now\","
-            "\"enqueue\":\"1\",\"hop\":\"1\"}");
-        free(js);
-        js = ng_augogen_handle(
-            NULL, "{\"action\":\"motive\",\"text\":\"trick the cube\",\"enqueue\":\"1\"}");
-        expect(js && strstr(js, "\"forward\":false"), "near purge stays closed");
-        free(js);
-        js = ng_augogen_handle(
-            NULL,
-            "{\"action\":\"generate\",\"transcript\":\"fold the peer bus now\",\"enqueue\":\"1\"}");
-        expect(js && strstr(js, "\"stored\":true"), "generate stores the near line");
-        expect(js && strstr(js, "\"lex_w\":64"), "generate near report names lex_w");
-        free(js);
-        setenv("NANOBOT_MOTIVE_PEER", "off", 1);
-        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
-        waitpid(kid, &st, 0);
-        lf = fopen(path, "r");
-        expect(lf != NULL, "near hop log");
-        if (lf) {
-          fseek(lf, 0, SEEK_END);
-          sz = ftell(lf);
-          if (sz < 0) sz = 0;
-          fseek(lf, 0, SEEK_SET);
-          log = malloc((size_t)sz + 1);
-          if (log) {
-            size_t n = fread(log, 1, (size_t)sz, lf);
-            log[n] = 0;
-          }
-          fclose(lf);
-        }
-        expect(log && count_substr(log, "POST /peer/v1/augogen") == 1, "near posts once");
-        expect(log && strstr(log, "\"concept\":\"fold the peer bus now\""),
-               "near hop quotes the concept");
-        expect(log && strstr(log, "\"lexical\":\"4\"") && strstr(log, "\"hamming\":\"0\""),
-               "near hop quotes the score");
-        expect(log && strstr(log, "\"plate\":\"observe\""), "near hop quotes the plate");
-        expect(!log || !strstr(log, "\"lex_w\""), "unset weight stays off the near hop");
-        expect(!log || !strstr(log, "read the law and prove"), "a disagreed concept does not post");
-        expect(!log || !strstr(log, "trick the cube"), "near purge is not posted");
-        free(log);
-        unlink(path);
+    char buf[640];
+    char *pend;
+    size_t n = 0;
+    int k;
+    for (k = 0; k < 40; k++) {
+      memcpy(buf + n, "alpha ", 6);
+      n += 6;
+    }
+    memcpy(buf + n, "trick the cube", 14);
+    buf[n + 14] = 0;
+    ng_motive_rank(buf, &m);
+    expect(m.plate == NG_PLATE_PURGE && !m.forward, "a trailing purge stays closed");
+    expect(strcmp(m.line, "serve the matrix in bits") == 0, "a trailing purge keeps the remedy");
+    n = 0;
+    memcpy(buf, "trick the cube ", 15);
+    n = 15;
+    for (k = 0; k < 40; k++) {
+      memcpy(buf + n, "alpha ", 6);
+      n += 6;
+    }
+    buf[n] = 0;
+    ng_motive_rank(buf, &m);
+    expect(m.plate == NG_PLATE_PURGE && !m.forward, "a leading purge stays closed");
+    n = 0;
+    memcpy(buf, "wipe the desk ", 14);
+    n = 14;
+    for (k = 0; k < 40; k++) {
+      memcpy(buf + n, "alpha ", 6);
+      n += 6;
+    }
+    memcpy(buf + n, "read the law and prove", 22);
+    buf[n + 22] = 0;
+    ng_motive_rank(buf, &m);
+    expect(m.plate == NG_PLATE_PROTECT && !m.forward, "a leading protect stays closed");
+    expect(strcmp(m.line, "keep free energy flowing") == 0, "a leading protect keeps the remedy");
+    n = 0;
+    for (k = 0; k < 40; k++) {
+      memcpy(buf + n, "alpha ", 6);
+      n += 6;
+    }
+    memcpy(buf + n, "read the law and prove", 22);
+    buf[n + 22] = 0;
+    ng_motive_rank(buf, &m);
+    expect(m.plate == NG_PLATE_OBSERVE && m.forward, "a trailing law line stays forward");
+    expect(strcmp(m.concept, "read the law and prove") == 0, "the tail ranks the law concept");
+    expect(strcmp(m.line, "read the law and prove") == 0, "the tail stores the law line");
+    expect(m.lexical == 3, "the tail keeps the law lexical count");
+    js = ng_motive_json(buf);
+    expect(js && strstr(js, "\"concepts\":8"), "a long act keeps eight concepts");
+    free(js);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0, "a short law line stays rank 256");
+    js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
+    free(js);
+    {
+      char req[768];
+      n = 0;
+      snprintf(req, sizeof req, "{\"action\":\"motive\",\"text\":\"");
+      n = strlen(req);
+      for (k = 0; k < 40 && n + 6 < sizeof req - 80; k++) {
+        memcpy(req + n, "alpha ", 6);
+        n += 6;
       }
-    } else {
-      expect(0, "near hop bind");
-      if (lfd >= 0) close(lfd);
+      snprintf(req + n, sizeof req - n, "trick the cube\",\"enqueue\":\"1\"}");
+      js = ng_augogen_handle(NULL, req);
+      expect(js && strstr(js, "\"forward\":false"), "enqueue of a trailing purge stays closed");
+      expect(js && strstr(js, "\"plate\":\"purge_intent\""), "enqueue reports the trailing purge");
+      free(js);
+      pend = ng_augogen_pending_json();
+      expect(!pend || !strstr(pend, "\"rank\":"), "a trailing purge is not stored");
+      free(pend);
     }
   }
-  unsetenv("NANOBOT_MOTIVE_NEAR");
-  ng_motive_rank("read the law and prove", &m);
-  expect(m.rank == 256 && strcmp(m.concept, "read the law and prove") == 0,
-         "clearing near restores the law");
 
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);

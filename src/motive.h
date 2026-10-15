@@ -4,8 +4,8 @@
 /* Hive motive. Hybrid rank of eight concepts plus a priority cascade.
  * Rank uses the caller stack: 192-byte norm, 24 tokens, no heap.
  * NANOBOT_MOTIVE_LEX_W is the lexical weight, 0-255. Unset stays 64.
- * NANOBOT_MOTIVE_NEAR may name one 2-12 word line. A higher score on a
- * forward plate replaces the catalog concept. A tie keeps the catalog.
+ * A longer act keeps a 192-byte head and a 192-byte tail. The earlier
+ * cascade plate of those windows is the plate. Concept rank uses the tail.
  * A forward plate may become a 2–12 word self-prompt. Destructive plates
  * stay on the wire as a remedy line and are not applied.
  * Schema: nanobot.motive.v1
