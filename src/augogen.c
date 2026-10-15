@@ -36,10 +36,6 @@ typedef struct {
   int pair_ok;
   int executed;
   char job_id[40];
-  int score_kept; /* 1 when a stored concept keeps its hybrid score */
-  int motive_rank;
-  int motive_lex;
-  int motive_ham;
 } ng_augogen;
 
 #if NANOBOT_HAS_BRAINCUBE
@@ -241,13 +237,8 @@ static char *plate_json(const ng_augogen *p) {
   char *st = escape_or_empty(p->status);
   char *jid = escape_or_empty(p->job_id);
   char *out = NULL;
-  char score[96];
   int auto_on = augogen_auto_enabled();
   const char *np = (p->confirmed && p->suggestion[0]) ? (sug ? sug : "") : NULL;
-  score[0] = 0;
-  if (p->score_kept)
-    snprintf(score, sizeof score, "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
-             p->motive_rank, p->motive_lex, p->motive_ham);
   asprintf(&out,
            "{\"schema\":\"" NG_AUGOGEN_SCHEMA "\",\"ok\":true,"
            "\"action\":\"%s\",\"id\":\"%s\",\"generation\":%lu,"
@@ -259,7 +250,7 @@ static char *plate_json(const ng_augogen *p) {
            "\"api\":\"x.ai/suggestPrompt\","
            "\"cli_compat\":\"%s\","
            "\"hold_flash\":1,\"share\":\"state_matrix_only\","
-           "%s\"python\":0}",
+           "\"python\":0}",
            p->status,
            id ? id : "",
            p->generation,
@@ -272,7 +263,7 @@ static char *plate_json(const ng_augogen *p) {
            p->executed ? "true" : "false",
            jid ? jid : "",
            np ? "\"" : "null", np ? np : "", np ? "\"" : "",
-           ng_cli_version(), score);
+           ng_cli_version());
   free(sug);
   free(id);
   free(st);
@@ -282,34 +273,35 @@ static char *plate_json(const ng_augogen *p) {
                       "\"error\":\"oom\",\"python\":0}");
 }
 
-/* The response carries the line. Rank is already on the plate when it was stored. */
+/* Response-only. The plate file keeps the concept line and omits these fields. */
 static char *with_report(char *js, const char *report, int rank, int lexical,
-                         int hamming, int stored) {
+                         int hamming, int stored, const char *plate) {
   char *esc;
+  char *pesc;
   char *cut;
   char *out = NULL;
-  int have_rank;
   if (!js || !report || !report[0]) return js;
   esc = ng_json_escape(report);
   if (!esc) return js;
-  cut = strstr(js, "\"python\":0}");
-  if (!cut) {
+  pesc = ng_json_escape(plate ? plate : "");
+  if (!pesc) {
     free(esc);
     return js;
   }
-  have_rank = strstr(js, "\"rank\":") != NULL;
-  if (have_rank) {
-    if (asprintf(&out,
-                 "%.*s\"report\":\"%s\",\"stored\":%s,\"python\":0}",
-                 (int)(cut - js), js, esc, stored ? "true" : "false") < 0)
-      out = NULL;
-  } else if (asprintf(&out,
-                      "%.*s\"report\":\"%s\",\"rank\":%d,\"lexical\":%d,"
-                      "\"hamming\":%d,\"stored\":%s,\"python\":0}",
-                      (int)(cut - js), js, esc, rank, lexical, hamming,
-                      stored ? "true" : "false") < 0)
+  cut = strstr(js, "\"python\":0}");
+  if (!cut) {
+    free(esc);
+    free(pesc);
+    return js;
+  }
+  if (asprintf(&out,
+               "%.*s\"report\":\"%s\",\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,"
+               "\"hamming\":%d,\"stored\":%s,\"python\":0}",
+               (int)(cut - js), js, esc, pesc, rank, lexical, hamming,
+               stored ? "true" : "false") < 0)
     out = NULL;
   free(esc);
+  free(pesc);
   if (!out) return js;
   free(js);
   return out;
@@ -361,15 +353,6 @@ static void load_plate(ng_augogen *p) {
   if (s) {
     snprintf(p->job_id, sizeof p->job_id, "%s", s);
     free(s);
-  }
-  if (strstr(raw, "\"rank\":")) {
-    const char *r = strstr(raw, "\"rank\":");
-    const char *lx = strstr(raw, "\"lexical\":");
-    const char *hm = strstr(raw, "\"hamming\":");
-    p->score_kept = 1;
-    if (r) p->motive_rank = (int)strtol(r + 7, NULL, 10);
-    if (lx) p->motive_lex = (int)strtol(lx + 10, NULL, 10);
-    if (hm) p->motive_ham = (int)strtol(hm + 10, NULL, 10);
   }
   p->pair_ok = (p->guide_vote == 1 && p->oversee_vote == 1);
   p->confirmed = p->pair_ok && (p->mesh_vote != 0);
@@ -783,10 +766,6 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       new_id(p.id, sizeof p.id);
       snprintf(p.suggestion, sizeof p.suggestion, "%s", m.line);
       snprintf(p.status, sizeof p.status, "pending");
-      p.score_kept = 1;
-      p.motive_rank = m.rank;
-      p.motive_lex = m.lexical;
-      p.motive_ham = m.hamming;
       if (augogen_auto_enabled()) {
         if (!pair_confirm_suggestion(&p)) {
           p.guide_vote = 1;
@@ -818,6 +797,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char cleaned[SUG_CAP];
     char reported[SUG_CAP];
     int report_rank = 0, report_lex = 0, report_ham = 0;
+    int report_plate = NG_PLATE_OBSERVE;
     int asked = 0;
     unsigned long gen = p.generation + 1;
     cleaned[0] = 0;
@@ -846,6 +826,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         report_rank = ranked.rank;
         report_lex = ranked.lexical;
         report_ham = ranked.hamming;
+        report_plate = ranked.plate;
         if (asked) snprintf(cleaned, sizeof cleaned, "%s", ranked.line);
       }
     }
@@ -857,12 +838,6 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     new_id(p.id, sizeof p.id);
     if (cleaned[0]) {
       snprintf(p.suggestion, sizeof p.suggestion, "%s", cleaned);
-      if (asked && reported[0]) {
-        p.score_kept = 1;
-        p.motive_rank = report_rank;
-        p.motive_lex = report_lex;
-        p.motive_ham = report_ham;
-      }
       if (suggestion_forbidden(cleaned) || ng_motive_blocks(cleaned)) {
         snprintf(p.status, sizeof p.status, "rejected");
         p.confirmed = 0;
@@ -884,11 +859,10 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       snprintf(p.status, sizeof p.status, "empty");
     }
     save_plate(&p);
-    /* One peer, same as motive. The body carries hop 1. No peer means local only. */
-    if (asked && reported[0]) motive_nudge(reported);
     free(action);
     return with_report(plate_json(&p), reported, report_rank, report_lex,
-                       report_ham, asked && reported[0]);
+                       report_ham, asked && reported[0],
+                       ng_motive_plate_name(report_plate));
   }
 
   {

@@ -1,0 +1,15 @@
+// A generate report names the plate. Ordinary program: no HOLD_FLASH line.
+
+CUBE plate ROLE observer   PROTON 1
+CUBE line  ROLE nanobot    PROTON 1
+
+PLUG plate line
+
+IMPULSE plate 1
+IMPULSE line 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY line
+DECIDE line
+ASSERT CUBES >= 2
+PRINT "plate" UNITY DECIDE ENERGY

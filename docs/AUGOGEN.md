@@ -37,11 +37,11 @@ plate's line is the winning concept. Every other plate reports a remedy and
 is not stored. With `enqueue` `1` only a forward line is stored. The act text
 itself is never stored. Full auto runs a stored line only when the caller
 passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
-When `generate` has no model line, the same ranker reports a forward concept in the response, plus `rank`, `lexical`, and `hamming`.
-`enqueue` `1` stores that concept and may POST it once to the motive peer. The stored plate keeps `rank`, `lexical`, and `hamming`. An empty plate omits them. Without `enqueue` the plate stays empty and nothing is posted.
-A blank transcript reports `prompt a peer to move` with rank 0. A purge or protect transcript stays empty. The act text is not stored.
+When `generate` has no model line, the same ranker reports a forward concept in the response, plus the plate name, `rank`, `lexical`, and `hamming`.
+`enqueue` `1` stores that concept line. The plate file omits those integers. Generate does not POST. Without `enqueue` the plate stays empty.
+A blank transcript reports `prompt a peer to move` with plate `observe` and rank 0. A purge or protect transcript stays empty. The act text is not stored.
 
-When that store happens and the request has no `hop`, one optional IPv4 peer
+When a motive store happens and the request has no `hop`, one optional IPv4 peer
 receives the stored line. Set `NANOBOT_MOTIVE_PEER` (or settings `MOTIVE_PEER`)
 to `http://A.B.C.D:port`. The token is `NANOBOT_MOTIVE_PEER_TOKEN` or settings
 `MOTIVE_PEER_TOKEN`, or else an absolute path in `NANOBOT_MOTIVE_PEER_TOKEN_FILE`
@@ -51,7 +51,7 @@ permission bit skips the file. The POST is `/peer/v1/augogen` with `enqueue`
 `1` and `hop` `1`, and the body text is the stored line. A request that
 already carries `hop` `1` stores locally and does not POST. An empty peer
 does not POST. There is no second peer and no retry. The act text is not the body.
-The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, and `programs/motive_score.cubalc`.
+The CubalC boards are `programs/motive_rank.cubalc`, `programs/motive_hop.cubalc`, `programs/motive_silence.cubalc`, and `programs/motive_plate.cubalc`.
 
 `auto_execute` is **true** when full auto is on (default). `confirmed` is true
 only when both pair votes are 1 and mesh did not veto (mesh `0`). Auto mode
