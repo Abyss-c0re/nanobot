@@ -19,9 +19,8 @@
  * The peer token may come from an owner-only file. A group or other bit
  * skips that file.
  * A generate with no model line reports a forward concept and its plate.
- * enqueue=1 stores that concept line. Generate does not POST.
- * The plate file omits rank, lexical, and hamming.
- * Without enqueue the plate stays empty.
+ * enqueue=1 stores that concept line and keeps rank, lexical, and hamming.
+ * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */
 char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body);

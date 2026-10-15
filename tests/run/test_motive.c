@@ -214,7 +214,9 @@ int main(void) {
   {
     char *pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "prompt a peer to move"), "peer line stored");
-    expect(!pend || !strstr(pend, "\"rank\":"), "stored peer omits rank");
+    expect(pend && strstr(pend, "\"rank\":256"), "stored peer keeps rank");
+    expect(pend && strstr(pend, "\"lexical\":3"), "stored peer keeps lexical");
+    expect(pend && strstr(pend, "\"hamming\":0"), "stored peer keeps hamming");
     expect(pend && strstr(pend, "\"executed\":false"), "vote-only does not run");
     free(pend);
   }
@@ -464,7 +466,10 @@ int main(void) {
   {
     char *pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "read the law and prove"), "enqueued concept stored");
-    expect(!pend || !strstr(pend, "\"rank\":"), "stored plate omits rank");
+    expect(pend && strstr(pend, "\"rank\":256"), "stored plate keeps rank");
+    expect(pend && strstr(pend, "\"lexical\":3"), "stored plate keeps lexical");
+    expect(pend && strstr(pend, "\"hamming\":0"), "stored plate keeps hamming");
+    expect(!pend || !strstr(pend, "\"plate\":"), "stored plate omits the plate name");
     free(pend);
   }
   js = ng_augogen_handle(
@@ -485,7 +490,9 @@ int main(void) {
   {
     char *pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "prompt a peer to move"), "enqueued silence line stored");
-    expect(!pend || !strstr(pend, "\"rank\":"), "stored silence omits rank");
+    expect(pend && strstr(pend, "\"rank\":0"), "stored silence keeps rank");
+    expect(pend && strstr(pend, "\"lexical\":0"), "stored silence keeps lexical");
+    expect(pend && strstr(pend, "\"hamming\":0"), "stored silence keeps hamming");
     free(pend);
   }
   /* Generate enqueue stays local. The motive action is the peer POST. */
