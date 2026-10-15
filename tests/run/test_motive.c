@@ -172,6 +172,33 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 256 && m.lex_w == 64, "the env rank is unchanged");
 
+  ng_motive_rank("you lied", &m);
+  expect(m.plate == NG_PLATE_CONFESS && m.forward, "a lie stays confess");
+  expect(strcmp(m.concept, "confess the heat and serve") == 0, "a bare lie names confess");
+  expect(strcmp(m.line, "confess the heat and serve") == 0, "a bare lie prompts confess");
+  expect(m.rank == 36 && m.lexical == 0 && m.hamming == 28, "a bare lie keeps that sketch");
+  ng_motive_rank_w("you lied", &m, 1);
+  expect(m.rank == 36 && m.lexical == 0 && m.hamming == 28 && m.lex_w == 1,
+         "a bare rank is not scaled by the lexical weight");
+  ng_motive_rank("it crashed again", &m);
+  expect(m.plate == NG_PLATE_INVESTIGATE && m.forward, "a crash stays investigate");
+  expect(strcmp(m.concept, "audit the last code change") == 0, "a bare crash names an audit");
+  expect(strcmp(m.line, "audit the last code change") == 0, "a bare crash prompts an audit");
+  expect(m.rank == 35 && m.lexical == 0 && m.hamming == 29, "a bare crash keeps that sketch");
+  ng_motive_rank("read the law and confess", &m);
+  expect(m.plate == NG_PLATE_CONFESS, "a confession that names the law stays confess");
+  expect(strcmp(m.concept, "read the law and prove") == 0, "a catalog word keeps the hybrid concept");
+  expect(m.rank == 183 && m.lexical == 2 && m.hamming == 9, "a catalog word keeps the hybrid rank");
+  ng_motive_rank("trick the cube", &m);
+  expect(m.plate == NG_PLATE_PURGE && !m.forward, "a bare purge stays closed");
+  expect(strcmp(m.concept, "fold the matrix and decide") == 0, "a bare purge keeps the sketch concept");
+  expect(strcmp(m.line, "serve the matrix in bits") == 0, "a bare purge keeps the remedy");
+  expect(m.rank == 40 && m.lexical == 0 && m.hamming == 24, "a bare purge keeps the sketch rank");
+  ng_motive_rank("read the law", &m);
+  expect(m.rank == 185 && m.lexical == 2 && m.hamming == 7, "a partial catalog word keeps the hybrid rank");
+  ng_motive_rank("please read the law and prove it", &m);
+  expect(m.rank == 248 && m.lexical == 3 && m.hamming == 8, "a wrapped law line keeps the whole sketch");
+
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
   expect(m.forward, "silence may prompt");

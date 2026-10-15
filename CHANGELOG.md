@@ -89,6 +89,7 @@
 - **lean:** a lean worker whose log fd names a renamed file reopens the live path before the next line. The open file is not cut. The host still renames a full log to a `.1` sibling. CubalC board: `programs/log_live.cubalc`.
 - **lean:** a lean listener reopens that same fd before the next accept, so the worker inherits the live path. The reopen writes nothing. The open file is not cut. CubalC board: `programs/log_sync.cubalc`.
 - **lean:** the listener counts a worker before the fork, while the child-exit signal is held, so a worker that exits first still occupies one slot. That slot is released when the worker is reaped. The child cap is unchanged. CubalC board: `programs/fork_slot.cubalc`.
+- **hive:** when no catalog content word is present, a forward plate names its concept. The rank is that concept's sketch distance. A catalog word keeps the hybrid winner. A plate that is not forward keeps the sketch winner and the remedy line. An exact concept stays rank 256, lexical 3, Hamming 0. CubalC board: `programs/motive_bare.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.
