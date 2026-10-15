@@ -890,7 +890,7 @@ int main(void) {
     pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "\"rank\":35"), "a tie is stored");
     expect(pend && strstr(pend, "read the law and prove"), "a tie stores the earliest concept");
-    expect(!pend || !strstr(pend, "\"ties\""), "the plate file omits ties");
+    expect(pend && strstr(pend, "\"ties\":2"), "the plate file names ties");
     expect(!pend || !strstr(pend, "\"lex_w\""), "the plate file omits lex_w");
     free(pend);
     js = ng_augogen_handle(
@@ -901,7 +901,7 @@ int main(void) {
     pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "\"rank\":256"), "a unique rank is stored");
     expect(pend && strstr(pend, "read the law and prove"), "a unique rank stores the concept");
-    expect(!pend || !strstr(pend, "\"ties\""), "the plate file omits ties");
+    expect(pend && strstr(pend, "\"ties\":1"), "a unique rank stores ties 1");
     expect(!pend || !strstr(pend, "\"lex_w\""), "the plate file omits lex_w");
     free(pend);
     js = ng_augogen_handle(NULL, "{\"action\":\"reset\"}");
@@ -912,7 +912,8 @@ int main(void) {
     free(js);
     pend = ng_augogen_pending_json();
     expect(pend && strstr(pend, "read the law and prove"), "generate stores the earliest concept");
-    expect(!pend || !strstr(pend, "\"ties\""), "generate plate omits ties");
+    expect(pend && strstr(pend, "\"ties\":2"), "generate plate names ties");
+    expect(!pend || !strstr(pend, "\"lex_w\""), "generate plate omits lex_w");
     free(pend);
     js = ng_augogen_handle(
         NULL,

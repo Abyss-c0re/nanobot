@@ -40,6 +40,7 @@ typedef struct {
   int motive_rank;
   int motive_lex;
   int motive_ham;
+  int motive_ties;
   char plate_name[16];
 } ng_augogen;
 
@@ -248,11 +249,12 @@ static char *plate_json(const ng_augogen *p) {
   score[0] = 0;
   if (p->score_kept && p->plate_name[0])
     snprintf(score, sizeof score,
-             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
-             p->plate_name, p->motive_rank, p->motive_lex, p->motive_ham);
+             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,\"ties\":%d,",
+             p->plate_name, p->motive_rank, p->motive_lex, p->motive_ham, p->motive_ties);
   else if (p->score_kept)
-    snprintf(score, sizeof score, "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
-             p->motive_rank, p->motive_lex, p->motive_ham);
+    snprintf(score, sizeof score,
+             "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,\"ties\":%d,",
+             p->motive_rank, p->motive_lex, p->motive_ham, p->motive_ties);
   asprintf(&out,
            "{\"schema\":\"" NG_AUGOGEN_SCHEMA "\",\"ok\":true,"
            "\"action\":\"%s\",\"id\":\"%s\",\"generation\":%lu,"
@@ -390,6 +392,10 @@ static void load_plate(ng_augogen *p) {
     if (r) p->motive_rank = (int)strtol(r + 7, NULL, 10);
     if (lx) p->motive_lex = (int)strtol(lx + 10, NULL, 10);
     if (hm) p->motive_ham = (int)strtol(hm + 10, NULL, 10);
+    if (strstr(raw, "\"ties\":")) {
+      const char *t = strstr(raw, "\"ties\":");
+      if (t) p->motive_ties = (int)strtol(t + 7, NULL, 10);
+    }
     s = ng_json_get_string(raw, "plate");
     if (s) {
       snprintf(p->plate_name, sizeof p->plate_name, "%s", s);
@@ -878,6 +884,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       p.motive_rank = m.rank;
       p.motive_lex = m.lexical;
       p.motive_ham = m.hamming;
+      p.motive_ties = m.ties;
       snprintf(p.plate_name, sizeof p.plate_name, "%s", ng_motive_plate_name(m.plate));
       if (augogen_auto_enabled()) {
         if (!pair_confirm_suggestion(&p)) {
@@ -918,6 +925,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     char cleaned[SUG_CAP];
     char reported[SUG_CAP];
     int report_rank = 0, report_lex = 0, report_ham = 0, report_lex_w = 64;
+    int report_ties = 1;
     int report_plate = NG_PLATE_OBSERVE;
     int asked = 0;
     unsigned long gen = p.generation + 1;
@@ -948,6 +956,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
         report_lex = ranked.lexical;
         report_ham = ranked.hamming;
         report_lex_w = ranked.lex_w;
+        report_ties = ranked.ties;
         report_plate = ranked.plate;
         if (asked) snprintf(cleaned, sizeof cleaned, "%s", ranked.line);
       }
@@ -970,6 +979,7 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
           p.motive_rank = report_rank;
           p.motive_lex = report_lex;
           p.motive_ham = report_ham;
+          p.motive_ties = report_ties;
           snprintf(p.plate_name, sizeof p.plate_name, "%s",
                    ng_motive_plate_name(report_plate));
         }
