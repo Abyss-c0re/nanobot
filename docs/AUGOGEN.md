@@ -38,7 +38,7 @@ is not stored. With `enqueue` `1` only a forward line is stored. The act text
 itself is never stored. Full auto runs a stored line only when the caller
 passed an agent. Vote-only (`NANOBOT_AUGOGEN_AUTO=0`) leaves that line pending.
 When `generate` has no model line, the same ranker reports a forward concept in the response, plus `rank`, `lexical`, and `hamming`.
-`enqueue` `1` stores that concept. Without `enqueue` the plate stays empty.
+`enqueue` `1` stores that concept and may POST it once to the motive peer. Without `enqueue` the plate stays empty and nothing is posted.
 A blank transcript reports `prompt a peer to move` with rank 0. A purge or protect transcript stays empty. The act text is not stored.
 
 When that store happens and the request has no `hop`, one optional IPv4 peer

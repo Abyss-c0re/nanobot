@@ -478,6 +478,75 @@ int main(void) {
     expect(pend && strstr(pend, "prompt a peer to move"), "enqueued silence line stored");
     free(pend);
   }
+  /* enqueue on generate posts the stored concept once. A purge does not. */
+  {
+    int lfd, port = 0, st = 0, on = 1;
+    pid_t kid;
+    char url[64];
+    char path[] = "/tmp/nb-motive-gen-hop.log";
+    char *log = NULL;
+    struct sockaddr_in sa;
+    socklen_t sl = sizeof sa;
+    FILE *lf;
+    long sz;
+    unlink(path);
+    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    expect(lfd >= 0, "generate hop socket");
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    if (lfd >= 0 &&
+        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
+        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 4) == 0 &&
+        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
+      port = ntohs(sa.sin_port);
+      kid = fork();
+      expect(kid >= 0, "generate hop fork");
+      if (kid == 0) hop_sink(lfd, path);
+      if (kid > 0) {
+        close(lfd);
+        snprintf(url, sizeof url, "http://127.0.0.1:%d", port);
+        setenv("NANOBOT_MOTIVE_PEER", url, 1);
+        setenv("NANOBOT_MOTIVE_PEER_TOKEN", "hop-test", 1);
+        js = ng_augogen_handle(
+            NULL, "{\"action\":\"generate\",\"transcript\":\"trick the cube\",\"enqueue\":\"1\"}");
+        free(js);
+        js = ng_augogen_handle(
+            NULL,
+            "{\"action\":\"generate\",\"transcript\":\"read the law and prove\",\"enqueue\":\"1\"}");
+        free(js);
+        js = ng_augogen_handle(NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\"}");
+        free(js);
+        setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+        unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
+        waitpid(kid, &st, 0);
+        lf = fopen(path, "r");
+        expect(lf != NULL, "generate hop log");
+        if (lf) {
+          fseek(lf, 0, SEEK_END);
+          sz = ftell(lf);
+          if (sz < 0) sz = 0;
+          fseek(lf, 0, SEEK_SET);
+          log = malloc((size_t)sz + 1);
+          if (log) {
+            size_t n = fread(log, 1, (size_t)sz, lf);
+            log[n] = 0;
+          }
+          fclose(lf);
+        }
+        expect(log && count_substr(log, "POST /peer/v1/augogen") == 1, "one generate post");
+        expect(log && strstr(log, "read the law and prove"), "generate posts the concept");
+        expect(log && strstr(log, "\"hop\":\"1\""), "generate hop stops the chain");
+        expect(!log || !strstr(log, "trick the cube"), "generate purge is not posted");
+        free(log);
+        unlink(path);
+      }
+    } else {
+      expect(0, "generate hop bind");
+      if (lfd >= 0) close(lfd);
+    }
+  }
 
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);

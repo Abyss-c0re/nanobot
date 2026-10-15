@@ -849,6 +849,8 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
       snprintf(p.status, sizeof p.status, "empty");
     }
     save_plate(&p);
+    /* One peer, same as motive. The body carries hop 1. No peer means local only. */
+    if (asked && reported[0]) motive_nudge(reported);
     free(action);
     return with_report(plate_json(&p), reported, report_rank, report_lex,
                        report_ham, asked && reported[0]);
