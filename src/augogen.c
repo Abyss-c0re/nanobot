@@ -644,22 +644,6 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
       NULL};
   if (!raw || !out || cap < 2) return 0;
   while (*raw == ' ' || *raw == '\t' || *raw == '\n' || *raw == '\r') raw++;
-  /* A mark the edge trim drops is outside the capped line.
-   * A break after that mark still ends the line. */
-  for (;;) {
-    int n;
-    if (*raw == ' ' || *raw == '\t' || *raw == '\v' || *raw == '\f' ||
-        field_sep((unsigned char)*raw)) {
-      raw++;
-      continue;
-    }
-    n = utf8_space(raw);
-    if (n > 0) {
-      raw += n;
-      continue;
-    }
-    break;
-  }
   while (*raw && *raw != '\n' && *raw != '\r' && i + 1 < sizeof line)
     line[i++] = *raw++;
   line[i] = 0;

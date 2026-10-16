@@ -25,9 +25,6 @@
  * A concept line with one word said twice in a row keeps sketch distance zero.
  * A failed fork marks that auto job error and names it. It does not stay queued.
  * The plate stays unexecuted. A queued job left for a later listen stays queued.
- * A vertical tab, a form feed, a field separator, or a unicode space at the
- * start of a suggestion does not fill the line cap. A break after that mark
- * still ends the line.
  * A motive text decodes a JSON unicode escape before the rank.
  * A JSON backspace or form feed in that text is a separator before the rank.
  * A motive request may pass a quoted lex_w for that call only.
