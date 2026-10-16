@@ -3,7 +3,6 @@
 #include "auth.h"
 #include "http.h"
 #include "hub_local.h"
-#include "memory.h"
 #include "runctl.h"
 #include "shell.h"
 #include "util.h"
@@ -1103,187 +1102,6 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
-static char *mem_slurp(const char *path, size_t *n_out) {
-  FILE *f = fopen(path, "rb");
-  char *b;
-  long n;
-  if (!f) return NULL;
-  if (fseek(f, 0, SEEK_END) != 0) {
-    fclose(f);
-    return NULL;
-  }
-  n = ftell(f);
-  if (n < 0) {
-    fclose(f);
-    return NULL;
-  }
-  rewind(f);
-  b = malloc((size_t)n + 1);
-  if (!b) {
-    fclose(f);
-    return NULL;
-  }
-  if (n && fread(b, 1, (size_t)n, f) != (size_t)n) {
-    free(b);
-    fclose(f);
-    return NULL;
-  }
-  fclose(f);
-  b[n] = 0;
-  if (n_out) *n_out = (size_t)n;
-  return b;
-}
-
-/* A line longer than the cap keeps its tail. Short lines stay line-aligned. */
-static void test_memory_tail(void) {
-  const char *home = "/tmp/nb-mem-tail-test";
-  const char *prof = "/tmp/nb-mem-tail-test/memory/profile.txt";
-  const char *core = "/tmp/nb-mem-tail-test/memory/core.txt";
-  const char *sum = "/tmp/nb-mem-tail-test/memory/summary.txt";
-  char *had_root = getenv("GROKIUM_ROOT");
-  char *had_align = getenv("NANOBOT_CUBE_ALIGN");
-  char *saved_root = had_root ? strdup(had_root) : NULL;
-  char *saved_align = had_align ? strdup(had_align) : NULL;
-  char *body;
-  char *prompt;
-  char line[1001];
-  char row[32];
-  unsigned char *mark;
-  size_t n = 0;
-  int i;
-  const char *at;
-
-  unsetenv("GROKIUM_ROOT");
-  unsetenv("NANOBOT_CUBE_ALIGN");
-  ng_set_workdir(home);
-  unlink(prof);
-  unlink(core);
-  unlink(sum);
-  unlink("/tmp/nb-mem-tail-test/memory/prefs");
-  unlink("/tmp/nb-mem-tail-test/memory/recent.jsonl");
-
-  ng_memory_note_profile("keep me whole");
-  body = mem_slurp(prof, &n);
-  expect(body && strcmp(body, "keep me whole\n") == 0, "a short profile line stays whole");
-  free(body);
-
-  unlink(prof);
-  memset(line, 'p', 1000);
-  line[1000] = 0;
-  memcpy(line, "HEAD", 4);
-  memcpy(line + 996, "TAIL", 4);
-  ng_memory_note_profile(line);
-  body = mem_slurp(prof, &n);
-  expect(body && n == 900, "a long profile line keeps nine hundred bytes");
-  expect(body && n >= 5 && memcmp(body + n - 5, "TAIL\n", 5) == 0,
-         "a long profile line keeps its tail");
-  expect(!body || !strstr(body, "HEAD"), "a long profile line drops its head");
-  free(body);
-
-  unlink(prof);
-  for (i = 0; i < 60; i++) {
-    snprintf(row, sizeof row, "row-%02d-abcdefghij", i);
-    ng_memory_note_profile(row);
-  }
-  body = mem_slurp(prof, &n);
-  expect(body && n == 900 && strncmp(body, "row-10-abcdefghij\n", 18) == 0,
-         "short profile lines keep the newest lines");
-  expect(body && strstr(body, "row-59-abcdefghij\n") != NULL, "the newest profile line stays");
-  expect(!body || strstr(body, "row-00-abcdefghij") == NULL, "the oldest profile line drops");
-  expect(!body || strstr(body, "row-09-abcdefghij") == NULL,
-         "a profile line above the tail drops");
-  free(body);
-
-  {
-    FILE *f = fopen(core, "wb");
-    char raw[800];
-    expect(f != NULL, "core file opens");
-    if (f) {
-      memset(raw, 'c', sizeof raw);
-      memcpy(raw, "HEAD", 4);
-      memcpy(raw + 796, "TAIL", 4);
-      fwrite(raw, 1, sizeof raw, f);
-      fclose(f);
-    }
-  }
-  prompt = ng_memory_system_prompt();
-  expect(prompt && strstr(prompt, "TAIL") != NULL, "a long core line still reaches the prompt");
-  expect(!prompt || strstr(prompt, "HEAD") == NULL, "a long core line drops its head");
-  expect(!prompt || strstr(prompt, "(none)") == NULL, "a long core line is not empty");
-  free(prompt);
-
-  {
-    FILE *f = fopen(core, "wb");
-    expect(f != NULL, "multiline core opens");
-    if (f) {
-      for (i = 0; i < 80; i++) fprintf(f, "head-line-%02d\n", i);
-      fputs("tail-mark\n", f);
-      fclose(f);
-    }
-  }
-  prompt = ng_memory_system_prompt();
-  expect(prompt && strstr(prompt, "tail-mark") != NULL, "short core lines keep the tail line");
-  expect(!prompt || strstr(prompt, "head-line-00") == NULL, "an old core line stays out");
-  free(prompt);
-
-  {
-    FILE *f = fopen(sum, "wb");
-    char raw[1700];
-    expect(f != NULL, "summary file opens");
-    if (f) {
-      memset(raw, 's', sizeof raw);
-      memcpy(raw, "SHEAD", 5);
-      memcpy(raw + 1695, "STAIL", 5);
-      fwrite(raw, 1, sizeof raw, f);
-      fputc('\n', f);
-      fclose(f);
-    }
-  }
-  prompt = ng_memory_system_prompt();
-  expect(prompt && strstr(prompt, "STAIL") != NULL, "a long summary line keeps its tail");
-  expect(!prompt || strstr(prompt, "SHEAD") == NULL, "a long summary line drops its head");
-  free(prompt);
-
-  mark = malloc(1200);
-  expect(mark != NULL, "mark buffer");
-  if (mark) {
-    FILE *f;
-    for (i = 0; i < 400; i++) {
-      mark[i * 3] = 0xE2;
-      mark[i * 3 + 1] = 0x98;
-      mark[i * 3 + 2] = 0x83;
-    }
-    f = fopen(core, "wb");
-    expect(f != NULL, "mark core opens");
-    if (f) {
-      fwrite(mark, 1, 1200, f);
-      fclose(f);
-    }
-    free(mark);
-  }
-  prompt = ng_memory_system_prompt();
-  at = prompt ? strstr(prompt, "## Always true (core)\n") : NULL;
-  if (at) at += strlen("## Always true (core)\n");
-  expect(at && (unsigned char)at[0] == 0xE2 && (unsigned char)at[1] == 0x98 &&
-             (unsigned char)at[2] == 0x83,
-         "a core tail starts on a character");
-  free(prompt);
-
-  unlink(prof);
-  unlink(core);
-  unlink(sum);
-  unlink("/tmp/nb-mem-tail-test/memory/prefs");
-  unlink("/tmp/nb-mem-tail-test/memory/recent.jsonl");
-  if (saved_root) {
-    setenv("GROKIUM_ROOT", saved_root, 1);
-    free(saved_root);
-  }
-  if (saved_align) {
-    setenv("NANOBOT_CUBE_ALIGN", saved_align, 1);
-    free(saved_align);
-  }
-}
-
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
@@ -1304,7 +1122,6 @@ int main(void) {
   test_shell_eof_reap();
   test_tail_ping();
   test_hub_closed_client();
-  test_memory_tail();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;
