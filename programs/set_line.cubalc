@@ -1,0 +1,17 @@
+// A settings line longer than 511 bytes stays whole.
+// A shorter line still drops trailing spaces.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE line ROLE observer PROTON 1
+CUBE law  ROLE nanobot  PROTON 1
+
+PLUG line law
+
+IMPULSE line 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "line" UNITY DECIDE ENERGY

@@ -129,8 +129,12 @@ int nb_settings_set(const char *key, const char *value) {
     while (*p) {
       char *nl = strchr(p, '\n');
       size_t len = nl ? (size_t)(nl - p) : strlen(p);
-      char line[512];
-      if (len >= sizeof line) len = sizeof line - 1;
+      char *line = malloc(len + 1);
+      if (!line) {
+        free(out);
+        free(body);
+        return -1;
+      }
       memcpy(line, p, len);
       line[len] = 0;
       size_t L = strlen(line);
@@ -155,6 +159,7 @@ int nb_settings_set(const char *key, const char *value) {
       } else if (line[0] || is_comment) {
         o += (size_t)snprintf(out + o, cap - o, "%s\n", line);
       }
+      free(line);
       if (!nl) break;
       p = nl + 1;
     }
