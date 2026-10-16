@@ -145,19 +145,6 @@ static int out_write(int fd, const char *s) {
   return 0;
 }
 
-/* since= at the start of a query key. A longer key keeps its own name. */
-static long query_since(const char *qs) {
-  const char *p;
-  if (!qs || !qs[0]) return 0;
-  p = qs;
-  while (*p) {
-    if (strncmp(p, "since=", 6) == 0) return atol(p + 6);
-    while (*p && *p != '&') p++;
-    if (*p == '&') p++;
-  }
-  return 0;
-}
-
 static void handle_out_client(int cfd, const char *expect_token) {
   char req[8192];
   size_t n = 0;
@@ -179,7 +166,9 @@ static void handle_out_client(int cfd, const char *expect_token) {
   long since = 0;
   if (q) {
     *q = 0;
-    since = query_since(q + 1);
+    const char *qs = q + 1;
+    const char *s = strstr(qs, "since=");
+    if (s) since = atol(s + 6);
   }
 
   /* Fail-closed: non-loopback never gets free READ. No expect token → 503
