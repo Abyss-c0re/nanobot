@@ -260,6 +260,34 @@ int main(void) {
   ng_motive_rank("read the law and prove", &m);
   expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
          "the exact law line stays rank 256");
+  ng_motive_rank("read the law and prove dfzf", &m);
+  expect(m.rank == 255 && m.lexical == 3 && m.hamming == 1,
+         "an outside word stays off zero");
+  expect(strcmp(m.concept, "read the law and prove") == 0,
+         "an outside word keeps the law concept");
+  expect(m.forward && m.plate == NG_PLATE_OBSERVE, "an outside word stays forward");
+  ng_motive_rank("read the law and prove ppse", &m);
+  expect(m.rank == 255 && m.lexical == 3 && m.hamming == 1,
+         "a second outside word stays off zero");
+  expect(strcmp(m.concept, "read the law and prove") == 0,
+         "a second outside word keeps the law concept");
+  ng_motive_rank_w("read the law and prove dfzf", &m, 0);
+  expect(m.rank == 63 && m.lexical == 3 && m.hamming == 1,
+         "an outside word stays off zero at weight 0");
+  expect(strcmp(m.concept, "read the law and prove") == 0,
+         "weight 0 keeps the law concept");
+  ng_motive_rank("read the law and prove prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a trailing repeated concept word stays on the law");
+  ng_motive_rank("read the law and prove read the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a doubled law line stays rank 256");
+  ng_motive_rank("prove the law and read", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a law permutation stays rank 256");
+  ng_motive_rank("please read the law and prove", &m);
+  expect(m.rank == 246 && m.lexical == 3 && m.hamming == 10,
+         "please stays off zero");
 
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");

@@ -300,6 +300,41 @@ static int same_tokens(const char *norm, const char *concept) {
   return *p == 0 && *c == 0;
 }
 
+/* 1 when a sketch token is not a token of the concept. The cap is the
+ * same twenty-four tokens the sketch reads. */
+static int outside_token(const char *norm, const char *concept) {
+  const char *p;
+  int ntok = 0;
+  if (!norm || !concept) return 0;
+  p = norm;
+  while (*p && ntok < TOK_MAX) {
+    const char *s;
+    const char *c;
+    size_t n = 0;
+    int found = 0;
+    while (*p == ' ') p++;
+    if (!*p) break;
+    s = p;
+    while (p[n] && p[n] != ' ') n++;
+    p += n;
+    ntok++;
+    c = concept;
+    while (*c) {
+      size_t cn = 0;
+      while (*c == ' ') c++;
+      if (!*c) break;
+      while (c[cn] && c[cn] != ' ') cn++;
+      if (cn == n && memcmp(c, s, n) == 0) {
+        found = 1;
+        break;
+      }
+      c += cn;
+    }
+    if (!found) return 1;
+  }
+  return 0;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
@@ -329,7 +364,12 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
     int lex = lexical_hits(norm, kConcept[i]);
     int h = ham64(qh, simhash_text(kConcept[i]));
     int score;
-    if (same_tokens(norm, kConcept[i])) h = 0;
+    /* A consecutive duplicate that consumes the concept stays at distance
+     * zero. A token the concept does not contain cannot keep that zero. */
+    if (same_tokens(norm, kConcept[i]))
+      h = 0;
+    else if (h == 0 && outside_token(norm, kConcept[i]))
+      h = 1;
     score = lex * lw + (64 - h);
     if (score > best_score) {
       best = i;
