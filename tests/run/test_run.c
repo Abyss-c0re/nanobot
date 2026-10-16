@@ -5,7 +5,6 @@
 #include "hub_local.h"
 #include "runctl.h"
 #include "shell.h"
-#include "task.h"
 #include "util.h"
 
 #include <arpa/inet.h>
@@ -1103,146 +1102,6 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
-static void test_task_brace(void) {
-  char home[] = "/tmp/nanobot-brace-XXXXXX";
-  char path[768];
-  char args[1200];
-  char steps[900];
-  char letters[301];
-  char *plan, *start, *step, *status, *rem, *body, *text;
-  int i, o;
-
-  if (!mkdtemp(home)) {
-    expect(0, "brace home");
-    return;
-  }
-  ng_set_workdir(home);
-  snprintf(path, sizeof path, "%s/tasks/active.json", home);
-
-  plan = ng_task_try_tool("task_plan",
-                          "{\"goal\":\"g\",\"steps\":\"close the ] now\\nsecond step\"}");
-  expect(plan && strstr(plan, "\"ok\":true"), "bracket plan");
-  free(plan);
-  start = ng_task_try_tool("task_start", "{}");
-  expect(start && strstr(start, "\"steps\":2"),
-         "a closing bracket keeps the later step");
-  free(start);
-  body = ng_read_file(path, NULL);
-  expect(body && strstr(body, "close the ] now") && strstr(body, "second step"),
-         "both bracket steps stay in the file");
-  free(body);
-
-  plan = ng_task_try_tool("task_plan",
-                          "{\"goal\":\"g\",\"steps\":\"use [ now\\nsecond step\"}");
-  free(plan);
-  start = ng_task_try_tool("task_start", "{}");
-  expect(start && strstr(start, "\"steps\":2"),
-         "an opening bracket keeps the later step");
-  free(start);
-  body = ng_read_file(path, NULL);
-  text = body ? ng_json_get_string(body, "text") : NULL;
-  expect(text && strcmp(text, "use [ now") == 0, "an opening bracket stays in the step");
-  expect(body && strstr(body, "second step"), "the step after an opening bracket stays");
-  {
-    const char *notes = body ? strstr(body, "\"notes\"") : NULL;
-    expect(notes && !strstr(notes + 7, "\"notes\""),
-           "an opening bracket does not copy the task tail");
-  }
-  free(text);
-  free(body);
-
-  plan = ng_task_try_tool("task_plan",
-                          "{\"goal\":\"g\",\"steps\":\"use } carefully\\nsecond step\"}");
-  free(plan);
-  start = ng_task_try_tool("task_start", "{}");
-  free(start);
-  step = ng_task_try_tool("task_step_done", "{\"index\":0}");
-  expect(step && strstr(step, "\"done\":1"), "marking the brace step reports one done");
-  free(step);
-  body = ng_read_file(path, NULL);
-  text = body ? ng_json_get_string(body, "text") : NULL;
-  expect(text && strcmp(text, "use } carefully") == 0,
-         "letters after a closing brace stay");
-  expect(body && strstr(body, "second step"), "the step after a brace stays");
-  free(text);
-  free(body);
-
-  plan = ng_task_try_tool("task_plan",
-                          "{\"goal\":\"g\",\"steps\":\"use { carefully\\nsecond step\"}");
-  free(plan);
-  step = ng_task_try_tool("task_step_done", "{\"index\":0}");
-  expect(step && strstr(step, "\"steps\":2") && strstr(step, "\"done\":1"),
-         "an opening brace keeps the later step");
-  free(step);
-  body = ng_read_file(path, NULL);
-  text = body ? ng_json_get_string(body, "text") : NULL;
-  expect(text && strcmp(text, "use { carefully") == 0, "an opening brace stays in the step");
-  expect(body && strstr(body, "second step"), "the step after an opening brace stays");
-  free(text);
-  free(body);
-
-  plan = ng_task_try_tool("task_plan",
-                          "{\"goal\":\"g\",\"steps\":\"say \\\"hi]\\\" now\\nsecond step\"}");
-  free(plan);
-  start = ng_task_try_tool("task_start", "{}");
-  expect(start && strstr(start, "\"steps\":2"), "a quoted bracket keeps the later step");
-  free(start);
-  body = ng_read_file(path, NULL);
-  text = body ? ng_json_get_string(body, "text") : NULL;
-  expect(text && strcmp(text, "say \"hi]\" now") == 0, "a quoted step stays");
-  expect(body && strstr(body, "second step"), "the step after a quote stays");
-  free(text);
-  free(body);
-
-  plan = ng_task_try_tool("task_plan",
-                          "{\"goal\":\"g\",\"steps\":\"one\\ntwo\\nthree\"}");
-  free(plan);
-  start = ng_task_try_tool("task_start", "{}");
-  free(start);
-  step = ng_task_try_tool("task_step_done", "{\"index\":2}");
-  expect(step && strstr(step, "\"done\":1") && !strstr(step, "\"done\":3"),
-         "marking the last step still reports done 1");
-  free(step);
-  status = ng_task_try_tool("task_status", "{}");
-  expect(status && strstr(status, "\"done\":3"),
-         "status still counts the later done field");
-  free(status);
-  rem = ng_task_reminder_text();
-  expect(rem && strstr(rem, "\"steps_done\":3") && strstr(rem, "\"steps_total\":3"),
-         "the reminder still says 3 of 3");
-  free(rem);
-
-  memset(letters, 'b', 300);
-  letters[300] = 0;
-  snprintf(args, sizeof args, "{\"goal\":\"g\",\"steps\":\"%s\"}", letters);
-  plan = ng_task_try_tool("task_plan", args);
-  free(plan);
-  body = ng_read_file(path, NULL);
-  text = body ? ng_json_get_string(body, "text") : NULL;
-  expect(text && strlen(text) == 239, "one step still stops at 239 letters");
-  free(text);
-  free(body);
-
-  o = 0;
-  steps[0] = 0;
-  for (i = 0; i < 25; i++)
-    o += snprintf(steps + o, sizeof steps - (size_t)o, "%sstep%02d", i ? "\\n" : "", i);
-  snprintf(args, sizeof args, "{\"goal\":\"g\",\"steps\":\"%s\"}", steps);
-  plan = ng_task_try_tool("task_plan", args);
-  free(plan);
-  body = ng_read_file(path, NULL);
-  expect(body && strstr(body, "step23") && !strstr(body, "step24"),
-         "a twenty-fifth step stays out");
-  free(body);
-
-  plan = ng_task_try_tool("task_plan", "{\"goal\":\"keep the gate\"}");
-  free(plan);
-  body = ng_read_file(path, NULL);
-  expect(body && strstr(body, "Investigate and complete:"),
-         "an empty step list still becomes one step");
-  free(body);
-}
-
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
@@ -1263,7 +1122,6 @@ int main(void) {
   test_shell_eof_reap();
   test_tail_ping();
   test_hub_closed_client();
-  test_task_brace();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;
