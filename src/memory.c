@@ -58,6 +58,23 @@ static void utf8_sanitize_inplace(char *s) {
   *w = 0;
 }
 
+/* Offset of the kept tail. A newline with bytes after it starts a line.
+ * A long line keeps the byte tail, so the cap does not wipe the file.
+ * A continuation byte is not a start. */
+static size_t mem_tail_off(const char *s, size_t len, size_t cap) {
+  size_t start, i;
+  if (!s || len <= cap) return 0;
+  start = len - cap;
+  for (i = start; i < len; i++) {
+    if (s[i] == '\n' && i + 1 < len) {
+      start = i + 1;
+      break;
+    }
+  }
+  while (start < len && ((unsigned char)s[start] & 0xC0) == 0x80) start++;
+  return start;
+}
+
 /* Cap at max_bytes without splitting a UTF-8 codepoint. */
 static void utf8_truncate(char *s, size_t max_bytes) {
   if (!s) return;
@@ -84,16 +101,10 @@ static char *read_capped(const char *path, size_t max_bytes) {
   char *b = ng_read_file(path, &len);
   if (!b) return NULL;
   if (len > max_bytes) {
-    /* keep tail (most recent notes) */
-    size_t start = len - max_bytes;
-    while (start < len && b[start] != '\n') start++;
-    if (start < len) start++;
-    /* align to UTF-8 character start */
-    while (start < len && (b[start] & 0xC0) == 0x80) start++;
-    char *t = malloc(max_bytes + 1);
-    if (!t) { free(b); return NULL; }
+    size_t start = mem_tail_off(b, len, max_bytes);
     size_t n = len - start;
-    if (n > max_bytes) n = max_bytes;
+    char *t = malloc(n + 1);
+    if (!t) { free(b); return NULL; }
     memcpy(t, b + start, n);
     t[n] = 0;
     free(b);
@@ -331,11 +342,7 @@ static void append_summary_line(const char *line) {
   size_t total = strlen(nbuf);
   const char *write_from = nbuf;
   size_t cap = (size_t)mem_summary_max();
-  if (total > cap) {
-    write_from = nbuf + (total - cap);
-    while (*write_from && *write_from != '\n') write_from++;
-    if (*write_from == '\n') write_from++;
-  }
+  if (total > cap) write_from = nbuf + mem_tail_off(nbuf, total, cap);
   ng_write_file(path, write_from, strlen(write_from));
   free(nbuf);
 }
@@ -441,11 +448,8 @@ void ng_memory_note_profile(const char *line) {
   if (!nl) return;
   size_t total = strlen(nl);
   const char *w = nl;
-  if (total > NG_MEM_MAX_PROFILE) {
-    w = nl + (total - NG_MEM_MAX_PROFILE);
-    while (*w && *w != '\n') w++;
-    if (*w == '\n') w++;
-  }
+  if (total > NG_MEM_MAX_PROFILE)
+    w = nl + mem_tail_off(nl, total, NG_MEM_MAX_PROFILE);
   ng_write_file(path, w, strlen(w));
   free(nl);
 }
