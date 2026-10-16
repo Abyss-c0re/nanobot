@@ -30,14 +30,33 @@ const char *ng_motive_plate_name(int plate) {
   return kPlates[plate];
 }
 
+/* U+2018 or U+2019, the typographic single quotes. A double quote is not. */
+static int single_quote(const char *p) {
+  unsigned char a, b, c;
+  if (!p || !p[0] || !p[1] || !p[2]) return 0;
+  a = (unsigned char)p[0];
+  b = (unsigned char)p[1];
+  c = (unsigned char)p[2];
+  if (a == 0xE2 && b == 0x80 && (c == 0x98 || c == 0x99)) return 3;
+  return 0;
+}
+
 static void norm_text(const char *in, char *out, size_t cap) {
   size_t o = 0;
   int sp = 1;
   if (!out || cap < 2) return;
   out[0] = 0;
   if (!in) return;
-  for (; *in && o + 1 < cap; in++) {
-    unsigned char c = (unsigned char)*in;
+  while (*in && o + 1 < cap) {
+    unsigned char c;
+    int n = single_quote(in);
+    /* A typographic single quote is deleted with an ASCII apostrophe.
+     * The letters stay one word. A double quote stays a separator. */
+    if (n) {
+      in += n;
+      continue;
+    }
+    c = (unsigned char)*in++;
     if (c == '\'') continue;
     if (c >= 'A' && c <= 'Z') c = (unsigned char)(c - 'A' + 'a');
     if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
