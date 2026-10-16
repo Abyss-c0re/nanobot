@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
-#include <stdarg.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <ctype.h>
@@ -226,22 +224,16 @@ static char *json_get_int_str(const char *args, const char *key, int *out) {
   return (char *)p;
 }
 
-/* 0 kept, -1 when the copy cannot be allocated.
- * One step still stops at 239 letters. At most TASK_MAX_STEPS are kept. */
-static int split_steps(const char *steps_raw, char lines[][240], int *nlines) {
-  char *buf;
-  char *save = NULL;
-  char *tok;
-  size_t n;
+static void split_steps(const char *steps_raw, char lines[][240], int *nlines) {
   *nlines = 0;
-  if (!steps_raw || !steps_raw[0]) return 0;
-  n = strlen(steps_raw);
-  buf = malloc(n + 1);
-  if (!buf) return -1;
-  memcpy(buf, steps_raw, n + 1);
+  if (!steps_raw || !steps_raw[0]) return;
+  char buf[2048];
+  snprintf(buf, sizeof buf, "%s", steps_raw);
+  /* normalize ; to newlines */
   for (char *q = buf; *q; q++)
     if (*q == ';') *q = '\n';
-  tok = strtok_r(buf, "\n", &save);
+  char *save = NULL;
+  char *tok = strtok_r(buf, "\n", &save);
   while (tok && *nlines < TASK_MAX_STEPS) {
     while (*tok == ' ' || *tok == '\t') tok++;
     size_t L = strlen(tok);
@@ -253,21 +245,6 @@ static int split_steps(const char *steps_raw, char lines[][240], int *nlines) {
     }
     tok = strtok_r(NULL, "\n", &save);
   }
-  free(buf);
-  return 0;
-}
-
-/* 0 appended, -1 when the piece would not fit. The caller does not save. */
-static int plan_add(char *dst, size_t cap, size_t *o, const char *fmt, ...) {
-  va_list ap;
-  int n;
-  if (!dst || !o || *o >= cap) return -1;
-  va_start(ap, fmt);
-  n = vsnprintf(dst + *o, cap - *o, fmt, ap);
-  va_end(ap);
-  if (n < 0 || (size_t)n >= cap - *o) return -1;
-  *o += (size_t)n;
-  return 0;
 }
 
 static char *tool_plan(const char *args) {
@@ -279,88 +256,36 @@ static char *tool_plan(const char *args) {
   }
   char lines[TASK_MAX_STEPS][240];
   int n = 0;
-  int i;
-  size_t cap = 160;
-  size_t o = 0;
-  size_t glen;
-  char *json = NULL;
-  char *eg = NULL;
-  char id[40];
-  if (split_steps(steps, lines, &n) != 0) {
-    free(goal);
-    free(steps);
-    return task_err("oom", "task_plan");
-  }
+  split_steps(steps, lines, &n);
   if (n == 0) {
     snprintf(lines[0], 240, "Investigate and complete: %.200s", goal);
     n = 1;
   }
+  char id[40];
   snprintf(id, sizeof id, "t%ld", (long)time(NULL));
-  /* Worst case every byte escapes as \\uXXXX. The object stays closed. */
-  glen = strlen(goal);
-  if (glen > (SIZE_MAX / 6) || cap + glen * 6 + 8 < cap) {
-    free(goal);
-    free(steps);
-    return task_err("oom", "task_plan");
-  }
-  cap += glen * 6 + 8;
-  for (i = 0; i < n; i++) {
-    size_t sl = strlen(lines[i]);
-    if (sl > (SIZE_MAX / 6) || cap + sl * 6 + 64 < cap) {
-      free(goal);
-      free(steps);
-      return task_err("oom", "task_plan");
-    }
-    cap += sl * 6 + 64;
-  }
-  json = malloc(cap);
+  /* build JSON */
+  size_t cap = 4096;
+  char *json = malloc(cap);
   if (!json) {
     free(goal);
     free(steps);
     return task_err("oom", "task_plan");
   }
-  if (plan_add(json, cap, &o,
-               "{\"id\":\"%s\",\"status\":\"planned\",\"goal\":", id) != 0) {
-    free(json);
-    free(goal);
-    free(steps);
-    return task_err("oom", "task_plan");
-  }
-  eg = ng_json_escape(goal);
-  if (!eg || plan_add(json, cap, &o, "\"%s\",\"steps\":[", eg) != 0) {
-    free(eg);
-    free(json);
-    free(goal);
-    free(steps);
-    return task_err("oom", "task_plan");
-  }
+  int o = snprintf(json, cap,
+    "{\"id\":\"%s\",\"status\":\"planned\",\"goal\":", id);
+  char *eg = ng_json_escape(goal);
+  o += snprintf(json + o, cap - (size_t)o, "\"%s\",\"steps\":[", eg ? eg : "");
   free(eg);
-  for (i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++) {
     char *es = ng_json_escape(lines[i]);
-    int rc;
-    if (!es) {
-      free(json);
-      free(goal);
-      free(steps);
-      return task_err("oom", "task_plan");
-    }
-    rc = plan_add(json, cap, &o, "%s{\"i\":%d,\"text\":\"%s\",\"done\":false}",
-                  i ? "," : "", i, es);
+    o += snprintf(json + o, cap - (size_t)o,
+                  "%s{\"i\":%d,\"text\":\"%s\",\"done\":false}",
+                  i ? "," : "", i, es ? es : "");
     free(es);
-    if (rc != 0) {
-      free(json);
-      free(goal);
-      free(steps);
-      return task_err("oom", "task_plan");
-    }
   }
-  if (plan_add(json, cap, &o, "],\"updated\":%ld,\"notes\":[]}",
-               (long)time(NULL)) != 0) {
-    free(json);
-    free(goal);
-    free(steps);
-    return task_err("oom", "task_plan");
-  }
+  o += snprintf(json + o, cap - (size_t)o,
+                "],\"updated\":%ld,\"notes\":[]}", (long)time(NULL));
+  (void)o;
   save_active(json);
   {
     char *reply = task_ok("planned", "task_start", id, n, 0, json);
