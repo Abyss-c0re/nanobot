@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -1495,6 +1496,162 @@ int main(void) {
     ng_motive_rank("", &m);
     expect(m.rank == 0, "a failed fork leaves an empty query at rank 0");
     setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+  }
+
+  /* The auto job child drops inherited sockets. The peer reply closes
+   * while that job is still running. */
+  {
+    int lfd = -1, sfd = -1, cfd = -1, cli = -1, on = 1;
+    int port = 0, sport = 0, fin = 0;
+    pid_t sink = -1, job = 0;
+    struct sockaddr_in sa;
+    socklen_t sl = sizeof sa;
+    ng_agent_cfg agent;
+    char url[64];
+    char *plate = NULL;
+    while (waitpid(-1, NULL, WNOHANG) > 0) {
+    }
+    sfd = socket(AF_INET, SOCK_STREAM, 0);
+    expect(sfd >= 0, "job sink socket");
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    if (sfd >= 0 &&
+        setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
+        bind(sfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(sfd, 4) == 0 &&
+        getsockname(sfd, (struct sockaddr *)&sa, &sl) == 0) {
+      sport = ntohs(sa.sin_port);
+      sink = fork();
+      expect(sink >= 0, "job sink fork");
+      if (sink == 0) {
+        int held = accept(sfd, NULL, NULL);
+        if (held >= 0) {
+          for (;;) pause();
+        }
+        _exit(0);
+      }
+    }
+    if (sfd >= 0) close(sfd);
+    sfd = -1;
+    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    cli = socket(AF_INET, SOCK_STREAM, 0);
+    expect(lfd >= 0 && cli >= 0, "peer reply sockets");
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    sl = sizeof sa;
+    if (lfd >= 0 && cli >= 0 && sink > 0 &&
+        setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == 0 &&
+        bind(lfd, (struct sockaddr *)&sa, sizeof sa) == 0 && listen(lfd, 4) == 0 &&
+        getsockname(lfd, (struct sockaddr *)&sa, &sl) == 0) {
+      port = ntohs(sa.sin_port);
+      sa.sin_port = htons((uint16_t)port);
+      if (connect(cli, (struct sockaddr *)&sa, sizeof sa) == 0) {
+        sl = sizeof sa;
+        cfd = accept(lfd, (struct sockaddr *)&sa, &sl);
+      }
+    }
+    expect(cfd >= 0, "peer reply accepted");
+    if (cfd >= 0 && sink > 0) {
+      char childpath[80];
+      FILE *cf;
+      int cpid = 0;
+      setenv("NANOBOT_AUGOGEN_AUTO", "1", 1);
+      setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+      ng_agent_cfg_init(&agent);
+      snprintf(url, sizeof url, "http://127.0.0.1:%d", sport);
+      ng_agent_set_local_backend(&agent, url, "local");
+      agent.timeout_sec = 30;
+      plate = ng_augogen_handle(
+          &agent, "{\"action\":\"generate\",\"suggestion\":\"read the law and prove\"}");
+      expect(plate && strstr(plate, "\"executed\":true"),
+             "the auto job starts");
+      expect(plate && strstr(plate, "\"suggestion\":\"read the law and prove\""),
+             "the running job keeps the law line");
+      close(cfd);
+      cfd = -1;
+      {
+        struct pollfd pfd;
+        char buf[8];
+        pfd.fd = cli;
+        pfd.events = POLLIN;
+        if (poll(&pfd, 1, 1000) > 0) {
+          ssize_t n = read(cli, buf, sizeof buf);
+          if (n == 0) fin = 1;
+        }
+      }
+      snprintf(childpath, sizeof childpath, "/proc/%d/task/%d/children",
+               (int)getpid(), (int)getpid());
+      cf = fopen(childpath, "r");
+      if (cf) {
+        while (fscanf(cf, "%d", &cpid) == 1) {
+          if (cpid > 0 && cpid != (int)sink) job = (pid_t)cpid;
+        }
+        fclose(cf);
+      }
+      expect(fin, "the peer reply closes while the auto job runs");
+      {
+        int running = 0;
+        char sp[64];
+        FILE *sf;
+        snprintf(sp, sizeof sp, "/proc/%d/stat", (int)job);
+        sf = job > 0 ? fopen(sp, "r") : NULL;
+        if (sf) {
+          int pidn = 0;
+          char state = 0;
+          if (fscanf(sf, "%d %*s %c", &pidn, &state) == 2 && state != 'Z')
+            running = 1;
+          fclose(sf);
+        }
+        expect(running, "the auto job is still running");
+      }
+      if (job > 0) {
+        char jpath[80];
+        FILE *jf;
+        int gpid = 0;
+        snprintf(jpath, sizeof jpath, "/proc/%d/task/%d/children", (int)job,
+                 (int)job);
+        jf = fopen(jpath, "r");
+        if (jf) {
+          while (fscanf(jf, "%d", &gpid) == 1) {
+            if (gpid > 1) kill(gpid, SIGKILL);
+          }
+          fclose(jf);
+        }
+        kill(job, SIGKILL);
+        waitpid(job, NULL, 0);
+      }
+      ng_agent_cfg_free(&agent);
+    }
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    if (sink > 0) {
+      kill(sink, SIGKILL);
+      waitpid(sink, NULL, 0);
+    }
+    if (cfd >= 0) close(cfd);
+    if (cli >= 0) close(cli);
+    if (lfd >= 0) close(lfd);
+    free(plate);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a closed reply leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a closed reply leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a closed reply leaves an empty query at rank 0");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move now,\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move now,\""),
+           "a trailing comma stays");
+    free(js);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no suggestion!\"}");
+    expect(js && strstr(js, "\"suggestion\":\"no suggestion!\""),
+           "a bang on a meta line stays");
+    free(js);
   }
 
   /* A done auto job past the keep cap drops. A queued job stays. */

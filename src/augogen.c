@@ -183,10 +183,39 @@ static void reap_done_auto_jobs(const char *jdir) {
   }
 }
 
+/* The accepted peer socket is inherited across this fork. Close sockets
+ * so the reply is not held until the job ends. Regular files stay open. */
+static void close_inherited_sockets(void) {
+  int fds[128];
+  int n = 0;
+  DIR *d = opendir("/proc/self/fd");
+  if (d) {
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL && n < (int)(sizeof fds / sizeof fds[0])) {
+      char *end = NULL;
+      int fd;
+      struct stat st;
+      if (de->d_name[0] < '0' || de->d_name[0] > '9') continue;
+      fd = (int)strtol(de->d_name, &end, 10);
+      if (!end || end == de->d_name || *end || fd < 3) continue;
+      if (fstat(fd, &st) == 0 && S_ISSOCK(st.st_mode)) fds[n++] = fd;
+    }
+    closedir(d);
+  } else {
+    int fd;
+    for (fd = 3; fd < 128 && n < (int)(sizeof fds / sizeof fds[0]); fd++) {
+      struct stat st;
+      if (fstat(fd, &st) == 0 && S_ISSOCK(st.st_mode)) fds[n++] = fd;
+    }
+  }
+  while (n > 0) close(fds[--n]);
+}
+
 /* Fork a prompt job (same shape as POST /peer/v1/jobs). Never blocks HTTP.
  * A second prompt in the same second keeps its own file. The first stays.
  * A done auto job past the keep cap drops. A queued job stays.
- * A failed fork marks the reserved file error. It does not stay queued. */
+ * A failed fork marks the reserved file error. It does not stay queued.
+ * The child drops inherited sockets so the peer reply is not held. */
 static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
                           size_t id_n) {
   char jdir[640], mpath[700], rpath[700], pp[700], meta[768];
@@ -261,11 +290,13 @@ static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
     char *esc;
     char *jb = NULL;
     char runm[512];
-    int rn = snprintf(runm, sizeof runm,
-                      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
-                      "\"action\":\"job\",\"id\":\"%s\",\"status\":\"running\","
-                      "\"kind\":\"prompt\",\"via\":\"augogen_auto\"}\n",
-                      id);
+    int rn;
+    close_inherited_sockets();
+    rn = snprintf(runm, sizeof runm,
+                  "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":true,"
+                  "\"action\":\"job\",\"id\":\"%s\",\"status\":\"running\","
+                  "\"kind\":\"prompt\",\"via\":\"augogen_auto\"}\n",
+                  id);
     ng_write_file(mpath, runm, (size_t)rn);
     reply = agent ? ng_agent_run(agent, prompt) : strdup("");
     esc = ng_json_escape(reply ? reply : "");
