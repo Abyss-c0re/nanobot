@@ -647,35 +647,6 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   while (*raw && *raw != '\n' && *raw != '\r' && i + 1 < sizeof line)
     line[i++] = *raw++;
   line[i] = 0;
-  /* A line that does not fit is not stored. Trailing trim past the cap stays. */
-  if (*raw && *raw != '\n' && *raw != '\r') {
-    const char *q = raw;
-    int more = 0;
-    while (*q && *q != '\n' && *q != '\r') {
-      int n = edge_quote(q);
-      if (n) {
-        q += n;
-        continue;
-      }
-      if (*q == ' ' || *q == '\t' || *q == '\v' || *q == '\f' || *q == '.' ||
-          *q == '"' || *q == '\'' || *q == '`' ||
-          field_sep((unsigned char)*q)) {
-        q++;
-        continue;
-      }
-      n = utf8_space(q);
-      if (n) {
-        q += n;
-        continue;
-      }
-      more = 1;
-      break;
-    }
-    if (more) {
-      out[0] = 0;
-      return -1;
-    }
-  }
   /* A torn byte drops. A quote behind it still drops. The words stay. */
   {
     size_t r = 0, w = 0;

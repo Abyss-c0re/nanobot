@@ -24,7 +24,6 @@
  * The motive JSON and the generate report name lex_w.
  * A concept line with one word said twice in a row keeps sketch distance zero.
  * A failed fork marks that auto job error and names it. It does not stay queued.
- * A host line that does not fit the plate is not stored.
  * The plate stays unexecuted. A queued job left for a later listen stays queued.
  * A motive text decodes a JSON unicode escape before the rank.
  * A JSON backspace or form feed in that text is a separator before the rank.
