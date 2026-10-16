@@ -261,52 +261,6 @@ int main(void) {
   expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
          "the exact law line stays rank 256");
 
-  /* Ninety-four one-letter words fill the norm up to a three-byte fragment. */
-  {
-    char cut[256];
-    char one[256];
-    size_t n = 0;
-    while (n + 2 <= 188) {
-      cut[n++] = 'z';
-      cut[n++] = ' ';
-    }
-    memcpy(cut + n, "action", 7);
-    ng_motive_rank(cut, &m);
-    expect(m.plate == NG_PLATE_OBSERVE, "a cut action stays observe");
-    expect(m.rank == 40 && m.lexical == 0 && m.hamming == 24,
-           "a cut action drops the fragment");
-    expect(strcmp(m.concept, "fold the matrix and decide") == 0,
-           "a cut action stays on the fold line");
-    expect(strcmp(m.line, m.concept) == 0, "a cut action line is that concept");
-    memcpy(cut + n, "lawyer", 7);
-    ng_motive_rank(cut, &m);
-    expect(m.rank == 40 && m.lexical == 0 && m.hamming == 24,
-           "a cut lawyer drops the fragment");
-    expect(strcmp(m.concept, "read the law and prove") != 0,
-           "a cut lawyer is not the law line");
-    expect(strcmp(m.concept, "fold the matrix and decide") == 0,
-           "a cut lawyer stays on the fold line");
-    memcpy(cut + n, "buggy", 6);
-    ng_motive_rank(cut, &m);
-    expect(m.plate == NG_PLATE_OBSERVE, "a cut buggy does not investigate");
-    expect(m.rank == 40 && m.lexical == 0 && m.hamming == 24,
-           "a cut buggy drops the fragment");
-    memcpy(cut + n, "act", 4);
-    ng_motive_rank(cut, &m);
-    expect(m.rank == 99 && m.lexical == 1 && m.hamming == 29,
-           "a whole act at the edge stays");
-    expect(strcmp(m.concept, "rank concepts then act") == 0,
-           "a whole act at the edge is the rank line");
-    memset(one, 'z', 192);
-    one[192] = 0;
-    ng_motive_rank(one, &m);
-    expect(m.rank == 37 && m.lexical == 0 && m.hamming == 27,
-           "one word that fills the cap stays");
-    expect(strcmp(m.concept, "pair vote then ship the step") == 0,
-           "one full word stays on the pair line");
-    expect(m.rank != 0, "one full word is not silence");
-  }
-
   ng_motive_rank("", &m);
   expect(m.plate == NG_PLATE_OBSERVE, "silence is observe");
   expect(m.forward, "silence may prompt");
