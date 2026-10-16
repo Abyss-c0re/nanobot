@@ -614,7 +614,8 @@ static int utf8_space(const char *p) {
   return 0;
 }
 
-/* grok-build prompt_suggest::sanitize_suggestion */
+/* 1 kept, 0 when there is no line, -1 when the line is rejected.
+ * A rejected line leaves the buffer empty. */
 static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   char line[SUG_CAP];
   size_t i = 0;
@@ -709,10 +710,12 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   }
   lowered[i] = 0;
   for (i = 0; meta[i]; i++) {
-    if (strcmp(lowered, meta[i]) == 0) return 0;
-    if (strncmp(lowered, meta[i], strlen(meta[i])) == 0 &&
-        lowered[strlen(meta[i])] == '.')
-      return 0;
+    if (strcmp(lowered, meta[i]) == 0 ||
+        (strncmp(lowered, meta[i], strlen(meta[i])) == 0 &&
+         lowered[strlen(meta[i])] == '.')) {
+      out[0] = 0;
+      return -1;
+    }
   }
   /* 2–12 words, matching grok-build eval bound */
   {
@@ -727,7 +730,10 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
         inw = 0;
       }
     }
-    if (words < 2 || words > 12) return 0;
+    if (words < 2 || words > 12) {
+      out[0] = 0;
+      return -1;
+    }
   }
   return 1;
 }
@@ -1170,24 +1176,31 @@ char *ng_augogen_handle(ng_agent_cfg *agent, const char *json_body) {
     int report_plate = NG_PLATE_OBSERVE;
     int asked = 0;
     unsigned long gen = p.generation + 1;
+    int host_reject = 0;
     cleaned[0] = 0;
     reported[0] = 0;
     if (enq && (enq[0] == '1' || enq[0] == 't' || enq[0] == 'T' || enq[0] == 'y' ||
                 enq[0] == 'Y'))
       asked = 1;
-    if (given && sanitize_suggestion(given, cleaned, sizeof cleaned)) {
-      /* host-supplied line (CubalC / mesh) still needs pair vote */
-    } else if (agent) {
+    if (given && given[0]) {
+      int sr = sanitize_suggestion(given, cleaned, sizeof cleaned);
+      /* A rejected host line is not silence and does not take its place. */
+      if (sr < 0) {
+        host_reject = 1;
+        cleaned[0] = 0;
+      }
+    }
+    if (!cleaned[0] && agent) {
       char *raw = ng_agent_suggest_prompt(agent, transcript, ng_workdir());
       if (raw) {
-        sanitize_suggestion(raw, cleaned, sizeof cleaned);
+        if (sanitize_suggestion(raw, cleaned, sizeof cleaned) != 1) cleaned[0] = 0;
         free(raw);
       }
     }
     /* No model line: report a forward concept.
        Store it only when enqueue asks. Silence reports the peer-prompt concept.
        The act stays off the plate. */
-    if (!cleaned[0]) {
+    if (!cleaned[0] && !host_reject) {
       ng_motive ranked;
       ng_motive_rank(transcript ? transcript : "", &ranked);
       if (ranked.forward && ranked.line[0] && !suggestion_forbidden(ranked.line) &&

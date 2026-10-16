@@ -1169,6 +1169,69 @@ int main(void) {
     free(pend);
   }
 
+  /* A line outside 2–12 words, or a meta line, is not stored. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"hello\"}");
+  expect(js && strstr(js, "\"status\":\"empty\""), "a one-word line is not stored");
+  expect(js && strstr(js, "\"suggestion\":\"\""), "a one-word line leaves no words");
+  expect(js && !strstr(js, "prompt a peer to move"), "a one-word line is not the peer line");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"\"") && strstr(pend, "\"status\":\"empty\""),
+           "a one-word line stays off the plate");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"silence\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a meta line such as silence is not stored");
+  expect(js && !strstr(js, "prompt a peer to move"), "a meta line is not the peer line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"none.\"}");
+  expect(js && strstr(js, "\"suggestion\":\"\"") && !strstr(js, "\"suggestion\":\"none\""),
+         "a meta line with a period is not stored");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"one two three four five six seven eight nine ten eleven twelve thirteen\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a thirteen-word line is not stored");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"   \"}");
+  expect(js && strstr(js, "prompt a peer to move") && strstr(js, "\"stored\":true"),
+         "a blank suggestion still stores the peer line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move now\"}");
+  expect(js && strstr(js, "\"suggestion\":\"move now\""), "a two-word line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"one two three four five six seven eight nine ten eleven twelve\"}");
+  expect(js && strstr(js, "\"suggestion\":\"one two three four five six seven eight nine ten eleven twelve\""),
+         "a twelve-word line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"silence please\"}");
+  expect(js && strstr(js, "\"suggestion\":\"silence please\""),
+         "silence inside a two-word line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"read the law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "the law line still stores");
+  free(js);
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a rejected line leaves the law rank");
+  ng_motive_rank("you lied", &m);
+  expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0, "you lied stays confess");
+  ng_motive_rank("", &m);
+  expect(m.rank == 0, "an empty query stays rank 0");
+
   /* A second prompt in the same second keeps its own file. The first stays. */
   {
     int tries, got = 0;

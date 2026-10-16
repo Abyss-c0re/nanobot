@@ -99,6 +99,7 @@
 - **hive:** a queued auto job left by a restart is marked error on listen. A done auto job stays done. The ranker is unchanged. CubalC board: `programs/motive_orphan.cubalc`.
 - **hive:** a done or error auto job past 48 drops on its own cap. A digit job keeps its own cap. A queued job stays. The ranker is unchanged. CubalC board: `programs/motive_cap.cubalc`.
 - **hive:** a concept line with one word said twice in a row is still that concept. The sketch distance is zero. The exact line stays rank 256. A partial line stays partial. An extra word stays off that zero. CubalC board: `programs/motive_twice.cubalc`.
+- **hive:** a suggestion outside 2–12 words, or a meta line such as silence, is not stored. An empty suggestion still stores the peer line when enqueue is set. A two-word line stays. The ranker is unchanged. CubalC board: `programs/motive_bound.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

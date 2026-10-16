@@ -1,0 +1,17 @@
+// A suggestion outside the word bound is not stored.
+// An empty line still has a peer line. The ranker is unchanged.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE bound ROLE observer PROTON 1
+CUBE law   ROLE nanobot  PROTON 1
+
+PLUG bound law
+
+IMPULSE bound 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "bound" UNITY DECIDE ENERGY
