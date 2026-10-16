@@ -106,7 +106,19 @@ int ng_task_hard_max_turns(void) {
   return m;
 }
 
-/* Count "done":true vs step objects roughly */
+/* Needle inside [s, end). A later object is outside that span. */
+static int span_has(const char *s, const char *end, const char *needle) {
+  size_t n;
+  if (!s || !end || !needle || end <= s) return 0;
+  n = strlen(needle);
+  if (n == 0 || (size_t)(end - s) < n) return 0;
+  for (; s + n <= end; s++) {
+    if (memcmp(s, needle, n) == 0) return 1;
+  }
+  return 0;
+}
+
+/* A step counts done only inside its own object. A later step does not. */
 static void count_steps(const char *j, int *total, int *done) {
   *total = 0;
   *done = 0;
@@ -122,7 +134,7 @@ static void count_steps(const char *j, int *total, int *done) {
     const char *end = strchr(p, '}');
     if (!end) break;
     (*total)++;
-    if (strstr(p, "\"done\":true") || strstr(p, "\"done\": true"))
+    if (span_has(p, end, "\"done\":true") || span_has(p, end, "\"done\": true"))
       (*done)++;
     p = end + 1;
   }

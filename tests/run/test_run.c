@@ -5,6 +5,7 @@
 #include "hub_local.h"
 #include "runctl.h"
 #include "shell.h"
+#include "task.h"
 #include "util.h"
 
 #include <arpa/inet.h>
@@ -1102,6 +1103,134 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
+static int json_num(const char *js, const char *key) {
+  char pat[64];
+  const char *p;
+  snprintf(pat, sizeof pat, "\"%s\":", key);
+  p = strstr(js ? js : "", pat);
+  if (!p) return -1;
+  return atoi(p + strlen(pat));
+}
+
+/* A later done step must not mark an earlier one. */
+static void test_task_own_done(void) {
+  char home[] = "/tmp/nanobot-task-XXXXXX";
+  char *saved_auto = NULL;
+  char *saved_peer = NULL;
+  const char *e;
+  char *plan, *start, *step, *status, *rem;
+  e = getenv("NANOBOT_AUGOGEN_AUTO");
+  if (e) saved_auto = strdup(e);
+  e = getenv("NANOBOT_MOTIVE_PEER");
+  if (e) saved_peer = strdup(e);
+  setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+  setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+  if (!mkdtemp(home)) {
+    expect(0, "task home");
+    goto restore;
+  }
+  ng_set_workdir(home);
+
+  plan = ng_task_try_tool(
+      "task_plan", "{\"goal\":\"count steps\",\"steps\":\"one\\ntwo\\nthree\"}");
+  expect(plan && json_num(plan, "steps") == 3 && json_num(plan, "done") == 0,
+         "a new plan has no done step");
+  free(plan);
+  start = ng_task_try_tool("task_start", "{}");
+  expect(start && json_num(start, "done") == 0 && json_num(start, "steps") == 3,
+         "a start keeps every step open");
+  free(start);
+  expect(ng_task_is_open() == 1, "an active task stays open");
+  status = ng_task_try_tool("task_status", "{}");
+  expect(status && json_num(status, "done") == 0 && json_num(status, "steps") == 3,
+         "status counts no done step");
+  free(status);
+  rem = ng_task_reminder_text();
+  expect(rem && json_num(rem, "steps_done") == 0 && json_num(rem, "steps_total") == 3,
+         "the reminder counts no done step");
+  free(rem);
+
+  step = ng_task_try_tool("task_step_done", "{\"index\":0}");
+  expect(step && json_num(step, "done") == 1, "the first step stays one done");
+  free(step);
+  status = ng_task_try_tool("task_status", "{}");
+  expect(status && json_num(status, "done") == 1 && json_num(status, "steps") == 3,
+         "status keeps the first done step at one");
+  free(status);
+  rem = ng_task_reminder_text();
+  expect(rem && json_num(rem, "steps_done") == 1 && json_num(rem, "steps_total") == 3,
+         "the reminder keeps the first done step at one");
+  free(rem);
+
+  step = ng_task_try_tool("task_step_done", "{\"index\":2}");
+  expect(step && json_num(step, "done") == 2 && strstr(step, "\"next\":\"task_step_done\""),
+         "the step reply counts two and stays open");
+  expect(step && strstr(step, "\"text\":\"two\",\"done\":false"),
+         "the step reply leaves the middle step open");
+  free(step);
+  status = ng_task_try_tool("task_status", "{}");
+  expect(status && json_num(status, "done") == 2 && json_num(status, "steps") == 3,
+         "a later done step does not mark the middle one");
+  expect(status && strstr(status, "\"text\":\"two\",\"done\":false") &&
+             strstr(status, "\"text\":\"three\",\"done\":true"),
+         "status keeps the middle step false");
+  free(status);
+  rem = ng_task_reminder_text();
+  expect(rem && json_num(rem, "steps_done") == 2 && json_num(rem, "steps_total") == 3,
+         "the reminder counts two of three");
+  free(rem);
+
+  {
+    char path[700];
+    FILE *f;
+    snprintf(path, sizeof path, "%s/tasks/active.json", home);
+    f = fopen(path, "w");
+    expect(f != NULL, "spaced plate");
+    if (f) {
+      fputs("{\"id\":\"tspace\",\"status\":\"active\",\"goal\":\"g\",\"steps\":["
+            "{\"i\":0,\"text\":\"one\",\"done\": false},"
+            "{\"i\":1,\"text\":\"two\",\"done\": true}]}",
+            f);
+      fclose(f);
+    }
+    status = ng_task_try_tool("task_status", "{}");
+    expect(status && json_num(status, "done") == 1 && json_num(status, "steps") == 2,
+           "a spaced done field counts only that step");
+    free(status);
+    rem = ng_task_reminder_text();
+    expect(rem && json_num(rem, "steps_done") == 1 && json_num(rem, "steps_total") == 2,
+           "the reminder counts the spaced done field once");
+    free(rem);
+  }
+
+  plan = ng_task_try_tool("task_plan", "{\"goal\":\"g\",\"steps\":\"one\\ntwo\"}");
+  free(plan);
+  start = ng_task_try_tool("task_start", "{}");
+  free(start);
+  step = ng_task_try_tool("task_step_done", "{\"index\":0}");
+  free(step);
+  step = ng_task_try_tool("task_step_done", "{\"index\":1}");
+  expect(step && json_num(step, "done") == 2 && strstr(step, "\"next\":\"task_done\""),
+         "both steps done still ask for task_done");
+  free(step);
+  status = ng_task_try_tool("task_status", "{}");
+  expect(status && json_num(status, "done") == 2 && json_num(status, "steps") == 2,
+         "status counts every done step");
+  free(status);
+  rem = ng_task_reminder_text();
+  expect(rem && json_num(rem, "steps_done") == 2 && json_num(rem, "steps_total") == 2,
+         "the reminder counts every done step");
+  free(rem);
+
+restore:
+  if (saved_auto) setenv("NANOBOT_AUGOGEN_AUTO", saved_auto, 1);
+  else unsetenv("NANOBOT_AUGOGEN_AUTO");
+  if (saved_peer) setenv("NANOBOT_MOTIVE_PEER", saved_peer, 1);
+  else unsetenv("NANOBOT_MOTIVE_PEER");
+  free(saved_auto);
+  free(saved_peer);
+}
+
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
@@ -1122,6 +1251,7 @@ int main(void) {
   test_shell_eof_reap();
   test_tail_ping();
   test_hub_closed_client();
+  test_task_own_done();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;
