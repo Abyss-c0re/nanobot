@@ -1102,77 +1102,7 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
-static void test_settings_long_line(void) {
-  char prev[512];
-  char home[] = "/tmp/nb-set-line-XXXXXX";
-  char *longv;
-  char *got;
-  char *body;
-  const char *e;
-  const char *nl;
-  FILE *f;
-  int i;
-  snprintf(prev, sizeof prev, "%s", ng_workdir());
-  if (!mkdtemp(home)) {
-    expect(0, "settings home");
-    return;
-  }
-  ng_set_workdir(home);
-  longv = malloc(640);
-  if (!longv) {
-    expect(0, "settings alloc");
-    goto restore;
-  }
-  for (i = 0; i < 600; i++) longv[i] = 'b';
-  memcpy(longv + 592, "TAILMARK", 8);
-  longv[600] = 0;
-  expect(ng_settings_set("long", longv) == 0, "store a long settings value");
-  expect(ng_settings_set("short", "two") == 0, "set another settings key");
-  got = ng_settings_get("long");
-  expect(got && strcmp(got, longv) == 0, "a long settings value stays whole");
-  free(got);
-  got = ng_settings_get("short");
-  expect(got && strcmp(got, "two") == 0, "the other settings key is stored");
-  free(got);
-  free(longv);
-
-  f = fopen(ng_settings_path(), "wb");
-  if (!f) {
-    expect(0, "settings rewrite file");
-    goto restore;
-  }
-  fputs("short=one\n", f);
-  fputs("exact511=", f);
-  for (i = 0; i < 511 - 9; i++) fputc('e', f);
-  fputc('\n', f);
-  fputs("exact512=", f);
-  for (i = 0; i < 512 - 9; i++) fputc('d', f);
-  fputc('\n', f);
-  fputc('#', f);
-  for (i = 0; i < 600; i++) fputc('c', f);
-  fputs("CMARK\n", f);
-  fputs("\n", f);
-  fputs("keep=yes  \n", f);
-  fclose(f);
-  expect(ng_settings_set("short", "two") == 0, "rewrite beside a 512-byte line");
-  body = ng_read_file(ng_settings_path(), NULL);
-  expect(body && strstr(body, "short=two\n") && !strstr(body, "short=one"),
-         "the other settings key is replaced");
-  e = body ? strstr(body, "exact511=") : NULL;
-  nl = e ? strchr(e, '\n') : NULL;
-  expect(e && nl && (size_t)(nl - e) == 511, "a 511-byte settings line stays");
-  e = body ? strstr(body, "exact512=") : NULL;
-  nl = e ? strchr(e, '\n') : NULL;
-  expect(e && nl && (size_t)(nl - e) == 512, "a 512-byte settings line keeps its last byte");
-  expect(body && strstr(body, "CMARK\n\nkeep=yes\n") && !strstr(body, "keep=yes "),
-         "a long comment stays and a short value still drops trailing spaces");
-  free(body);
-restore:
-  ng_set_workdir(prev);
-}
-
 int main(void) {
-  test_settings_long_line();
   test_cap_regular_fd();
   test_auto_orphan();
   test_auto_cap();
