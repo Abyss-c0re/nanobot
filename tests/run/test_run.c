@@ -1102,7 +1102,30 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
+static void test_job_poll_id(void) {
+  char longid[48];
+  expect(ng_job_poll_id_ok("17920000000001"), "a digit job id polls");
+  expect(ng_job_poll_id_ok("0"), "a short digit id polls");
+  expect(ng_job_poll_id_ok("agrun-0000000000-9"), "an auto job id polls");
+  expect(ng_job_poll_id_ok("agrun-1792123722-1209-3"), "a suffixed auto id polls");
+  expect(!ng_job_poll_id_ok("agrun-"), "an auto stem with no digit stays out");
+  expect(!ng_job_poll_id_ok("agrun"), "a bare stem stays out");
+  expect(!ng_job_poll_id_ok(""), "an empty id stays out");
+  expect(!ng_job_poll_id_ok(NULL), "a missing id stays out");
+  expect(!ng_job_poll_id_ok("nope"), "a word id stays out");
+  expect(!ng_job_poll_id_ok("12a"), "a mixed id stays out");
+  expect(!ng_job_poll_id_ok(".."), "a dotdot id stays out");
+  expect(!ng_job_poll_id_ok("agrun-1..2"), "a dot inside an auto id stays out");
+  expect(!ng_job_poll_id_ok("AGRUN-0000000000-9"), "an upper auto id stays out");
+  memset(longid, '1', 40);
+  longid[40] = 0;
+  expect(!ng_job_poll_id_ok(longid), "a 40-digit id stays out");
+  longid[39] = 0;
+  expect(ng_job_poll_id_ok(longid), "a 39-digit id polls");
+}
+
 int main(void) {
+  test_job_poll_id();
   test_cap_regular_fd();
   test_auto_orphan();
   test_auto_cap();

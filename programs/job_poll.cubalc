@@ -1,0 +1,17 @@
+// A job poll accepts an auto id.
+// A digit id still polls. The ranker is unchanged.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE poll ROLE observer PROTON 1
+CUBE law  ROLE nanobot  PROTON 1
+
+PLUG poll law
+
+IMPULSE poll 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "poll" UNITY DECIDE ENERGY

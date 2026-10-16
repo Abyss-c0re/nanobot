@@ -26,6 +26,8 @@ int ng_http_serve(ng_http_cfg *cfg);
 void ng_jobs_mark_orphans(const char *jdir);
 /* Done and error jobs past 48 drop. Digit ids and auto ids keep separate caps. */
 void ng_jobs_gc(const char *jdir);
+/* 1 when a poll id is all digits, or agrun- plus digits and hyphens. */
+int ng_job_poll_id_ok(const char *id);
 
 /* The accept loop counts a worker before fork. A failed fork releases it. */
 void ng_http_worker_slots_reset(void);

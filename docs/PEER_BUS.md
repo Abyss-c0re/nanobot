@@ -47,4 +47,6 @@ POST /peer/v1/jobs  {"kind":"prompt","prompt":"…"}
 GET  /peer/v1/jobs/<id>
 ```
 
+An auto id `agrun-` plus digits and hyphens polls. A digit id still polls. Any other id is `bad_id`.
+
 See SECURITY.md for threat model.
