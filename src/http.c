@@ -164,32 +164,6 @@ static void jobs_gc(const char *jdir) {
 
 void ng_jobs_gc(const char *jdir) { jobs_gc(jdir); }
 
-/* 1 when a poll id is all digits, or agrun- plus digits and hyphens. */
-int ng_job_poll_id_ok(const char *id) {
-  size_t n, i;
-  int digit = 0;
-  int all_digit = 1;
-  if (!id || !id[0]) return 0;
-  n = strlen(id);
-  if (n >= 40) return 0;
-  if (strstr(id, "..")) return 0;
-  for (i = 0; i < n; i++) {
-    if ((unsigned char)id[i] < '0' || (unsigned char)id[i] > '9') {
-      all_digit = 0;
-      break;
-    }
-  }
-  if (all_digit) return 1;
-  if (n < 8 || strncmp(id, "agrun-", 6) != 0) return 0;
-  for (i = 6; i < n; i++) {
-    unsigned char c = (unsigned char)id[i];
-    if (c == '-') continue;
-    if (c < '0' || c > '9') return 0;
-    digit = 1;
-  }
-  return digit;
-}
-
 /* Residual: cool_restart / SIGTERM kills job worker children; metas stay
  * status=running|queued forever (jobs_gc never drops live). Mesh poll spins.
  * On listen only — mark orphans error so GC and dual-wire poll can finish.
@@ -8483,10 +8457,16 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
       free(req); close(cfd); return;
     }
     const char *id = idbuf;
-    /* A digit id stays. An auto id agrun- with digits and hyphens polls. */
-    if (!ng_job_poll_id_ok(id)) {
+    /* job ids are digits only (time+pid) */
+    if (!id[0] || strstr(id, "..")) {
       http_peer_err(cfd, 400, "bad_id");
       free(req); close(cfd); return;
+    }
+    for (const char *p = id; *p; p++) {
+      if (!isdigit((unsigned char)*p)) {
+        http_peer_err(cfd, 400, "bad_id");
+        free(req); close(cfd); return;
+      }
     }
     char mpath[700];
     snprintf(mpath, sizeof mpath, "%s/jobs/%s.json", ng_workdir(), id);
