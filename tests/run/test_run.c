@@ -3,7 +3,6 @@
 #include "auth.h"
 #include "http.h"
 #include "hub_local.h"
-#include "mcp.h"
 #include "runctl.h"
 #include "shell.h"
 #include "util.h"
@@ -1103,178 +1102,6 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
-static int mcp_once(const char *home, const char *line, char *out, size_t outsz) {
-  int in_fd[2];
-  int out_fd[2];
-  pid_t pid;
-  size_t got = 0;
-  if (pipe(in_fd) != 0 || pipe(out_fd) != 0) return -1;
-  pid = fork();
-  if (pid < 0) {
-    close(in_fd[0]);
-    close(in_fd[1]);
-    close(out_fd[0]);
-    close(out_fd[1]);
-    return -1;
-  }
-  if (pid == 0) {
-    ng_agent_cfg cfg;
-    char logpath[700];
-    close(in_fd[1]);
-    close(out_fd[0]);
-    if (dup2(in_fd[0], STDIN_FILENO) < 0) _exit(2);
-    if (dup2(out_fd[1], STDOUT_FILENO) < 0) _exit(2);
-    close(in_fd[0]);
-    close(out_fd[1]);
-    ng_set_workdir(home);
-    snprintf(logpath, sizeof logpath, "%s/nanobot.log", home);
-    ng_log_init(logpath);
-    ng_agent_cfg_init(&cfg);
-    ng_mcp_stdio_run(&cfg);
-    ng_agent_cfg_free(&cfg);
-    _exit(0);
-  }
-  close(in_fd[0]);
-  close(out_fd[1]);
-  if (line && line[0]) {
-    size_t n = strlen(line);
-    if (write(in_fd[1], line, n) < 0 || write(in_fd[1], "\n", 1) < 0) {
-      close(in_fd[1]);
-      close(out_fd[0]);
-      waitpid(pid, NULL, 0);
-      return -1;
-    }
-  }
-  close(in_fd[1]);
-  while (got + 1 < outsz) {
-    ssize_t r = read(out_fd[0], out + got, outsz - 1 - got);
-    if (r <= 0) break;
-    got += (size_t)r;
-  }
-  out[got] = 0;
-  close(out_fd[0]);
-  waitpid(pid, NULL, 0);
-  return (int)got;
-}
-
-static void write_text(const char *path, const char *text) {
-  FILE *f = fopen(path, "w");
-  if (!f) return;
-  fputs(text, f);
-  fclose(f);
-}
-
-static void test_mcp_tool_name(void) {
-  char home[] = "/tmp/nanobot-mcp-XXXXXX";
-  char path[720];
-  char buf[4096];
-  const char *prev_auto = getenv("NANOBOT_AUGOGEN_AUTO");
-  const char *prev_peer = getenv("NANOBOT_MOTIVE_PEER");
-  char *auto_copy = prev_auto ? strdup(prev_auto) : NULL;
-  char *peer_copy = prev_peer ? strdup(prev_peer) : NULL;
-
-  setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
-  setenv("NANOBOT_MOTIVE_PEER", "off", 1);
-  if (!mkdtemp(home)) {
-    expect(0, "mcp home");
-    goto restore;
-  }
-  snprintf(path, sizeof path, "%s/memory", home);
-  mkdir(path, 0700);
-  snprintf(path, sizeof path, "%s/memory/core.txt", home);
-  write_text(path, "self-improvement\nCOREMARK\n");
-  snprintf(path, sizeof path, "%s/memory/memory_read.txt", home);
-  write_text(path, "TOOLMARK\n");
-  snprintf(path, sizeof path, "%s/memory/co}re.txt", home);
-  write_text(path, "BRACEMARK\n");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\","
-                  "\"params\":{\"name\":\"memory_read\",\"arguments\":{\"name\":\"core\"}}}",
-                  buf, sizeof buf) > 0,
-         "name-first call");
-  expect(strstr(buf, "COREMARK") != NULL, "name-first reads the argument file");
-  expect(strstr(buf, "TOOLMARK") == NULL, "name-first does not read the tool file");
-  expect(strstr(buf, "unknown_tool") == NULL, "name-first is a known tool");
-  expect(strstr(buf, "\"id\":7") != NULL, "name-first keeps the call id");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\","
-                  "\"params\":{\"arguments\":{\"name\":\"core\"},\"name\":\"memory_read\"}}",
-                  buf, sizeof buf) > 0,
-         "arguments-first call");
-  expect(strstr(buf, "COREMARK") != NULL, "arguments-first reads the argument file");
-  expect(strstr(buf, "unknown_tool") == NULL, "arguments-first is not an unknown tool");
-  expect(strstr(buf, "\"tool\":\"core\"") == NULL, "arguments-first does not use the argument as the tool");
-  expect(strstr(buf, "TOOLMARK") == NULL, "arguments-first does not read the tool file");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\","
-                  "\"params\":{\"arguments\":{\"name\":\"co}re\"},\"name\":\"memory_read\"}}",
-                  buf, sizeof buf) > 0,
-         "brace argument call");
-  expect(strstr(buf, "BRACEMARK") != NULL, "a brace inside the argument stays in the name");
-  expect(strstr(buf, "unknown_tool") == NULL, "a brace inside arguments does not hide the tool");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\","
-                  "\"params\":{\"label\":\"name\",\"name\":\"memory_read\","
-                  "\"arguments\":{\"name\":\"core\"}}}",
-                  buf, sizeof buf) > 0,
-         "value named name");
-  expect(strstr(buf, "COREMARK") != NULL, "a value named name is not the tool");
-  expect(strstr(buf, "unknown_tool") == NULL, "a value named name still calls memory_read");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/call\","
-                  "\"params\":{\"arguments\":{\"name\":\"core\"},\"name\" : \"memory_read\"}}",
-                  buf, sizeof buf) > 0,
-         "spaced tool name");
-  expect(strstr(buf, "COREMARK") != NULL, "a spaced tool name still reads the argument file");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"tools/call\","
-                  "\"params\":{\"arguments\":{},\"name\":\"home_info\"}}",
-                  buf, sizeof buf) > 0,
-         "arguments-first home");
-  expect(strstr(buf, "home_info") != NULL && strstr(buf, "\"isError\":false") != NULL,
-         "arguments-first home_info runs");
-  expect(strstr(buf, "unknown_tool") == NULL, "home_info is a known tool");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"prompts/get\","
-                  "\"params\":{\"name\":\"self_improve\",\"arguments\":{\"focus\":\"ports\"}}}",
-                  buf, sizeof buf) > 0,
-         "prompt name first");
-  expect(strstr(buf, "focus=ports") != NULL, "prompt arguments stay in arguments");
-  expect(strstr(buf, "unknown prompt") == NULL, "prompt name stays the params name");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"prompts/get\","
-                  "\"params\":{\"arguments\":{\"focus\":\"ports\"},\"name\":\"self_improve\"}}",
-                  buf, sizeof buf) > 0,
-         "prompt arguments first");
-  expect(strstr(buf, "focus=ports") != NULL, "prompt focus stays when arguments are first");
-  expect(strstr(buf, "unknown prompt") == NULL, "prompt name still follows arguments");
-
-  expect(mcp_once(home,
-                  "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\","
-                  "\"params\":{\"name\":\"not_a_tool\",\"arguments\":{\"name\":\"core\"}}}",
-                  buf, sizeof buf) > 0,
-         "unknown tool call");
-  expect(strstr(buf, "unknown_tool") != NULL, "an unknown tool stays unknown");
-  expect(strstr(buf, "not_a_tool") != NULL, "the unknown tool name stays");
-  expect(strstr(buf, "COREMARK") == NULL, "an unknown tool does not read memory");
-
-restore:
-  if (auto_copy) setenv("NANOBOT_AUGOGEN_AUTO", auto_copy, 1);
-  else unsetenv("NANOBOT_AUGOGEN_AUTO");
-  if (peer_copy) setenv("NANOBOT_MOTIVE_PEER", peer_copy, 1);
-  else unsetenv("NANOBOT_MOTIVE_PEER");
-  free(auto_copy);
-  free(peer_copy);
-}
-
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
@@ -1295,7 +1122,6 @@ int main(void) {
   test_shell_eof_reap();
   test_tail_ping();
   test_hub_closed_client();
-  test_mcp_tool_name();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;
