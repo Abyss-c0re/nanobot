@@ -30,6 +30,10 @@ const char *ng_motive_plate_name(int plate) {
   return kPlates[plate];
 }
 
+static int word_byte(unsigned char c) {
+  return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+}
+
 static void norm_text(const char *in, char *out, size_t cap) {
   size_t o = 0;
   int sp = 1;
@@ -40,12 +44,27 @@ static void norm_text(const char *in, char *out, size_t cap) {
     unsigned char c = (unsigned char)*in;
     if (c == '\'') continue;
     if (c >= 'A' && c <= 'Z') c = (unsigned char)(c - 'A' + 'a');
-    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+    if (word_byte(c)) {
       out[o++] = (char)c;
       sp = 0;
     } else if (!sp) {
       out[o++] = ' ';
       sp = 1;
+    }
+  }
+  /* A full cap can stop inside a word. Drop that fragment when an earlier
+   * word already fit, so the cut does not invent a shorter word. A single
+   * word that fills the cap stays. */
+  if (*in && o > 0 && out[o - 1] != ' ') {
+    const char *p = in;
+    unsigned char c;
+    while (*p == '\'') p++;
+    c = (unsigned char)*p;
+    if (c >= 'A' && c <= 'Z') c = (unsigned char)(c - 'A' + 'a');
+    if (word_byte(c)) {
+      size_t t = o;
+      while (t > 0 && out[t - 1] != ' ') t--;
+      if (t > 0) o = t;
     }
   }
   while (o > 0 && out[o - 1] == ' ') o--;
