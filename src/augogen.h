@@ -27,8 +27,6 @@
  * The plate stays unexecuted. A queued job left for a later listen stays queued.
  * A motive text decodes a JSON unicode escape before the rank.
  * A JSON backspace or form feed in that text is a separator before the rank.
- * A typographic single quote in that text is deleted with an ASCII apostrophe.
- * A typographic double quote stays a separator.
  * A motive request may pass a quoted lex_w for that call only.
  * Generate keeps the process weight. The plate file omits lex_w.
  * When that motive request quoted lex_w, the one peer POST quotes it too.

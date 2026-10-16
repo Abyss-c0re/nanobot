@@ -4,7 +4,6 @@
 /* Hive motive. Hybrid rank of eight concepts plus a priority cascade.
  * Rank uses the caller stack: 192-byte norm, 24 tokens, no heap.
  * A concept line with one word said twice in a row keeps sketch distance zero.
- * A typographic single quote is deleted with an ASCII apostrophe.
  * NANOBOT_MOTIVE_LEX_W is the lexical weight, 0-255. Unset stays 64.
  * A forward plate may become a 2–12 word self-prompt. Destructive plates
  * stay on the wire as a remedy line and are not applied.
