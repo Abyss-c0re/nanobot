@@ -118,6 +118,7 @@
 - **runs:** a `filter.json` longer than the 8192-byte cache is left unparsed, so the filter already loaded stays.
 - **runs:** the run list keeps at most 32 status plates, chosen as the runs whose events file was modified most recently.
 - **hub:** an events stream ends when a write to the client fails, so a closed client does not keep the child for the hour.
+- **hub:** an events `since` cursor matches the query key `since`. A longer key that only ends with those letters leaves the cursor at the start. `since` written after another key still seeks that byte offset. CubalC board: `programs/hub_since.cubalc`.
 - **runs:** a run event stream ends when a write to the client fails, so a closed client does not keep the worker for the rest of the 20 second window.
 - **runs:** a run event stream writes an SSE comment ping about once a second while it waits, and ends when that ping fails, so a quiet closed client does not keep the worker for the rest of the window.
 - **runs:** abort kills a shell already inside `ng_run_command`, then the run finishes aborted.

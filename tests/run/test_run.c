@@ -491,6 +491,126 @@ static void test_hub_closed_client(void) {
   waitpid(pid, NULL, 0);
 }
 
+static int hub_collect(int port, const char *path, char *buf, size_t bufsz) {
+  int cfd = -1;
+  int got = 0;
+  int i;
+  struct sockaddr_in addr;
+  char req[640];
+  buf[0] = 0;
+  snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: loop\r\n\r\n", path);
+  for (i = 0; i < 50; i++) {
+    cfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (cfd < 0) return -1;
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons((uint16_t)port);
+    if (connect(cfd, (struct sockaddr *)&addr, sizeof addr) == 0) break;
+    close(cfd);
+    cfd = -1;
+    usleep(20000);
+  }
+  if (cfd < 0) return -1;
+  {
+    struct timeval tv;
+    tv.tv_sec = 2;
+    tv.tv_usec = 0;
+    setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  }
+  if (send(cfd, req, strlen(req), 0) < 0) {
+    close(cfd);
+    return -1;
+  }
+  while (got < (int)bufsz - 1) {
+    ssize_t r = recv(cfd, buf + got, bufsz - 1 - (size_t)got, 0);
+    if (r <= 0) break;
+    got += (int)r;
+    buf[got] = 0;
+    if (strstr(buf, ": ping")) break;
+  }
+  close(cfd);
+  return got;
+}
+
+static void test_hub_since(void) {
+  char home[] = "/tmp/nanobot-hubs-XXXXXX";
+  char file[720];
+  char q[160];
+  char buf[2048];
+  const char *line1 = "{\"k\":\"aa\"}\n";
+  const char *body = "{\"k\":\"aa\"}\n{\"k\":\"bb\"}\n";
+  long off;
+  int port = -1;
+  int lfd;
+  pid_t pid;
+  struct sockaddr_in addr;
+  socklen_t al = sizeof addr;
+  FILE *f;
+  if (!mkdtemp(home)) {
+    expect(0, "hub since home");
+    return;
+  }
+  ng_set_workdir(home);
+  snprintf(file, sizeof file, "%s/hub", home);
+  mkdir(file, 0700);
+  snprintf(file, sizeof file, "%s/hub/events.jsonl", home);
+  f = fopen(file, "w");
+  expect(f != NULL, "hub events file");
+  if (!f) return;
+  fputs(body, f);
+  fclose(f);
+  off = (long)strlen(line1);
+  expect(off == 11, "first event is 11 bytes");
+  lfd = socket(AF_INET, SOCK_STREAM, 0);
+  expect(lfd >= 0, "hub since socket");
+  if (lfd < 0) return;
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = 0;
+  if (bind(lfd, (struct sockaddr *)&addr, sizeof addr) == 0 &&
+      getsockname(lfd, (struct sockaddr *)&addr, &al) == 0)
+    port = ntohs(addr.sin_port);
+  close(lfd);
+  expect(port > 0, "hub since port");
+  if (port <= 0) return;
+  pid = fork();
+  expect(pid >= 0, "hub since fork");
+  if (pid < 0) return;
+  if (pid == 0) {
+    ng_hub_out_cfg cfg;
+    setpgid(0, 0);
+    memset(&cfg, 0, sizeof cfg);
+    cfg.port_out = port;
+    ng_hub_out_serve(&cfg);
+    _exit(0);
+  }
+  setpgid(pid, pid);
+  snprintf(q, sizeof q, "/hub/v1/events?preview_since=4&since=%ld", off);
+  expect(hub_collect(port, q, buf, sizeof buf) > 0, "later since connects");
+  expect(strstr(buf, "{\"k\":\"bb\"}") != NULL, "later since keeps the second event");
+  expect(strstr(buf, "{\"k\":\"aa\"}") == NULL, "later since skips the first event");
+  expect(strstr(buf, ":\"aa\"}") == NULL, "later since does not tear the first event");
+  snprintf(q, sizeof q, "/hub/v1/events?since=%ld&preview_since=4", off);
+  expect(hub_collect(port, q, buf, sizeof buf) > 0, "leading since connects");
+  expect(strstr(buf, "{\"k\":\"bb\"}") != NULL, "leading since keeps the second event");
+  expect(strstr(buf, "{\"k\":\"aa\"}") == NULL, "leading since skips the first event");
+  snprintf(q, sizeof q, "/hub/v1/events?since=%ld", off);
+  expect(hub_collect(port, q, buf, sizeof buf) > 0, "lone since connects");
+  expect(strstr(buf, "{\"k\":\"bb\"}") != NULL, "lone since keeps the second event");
+  expect(strstr(buf, "{\"k\":\"aa\"}") == NULL, "lone since skips the first event");
+  expect(hub_collect(port, "/hub/v1/events?preview_since=4", buf, sizeof buf) > 0,
+         "longer key connects");
+  expect(strstr(buf, "{\"k\":\"aa\"}") != NULL, "a longer key keeps the first event");
+  expect(strstr(buf, "{\"k\":\"bb\"}") != NULL, "a longer key keeps the second event");
+  expect(hub_collect(port, "/hub/v1/events", buf, sizeof buf) > 0, "plain events connect");
+  expect(strstr(buf, "{\"k\":\"aa\"}") != NULL && strstr(buf, "{\"k\":\"bb\"}") != NULL,
+         "a plain stream keeps both events");
+  kill(-pid, SIGTERM);
+  waitpid(pid, NULL, 0);
+}
+
 static void test_tail_stop(void) {
   char home[] = "/tmp/nanobot-run-XXXXXX";
   char *id;
@@ -1122,6 +1242,7 @@ int main(void) {
   test_shell_eof_reap();
   test_tail_ping();
   test_hub_closed_client();
+  test_hub_since();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;
