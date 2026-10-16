@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -1392,6 +1393,108 @@ int main(void) {
     ng_motive_rank("read the law and prove", &m);
     expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
            "a second job leaves the law rank");
+  }
+
+  /* A failed fork marks the auto job error. A queued job stays queued. */
+  {
+    char forkhome[] = "/tmp/nb-motive-fork";
+    char path[512];
+    char plate[1200];
+    char id[48];
+    pid_t kid;
+    int st = 0;
+    DIR *d;
+    struct dirent *de;
+    int njson = 0;
+    mkdir(forkhome, 0700);
+    snprintf(path, sizeof path, "%s/jobs", forkhome);
+    mkdir(path, 0700);
+    d = opendir(path);
+    if (d) {
+      while ((de = readdir(d)) != NULL) {
+        if (strncmp(de->d_name, "agrun-", 6) == 0) {
+          snprintf(path, sizeof path, "%s/jobs/%s", forkhome, de->d_name);
+          unlink(path);
+        }
+      }
+      closedir(d);
+    }
+    unlink("/tmp/nb-motive-fork/plate.txt");
+    kid = fork();
+    expect(kid >= 0, "fork fail probe starts");
+    if (kid == 0) {
+      struct rlimit rl;
+      char *body;
+      FILE *pf;
+      if (getrlimit(RLIMIT_NPROC, &rl) != 0) _exit(2);
+      rl.rlim_cur = 1;
+      if (setrlimit(RLIMIT_NPROC, &rl) != 0) _exit(3);
+      setenv("NANOBOT_AUGOGEN_AUTO", "1", 1);
+      setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+      nb_set_workdir(forkhome);
+      body = ng_augogen_handle(
+          NULL, "{\"action\":\"generate\",\"suggestion\":\"read the law and prove\"}");
+      pf = fopen("/tmp/nb-motive-fork/plate.txt", "wb");
+      if (!pf) {
+        free(body);
+        _exit(4);
+      }
+      if (body) fputs(body, pf);
+      fclose(pf);
+      free(body);
+      _exit(0);
+    }
+    if (kid > 0) waitpid(kid, &st, 0);
+    expect(kid > 0 && WIFEXITED(st) && WEXITSTATUS(st) == 0, "fork fail probe exits");
+    {
+      FILE *pf = fopen("/tmp/nb-motive-fork/plate.txt", "rb");
+      size_t n = 0;
+      plate[0] = 0;
+      if (pf) {
+        n = fread(plate, 1, sizeof plate - 1, pf);
+        fclose(pf);
+      }
+      plate[n] = 0;
+    }
+    expect(strstr(plate, "\"executed\":false") != NULL, "a failed fork stays unexecuted");
+    expect(strstr(plate, "\"status\":\"applied\"") != NULL, "a failed fork still applied");
+    job_id_of(plate, id, sizeof id);
+    expect(strncmp(id, "agrun-", 6) == 0, "a failed fork names the job");
+    snprintf(path, sizeof path, "%s/jobs/%s.json", forkhome, id);
+    {
+      FILE *f = fopen(path, "rb");
+      char buf[600];
+      size_t n = 0;
+      expect(f != NULL, "a failed fork leaves the job file");
+      if (f) {
+        n = fread(buf, 1, sizeof buf - 1, f);
+        fclose(f);
+      }
+      buf[n] = 0;
+      expect(strstr(buf, "\"status\":\"error\"") != NULL, "a failed fork marks the job error");
+      expect(strstr(buf, "fork_failed") != NULL, "a failed fork names fork_failed");
+      expect(strstr(buf, "\"status\":\"queued\"") == NULL, "a failed fork does not stay queued");
+    }
+    snprintf(path, sizeof path, "%s/jobs/%s.in", forkhome, id);
+    expect(file_eq(path, "read the law and prove"), "a failed fork keeps the prompt");
+    d = opendir("/tmp/nb-motive-fork/jobs");
+    if (d) {
+      while ((de = readdir(d)) != NULL) {
+        size_t len = strlen(de->d_name);
+        if (len > 5 && strcmp(de->d_name + len - 5, ".json") == 0) njson++;
+      }
+      closedir(d);
+    }
+    expect(njson == 1, "a failed fork leaves one job file");
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a failed fork leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a failed fork leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a failed fork leaves an empty query at rank 0");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
   }
 
   /* A done auto job past the keep cap drops. A queued job stays. */

@@ -185,7 +185,8 @@ static void reap_done_auto_jobs(const char *jdir) {
 
 /* Fork a prompt job (same shape as POST /peer/v1/jobs). Never blocks HTTP.
  * A second prompt in the same second keeps its own file. The first stays.
- * A done auto job past the keep cap drops. A queued job stays. */
+ * A done auto job past the keep cap drops. A queued job stays.
+ * A failed fork marks the reserved file error. It does not stay queued. */
 static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
                           size_t id_n) {
   char jdir[640], mpath[700], rpath[700], pp[700], meta[768];
@@ -281,7 +282,19 @@ static int enqueue_prompt(ng_agent_cfg *agent, const char *prompt, char *id_out,
     free(reply);
     _exit(0);
   }
-  if (w < 0) return 0;
+  if (w < 0) {
+    char errm[512];
+    int en = snprintf(errm, sizeof errm,
+                      "{\"schema\":\"nanobot.peer_http.v1\",\"ok\":false,"
+                      "\"action\":\"job\",\"id\":\"%s\",\"status\":\"error\","
+                      "\"kind\":\"prompt\",\"via\":\"augogen_auto\","
+                      "\"error\":\"fork_failed\"}\n",
+                      id);
+    if (en > 0 && (size_t)en < sizeof errm)
+      ng_write_file(mpath, errm, (size_t)en);
+    if (id_out && id_n) snprintf(id_out, id_n, "%s", id);
+    return 0;
+  }
   if (id_out && id_n) snprintf(id_out, id_n, "%s", id);
   (void)rpath;
   return 1;
