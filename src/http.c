@@ -7756,11 +7756,18 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
                  strcmp(path, "/api/control") == 0 || strcmp(path, "/api/control/") == 0 ||
                  strcmp(path, "/api/v1/control") == 0 ||
                  strcmp(path, "/api/v1/control/") == 0)) {
-    char wp[640];
+    char sp[640], wp[640];
+    snprintf(sp, sizeof sp, "%s/shell_enabled", ng_workdir());
     snprintf(wp, sizeof wp, "%s/watcher_enabled", ng_workdir());
-    /* The command gate owns this word. The plate reads that gate. */
-    int shell_on = ng_shell_is_enabled();
-    int watch_on = 0, ui_on = 0;
+    int shell_on = 1, watch_on = 0, ui_on = 0;
+    {
+      FILE *f = fopen(sp, "r");
+      if (f) {
+        char b[16] = {0};
+        if (fgets(b, sizeof b, f) && (b[0] == '0' || !strncasecmp(b, "off", 3))) shell_on = 0;
+        fclose(f);
+      }
+    }
     {
       FILE *f = fopen(wp, "r");
       if (f) {
@@ -7839,7 +7846,17 @@ static void handle_client(int cfd, ng_http_cfg *cfg) {
     }
     int enabled = 0;
     if (!strcmp(svc, "shell")) {
-      enabled = ng_shell_is_enabled();
+      char sp[640];
+      snprintf(sp, sizeof sp, "%s/shell_enabled", ng_workdir());
+      enabled = 1;
+      FILE *f = fopen(sp, "r");
+      if (f) {
+        char b[16] = {0};
+        if (fgets(b, sizeof b, f) &&
+            (b[0] == '0' || !strncasecmp(b, "off", 3)))
+          enabled = 0;
+        fclose(f);
+      }
     } else if (!strcmp(svc, "watcher")) {
       char wp[640];
       snprintf(wp, sizeof wp, "%s/watcher_enabled", ng_workdir());

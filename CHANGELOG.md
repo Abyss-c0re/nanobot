@@ -128,7 +128,6 @@
 - **feat(task):** internal tools `task_plan` / `task_start` / `task_step_done` / `task_done` / `task_block` / `task_status`; open tasks self-remind each turn until done or blocked (hard max turns)
 - **feat(http):** `POST /api/chat` with `"stream":true` returns SSE (`text/event-stream`) deltas via `ng_agent_run_ex` for real-time typing clients
 - **fix(json/memory):** safer UTF-8 JSON escape + memory truncation so provider payloads never ship broken code points
-- **hive:** the control plate and the shell status plate report the same shell flag the command gate uses. The words false and disabled stay off. A word that only begins with off, such as offline, stays on. The word no stays on. A missing file stays on. The ranker is unchanged. CubalC board: `programs/shell_word.cubalc`.
 
 
 All notable changes to this project are documented here.
