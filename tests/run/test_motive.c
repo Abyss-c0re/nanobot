@@ -1280,6 +1280,73 @@ int main(void) {
   expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
          "an interior blank leaves the law rank");
 
+  /* A meta line closed by a bang or a question is still that meta line. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no suggestion!\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a meta line closed by a bang is not stored");
+  expect(js && !strstr(js, "prompt a peer to move"),
+         "a banged meta line is not the peer line");
+  expect(js && !strstr(js, "no suggestion"), "a banged meta line leaves no words");
+  free(js);
+  {
+    char *pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"\"") && strstr(pend, "\"status\":\"empty\""),
+           "a banged meta line stays off the plate");
+    free(pend);
+  }
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no suggestion?\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a meta line closed by a question is not stored");
+  expect(js && !strstr(js, "prompt a peer to move"),
+         "a questioned meta line is not the peer line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"NO SUGGESTION?\"}");
+  expect(js && strstr(js, "\"suggestion\":\"\"") && !strstr(js, "NO SUGGESTION"),
+         "a closed meta line folds case");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no suggestion!!\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a meta line closed by two bangs is not stored");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move now!\"}");
+  expect(js && strstr(js, "\"suggestion\":\"move now!\""),
+         "a bang on a real line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read the law and prove!\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove!\""),
+         "a bang on the law line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"nothing to add!\"}");
+  expect(js && strstr(js, "\"suggestion\":\"nothing to add!\""),
+         "a bang after more words stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"silence? please move\"}");
+  expect(js && strstr(js, "\"suggestion\":\"silence? please move\""),
+         "a question inside a longer line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no suggestion !\"}");
+  expect(js && strstr(js, "\"suggestion\":\"no suggestion !\""),
+         "a space before a bang keeps the line");
+  free(js);
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a closed meta line leaves the law rank");
+  ng_motive_rank("you lied", &m);
+  expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+         "a closed meta line leaves confess");
+  ng_motive_rank("", &m);
+  expect(m.rank == 0, "a closed meta line leaves an empty query at rank 0");
+
   /* A second prompt in the same second keeps its own file. The first stays. */
   {
     int tries, got = 0;
