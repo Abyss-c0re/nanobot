@@ -296,14 +296,34 @@ static char *tool_plan(const char *args) {
   }
 }
 
+/* Opening quote: return the byte after the close. A backslash skips one byte. */
+static const char *skip_json_string(const char *p) {
+  if (!p || *p != '"') return p;
+  p++;
+  while (*p) {
+    if (*p == '\\') {
+      p++;
+      if (*p) p++;
+      continue;
+    }
+    if (*p == '"') return p + 1;
+    p++;
+  }
+  return p;
+}
+
 static char *extract_steps_array(const char *j) {
   const char *sp = strstr(j, "\"steps\"");
   if (!sp) return strdup("[]");
   const char *arr = strchr(sp, '[');
   if (!arr) return strdup("[]");
   int depth = 0;
-  const char *t;
-  for (t = arr; *t; t++) {
+  const char *t = arr;
+  while (*t) {
+    if (*t == '"') {
+      t = skip_json_string(t);
+      continue;
+    }
     if (*t == '[') depth++;
     else if (*t == ']') {
       depth--;
@@ -312,6 +332,7 @@ static char *extract_steps_array(const char *j) {
         break;
       }
     }
+    t++;
   }
   size_t n = (size_t)(t - arr);
   char *out = malloc(n + 1);
@@ -405,13 +426,18 @@ static char *tool_step_done(const char *args) {
     if (*p != '{') break;
     const char *obj = p;
     int depth = 0;
-    const char *q;
-    for (q = p; *q; q++) {
+    const char *q = p;
+    while (*q) {
+      if (*q == '"') {
+        q = skip_json_string(q);
+        continue;
+      }
       if (*q == '{') depth++;
       else if (*q == '}') {
         depth--;
         if (depth == 0) { q++; break; }
       }
+      q++;
     }
     size_t olen = (size_t)(q - obj);
     char objbuf[512];
