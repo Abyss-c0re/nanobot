@@ -1,0 +1,18 @@
+// A vertical tab, a form feed, a field separator, or a unicode space
+// at the start of a suggestion does not fill the line cap.
+// A break after that mark still ends the line.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE room ROLE observer PROTON 1
+CUBE law  ROLE nanobot  PROTON 1
+
+PLUG room law
+
+IMPULSE room 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "room" UNITY DECIDE ENERGY

@@ -98,6 +98,33 @@ static int file_eq(const char *path, const char *want) {
   return strcmp(buf, want) == 0;
 }
 
+/* Generate JSON: suggestion is rep copies of a JSON escape, then tail. */
+static char *gen_rep(const char *esc, int rep, const char *tail) {
+  char *buf = malloc(8192);
+  int o, i, k;
+  if (!buf) return NULL;
+  o = snprintf(buf, 8192,
+               "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"");
+  if (o < 0) {
+    free(buf);
+    return NULL;
+  }
+  for (i = 0; i < rep; i++) {
+    k = snprintf(buf + o, 8192 - (size_t)o, "%s", esc);
+    if (k < 0 || o + k >= 8192) {
+      free(buf);
+      return NULL;
+    }
+    o += k;
+  }
+  k = snprintf(buf + o, 8192 - (size_t)o, "%s\"}", tail ? tail : "");
+  if (k < 0 || o + k >= 8192) {
+    free(buf);
+    return NULL;
+  }
+  return buf;
+}
+
 static int count_substr(const char *s, const char *n) {
   int c = 0;
   size_t L;
@@ -1360,6 +1387,142 @@ int main(void) {
          "a unit separator leaves you lied");
   ng_motive_rank("", &m);
   expect(m.rank == 0, "a unit separator leaves an empty query at rank 0");
+
+  /* Edge marks that trim do not fill the line cap. A break still ends the line. */
+  {
+    char *body;
+    body = gen_rep("\\u000b", 300, "move now");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a long vertical-tab run does not eat the words");
+    expect(js && !strstr(js, "prompt a peer to move"),
+           "a long vertical-tab run is not the peer line");
+    free(js);
+    body = gen_rep("\\u000c", 300, "move now");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a long form-feed run does not eat the words");
+    free(js);
+    body = gen_rep("\\u001f", 300, "move now");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a long unit-separator run does not eat the words");
+    free(js);
+    body = gen_rep("\\u00a0", 160, "move now");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a long unicode-space run does not eat the words");
+    free(js);
+    body = gen_rep("\\u2003", 100, "move now");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a long em-space run does not eat the words");
+    free(js);
+    body = gen_rep("\\u00a0", 160, "\\\"move now\\\"");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a quote behind a long unicode-space run still drops");
+    free(js);
+    body = gen_rep("\\u000b ", 150, "move now");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a space between vertical tabs does not eat the words");
+    free(js);
+    body = gen_rep("\\u000b", 300, "move  now");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"move  now\""),
+           "a doubled space stays doubled after a long edge run");
+    free(js);
+    body = gen_rep("\\u000b", 300, "no suggestion!");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"no suggestion!\""),
+           "a bang on a meta line stays after a long edge run");
+    free(js);
+    body = gen_rep("\\u000b", 300, "hello");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"\"") && strstr(js, "\"status\":\"empty\""),
+           "a one-word line stays empty after a long edge run");
+    expect(js && !strstr(js, "prompt a peer to move"),
+           "a one-word line after a long edge run is not the peer line");
+    free(js);
+    body = gen_rep("\\u000b", 300, "read the law and prove\\u2014");
+    js = ng_augogen_handle(NULL, body);
+    free(body);
+    expect(js && strstr(js, "\"suggestion\":\"read the law and prove\xe2\x80\x94\""),
+           "an em dash stays after a long edge run");
+    free(js);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"\\u00a0\\nmove now\"}");
+    expect(js && strstr(js, "\"suggestion\":\"prompt a peer to move\""),
+           "a unicode space before a break still hides the next line");
+    expect(js && !strstr(js, "move now"),
+           "a break after a unicode space does not keep the next line");
+    free(js);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"\\u000b\\nmove now\"}");
+    expect(js && strstr(js, "\"suggestion\":\"prompt a peer to move\""),
+           "a vertical tab before a break still hides the next line");
+    expect(js && !strstr(js, "move now"),
+           "a break after a vertical tab does not keep the next line");
+    free(js);
+    js = ng_augogen_handle(
+        NULL,
+        "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":"
+        "\"bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb "
+        "bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb "
+        "bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb "
+        "bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb\"}");
+    expect(js && strstr(js, "\"suggestion\":\"bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb "
+                            "bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb "
+                            "bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb "
+                            "bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb "
+                            "bbbbbbbb\""),
+           "twelve long words stay cut at the cap");
+    free(js);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move now,\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move now,\""),
+           "an edge run leaves the trailing comma");
+    free(js);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move\\u0008now\"}");
+    expect(js && strstr(js, "\"status\":\"empty\"") && !strstr(js, "prompt a peer to move"),
+           "an edge run leaves a backspace between two words empty");
+    free(js);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "an edge run leaves the law rank");
+    ng_motive_rank("READ READ THE LAW AND PROVE", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "an edge run leaves the doubled law rank");
+    ng_motive_rank("pair pair vote then ship the step", &m);
+    expect(m.rank == 320 && m.lexical == 4 && m.hamming == 0,
+           "an edge run leaves the pair rank");
+    ng_motive_rank("read the law", &m);
+    expect(m.rank == 185 && m.lexical == 2 && m.hamming == 7,
+           "an edge run leaves the short law rank");
+    ng_motive_rank("read read the law", &m);
+    expect(m.rank == 179 && m.lexical == 2 && m.hamming == 13,
+           "an edge run leaves the partial law rank");
+    ng_motive_rank("please read the law and prove", &m);
+    expect(m.rank == 246 && m.lexical == 3 && m.hamming == 10,
+           "an edge run leaves the extra-word rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "an edge run leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "an edge run leaves an empty query at rank 0");
+  }
 
   /* A second prompt in the same second keeps its own file. The first stays. */
   {
