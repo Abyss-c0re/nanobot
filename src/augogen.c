@@ -718,20 +718,10 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
     lowered[i] = (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
   }
   lowered[i] = 0;
-  /* A meta line closed by bangs or questions is empty. A period stays as it was. */
   for (i = 0; meta[i]; i++) {
-    size_t n = strlen(meta[i]);
-    size_t k;
     if (strcmp(lowered, meta[i]) == 0 ||
-        (strncmp(lowered, meta[i], n) == 0 && lowered[n] == '.')) {
-      out[0] = 0;
-      return -1;
-    }
-    if (strncmp(lowered, meta[i], n) != 0) continue;
-    k = n;
-    if (lowered[k] != '!' && lowered[k] != '?') continue;
-    while (lowered[k] == '!' || lowered[k] == '?') k++;
-    if (lowered[k] == 0) {
+        (strncmp(lowered, meta[i], strlen(meta[i])) == 0 &&
+         lowered[strlen(meta[i])] == '.')) {
       out[0] = 0;
       return -1;
     }
