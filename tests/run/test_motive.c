@@ -1566,6 +1566,88 @@ int main(void) {
            "a reaped job leaves the law rank");
   }
 
+  /* A directory longer than the old scan still drops to the cap. */
+  {
+    char path[256];
+    int i, left = 0;
+    DIR *d = opendir("/tmp/nb-motive-test/jobs");
+    struct dirent *de;
+    if (d) {
+      while ((de = readdir(d)) != NULL) {
+        if (strncmp(de->d_name, "agrun-", 6) == 0) {
+          snprintf(path, sizeof path, "%s/jobs/%s", home, de->d_name);
+          unlink(path);
+        }
+      }
+      closedir(d);
+    }
+    for (i = 1; i <= 300; i++) {
+      FILE *f;
+      char id[40];
+      snprintf(id, sizeof id, "agrun-%010d-1", i);
+      snprintf(path, sizeof path, "%s/jobs/%s.json", home, id);
+      f = fopen(path, "wb");
+      expect(f != NULL, "seed a long done auto job");
+      if (f) {
+        fprintf(f, "{\"status\":\"done\",\"id\":\"%s\"}\n", id);
+        fclose(f);
+      }
+      snprintf(path, sizeof path, "%s/jobs/%s.in", home, id);
+      f = fopen(path, "wb");
+      if (f) {
+        fputs("old prompt", f);
+        fclose(f);
+      }
+    }
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000000-9.json", home);
+    {
+      FILE *f = fopen(path, "wb");
+      expect(f != NULL, "seed a queued auto job past the window");
+      if (f) {
+        fputs("{\"status\":\"queued\",\"id\":\"agrun-0000000000-9\"}\n", f);
+        fclose(f);
+      }
+    }
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000000-9.in", home);
+    {
+      FILE *f = fopen(path, "wb");
+      if (f) {
+        fputs("stay queued", f);
+        fclose(f);
+      }
+    }
+    setenv("NANOBOT_AUGOGEN_AUTO", "1", 1);
+    setenv("NANOBOT_MOTIVE_PEER", "off", 1);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"suggestion\":\"read the law and prove\"}");
+    free(js);
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    for (i = 0; i < 8; i++) {
+      if (waitpid(-1, NULL, WNOHANG) < 0) break;
+    }
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000001-1.in", home);
+    expect(access(path, F_OK) != 0, "the oldest done auto job past the window drops");
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000300-1.in", home);
+    expect(file_eq(path, "old prompt"), "the newest done auto job past the window stays");
+    snprintf(path, sizeof path, "%s/jobs/agrun-0000000000-9.in", home);
+    expect(file_eq(path, "stay queued"), "a queued auto job stays past the window");
+    for (i = 1; i <= 300; i++) {
+      char id[40];
+      snprintf(id, sizeof id, "agrun-%010d-1", i);
+      snprintf(path, sizeof path, "%s/jobs/%s.json", home, id);
+      if (access(path, F_OK) == 0) left++;
+    }
+    expect(left == 48, "a long auto directory keeps 48 done jobs");
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a long reap leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a long reap leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a long reap leaves an empty query at rank 0");
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

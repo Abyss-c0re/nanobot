@@ -107,8 +107,9 @@ static int pair_confirm_suggestion(ng_augogen *p) {
   return 0;
 }
 
-/* Done auto jobs past this cap drop. A queued or running job stays. */
-enum { AUTO_JOB_KEEP = 48, AUTO_JOB_SCAN = 256 };
+/* Done auto jobs past this cap drop. A queued or running job stays.
+ * A longer directory still keeps only this many. */
+enum { AUTO_JOB_KEEP = 48 };
 
 static int auto_job_stem(const char *stem, size_t n) {
   size_t i;
@@ -124,16 +125,36 @@ static int auto_job_stem(const char *stem, size_t n) {
   return digit;
 }
 
+static void reap_unlink_id(const char *jdir, const char *id) {
+  char p[700];
+  if (snprintf(p, sizeof p, "%s/%s.json", jdir, id) < (int)sizeof p) unlink(p);
+  if (snprintf(p, sizeof p, "%s/%s.in", jdir, id) < (int)sizeof p) unlink(p);
+  if (snprintf(p, sizeof p, "%s/%s.out", jdir, id) < (int)sizeof p) unlink(p);
+}
+
+/* Oldest id at index 0. Caller keeps n below the cap. */
+static void reap_keep_insert(char keep[][40], int *n, const char *id) {
+  int j = *n;
+  size_t nlen = strlen(id);
+  while (j > 0 && strcmp(keep[j - 1], id) > 0) {
+    memcpy(keep[j], keep[j - 1], 40);
+    j--;
+  }
+  memset(keep[j], 0, 40);
+  if (nlen < 40) memcpy(keep[j], id, nlen);
+  (*n)++;
+}
+
+/* The newest finished auto ids stay. A later directory entry still counts. */
 static void reap_done_auto_jobs(const char *jdir) {
   DIR *d;
   struct dirent *de;
-  char ids[AUTO_JOB_SCAN][40];
-  int n = 0;
-  int i;
+  char keep[AUTO_JOB_KEEP][40];
+  int nkeep = 0;
   if (!jdir || !jdir[0]) return;
   d = opendir(jdir);
   if (!d) return;
-  while ((de = readdir(d)) != NULL && n < AUTO_JOB_SCAN) {
+  while ((de = readdir(d)) != NULL) {
     const char *name = de->d_name;
     size_t len = strlen(name);
     size_t idlen;
@@ -141,9 +162,10 @@ static void reap_done_auto_jobs(const char *jdir) {
     char *meta;
     char *st;
     int live;
+    char id[40];
     if (len < 6 || strcmp(name + len - 5, ".json") != 0) continue;
     idlen = len - 5;
-    if (!auto_job_stem(name, idlen)) continue;
+    if (!auto_job_stem(name, idlen) || idlen >= sizeof id) continue;
     if (snprintf(mpath, sizeof mpath, "%s/%s", jdir, name) >= (int)sizeof mpath)
       continue;
     meta = ng_read_file(mpath, NULL);
@@ -153,34 +175,22 @@ static void reap_done_auto_jobs(const char *jdir) {
     free(st);
     free(meta);
     if (live) continue;
-    memset(ids[n], 0, sizeof ids[n]);
-    memcpy(ids[n], name, idlen);
-    n++;
+    memset(id, 0, sizeof id);
+    memcpy(id, name, idlen);
+    if (nkeep < AUTO_JOB_KEEP) {
+      reap_keep_insert(keep, &nkeep, id);
+      continue;
+    }
+    if (strcmp(id, keep[0]) > 0) {
+      reap_unlink_id(jdir, keep[0]);
+      memmove(keep[0], keep[1], (size_t)(nkeep - 1) * 40);
+      nkeep--;
+      reap_keep_insert(keep, &nkeep, id);
+    } else {
+      reap_unlink_id(jdir, id);
+    }
   }
   closedir(d);
-  if (n <= AUTO_JOB_KEEP) return;
-  for (i = 1; i < n; i++) {
-    char tmp[40];
-    int j = i;
-    memcpy(tmp, ids[i], sizeof tmp);
-    while (j > 0 && strcmp(ids[j - 1], tmp) > 0) {
-      memcpy(ids[j], ids[j - 1], sizeof ids[j]);
-      j--;
-    }
-    memcpy(ids[j], tmp, sizeof tmp);
-  }
-  {
-    int drop = n - AUTO_JOB_KEEP;
-    for (i = 0; i < drop; i++) {
-      char p[700];
-      if (snprintf(p, sizeof p, "%s/%s.json", jdir, ids[i]) < (int)sizeof p)
-        unlink(p);
-      if (snprintf(p, sizeof p, "%s/%s.in", jdir, ids[i]) < (int)sizeof p)
-        unlink(p);
-      if (snprintf(p, sizeof p, "%s/%s.out", jdir, ids[i]) < (int)sizeof p)
-        unlink(p);
-    }
-  }
 }
 
 /* Fork a prompt job (same shape as POST /peer/v1/jobs). Never blocks HTTP.

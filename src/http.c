@@ -50,8 +50,8 @@ static pid_t g_serve_pid = 0;
 
 /* Cap finished job artifacts under $HOME/jobs (mesh leaves many done/*.json).
  * Never unlink queued/running. Ids are time-prefixed so lexicographic order
- * is chronological. */
-enum { NG_JOBS_KEEP = 48, NG_JOBS_SCAN = 256 };
+ * is chronological. A longer directory still keeps only this many of each class. */
+enum { NG_JOBS_KEEP = 48 };
 
 /* Count $HOME/jobs/*.json for health/info (mesh focus probes). */
 static int jobs_meta_count(void) {
@@ -90,41 +90,36 @@ static int job_meta_stem(const char *stem, size_t n) {
   return 1;
 }
 
-static void jobs_drop_oldest(const char *jdir, char ids[][32], int n) {
-  int i;
-  if (n <= NG_JOBS_KEEP) return;
-  for (i = 1; i < n; i++) {
-    char tmp[32];
-    int j = i;
-    memcpy(tmp, ids[i], sizeof tmp);
-    while (j > 0 && strcmp(ids[j - 1], tmp) > 0) {
-      memcpy(ids[j], ids[j - 1], sizeof ids[j]);
-      j--;
-    }
-    memcpy(ids[j], tmp, sizeof tmp);
-  }
-  {
-    int drop = n - NG_JOBS_KEEP;
-    for (i = 0; i < drop; i++) {
-      char p[700];
-      if (snprintf(p, sizeof p, "%s/%s.json", jdir, ids[i]) < (int)sizeof p)
-        unlink(p);
-      if (snprintf(p, sizeof p, "%s/%s.in", jdir, ids[i]) < (int)sizeof p)
-        unlink(p);
-      if (snprintf(p, sizeof p, "%s/%s.out", jdir, ids[i]) < (int)sizeof p)
-        unlink(p);
-    }
-  }
+static void jobs_unlink_id(const char *jdir, const char *id) {
+  char p[700];
+  if (snprintf(p, sizeof p, "%s/%s.json", jdir, id) < (int)sizeof p) unlink(p);
+  if (snprintf(p, sizeof p, "%s/%s.in", jdir, id) < (int)sizeof p) unlink(p);
+  if (snprintf(p, sizeof p, "%s/%s.out", jdir, id) < (int)sizeof p) unlink(p);
 }
 
-/* auto_only 0 keeps digit ids. auto_only 1 keeps agrun ids. Caps stay apart. */
-static int jobs_collect(const char *jdir, char ids[][32], int auto_only) {
+/* Oldest id at index 0. Caller keeps n below the cap. */
+static void jobs_keep_insert(char keep[][32], int *n, const char *id) {
+  int j = *n;
+  size_t nlen = strlen(id);
+  while (j > 0 && strcmp(keep[j - 1], id) > 0) {
+    memcpy(keep[j], keep[j - 1], 32);
+    j--;
+  }
+  memset(keep[j], 0, 32);
+  if (nlen < 32) memcpy(keep[j], id, nlen);
+  (*n)++;
+}
+
+/* auto_only 0 is digit ids. auto_only 1 is agrun ids. Caps stay apart.
+ * The newest finished ids stay. A later directory entry still counts. */
+static void jobs_gc_class(const char *jdir, int auto_only) {
   DIR *d;
   struct dirent *de;
-  int n = 0;
+  char keep[NG_JOBS_KEEP][32];
+  int nkeep = 0;
   d = opendir(jdir);
-  if (!d) return 0;
-  while ((de = readdir(d)) != NULL && n < NG_JOBS_SCAN) {
+  if (!d) return;
+  while ((de = readdir(d)) != NULL) {
     const char *name = de->d_name;
     size_t len = strlen(name);
     size_t idlen;
@@ -133,9 +128,10 @@ static int jobs_collect(const char *jdir, char ids[][32], int auto_only) {
     char *st;
     int live;
     int is_auto;
+    char id[32];
     if (len < 6 || strcmp(name + len - 5, ".json") != 0) continue;
     idlen = len - 5;
-    if (!job_meta_stem(name, idlen)) continue;
+    if (!job_meta_stem(name, idlen) || idlen >= sizeof id) continue;
     is_auto = (strncmp(name, "agrun-", 6) == 0);
     if (auto_only != is_auto) continue;
     if (snprintf(mpath, sizeof mpath, "%s/%s", jdir, name) >= (int)sizeof mpath)
@@ -147,19 +143,28 @@ static int jobs_collect(const char *jdir, char ids[][32], int auto_only) {
     free(st);
     free(meta);
     if (live) continue;
-    memset(ids[n], 0, 32);
-    memcpy(ids[n], name, idlen);
-    n++;
+    memset(id, 0, sizeof id);
+    memcpy(id, name, idlen);
+    if (nkeep < NG_JOBS_KEEP) {
+      jobs_keep_insert(keep, &nkeep, id);
+      continue;
+    }
+    if (strcmp(id, keep[0]) > 0) {
+      jobs_unlink_id(jdir, keep[0]);
+      memmove(keep[0], keep[1], (size_t)(nkeep - 1) * 32);
+      nkeep--;
+      jobs_keep_insert(keep, &nkeep, id);
+    } else {
+      jobs_unlink_id(jdir, id);
+    }
   }
   closedir(d);
-  return n;
 }
 
 static void jobs_gc(const char *jdir) {
-  char ids[NG_JOBS_SCAN][32];
   if (!jdir || !jdir[0]) return;
-  jobs_drop_oldest(jdir, ids, jobs_collect(jdir, ids, 0));
-  jobs_drop_oldest(jdir, ids, jobs_collect(jdir, ids, 1));
+  jobs_gc_class(jdir, 0);
+  jobs_gc_class(jdir, 1);
 }
 
 void ng_jobs_gc(const char *jdir) { jobs_gc(jdir); }

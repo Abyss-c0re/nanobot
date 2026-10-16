@@ -24,7 +24,8 @@ int ng_http_serve(ng_http_cfg *cfg);
 
 /* On listen, a queued or running job whose worker is gone becomes error. */
 void ng_jobs_mark_orphans(const char *jdir);
-/* Done and error jobs past 48 drop. Digit ids and auto ids keep separate caps. */
+/* Done and error jobs past 48 drop. A longer directory still keeps that cap.
+ * Digit ids and auto ids keep separate caps. */
 void ng_jobs_gc(const char *jdir);
 
 /* The accept loop counts a worker before fork. A failed fork releases it. */
