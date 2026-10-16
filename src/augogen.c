@@ -614,6 +614,11 @@ static int utf8_space(const char *p) {
   return 0;
 }
 
+/* 1 for a separator from U+001C through U+001F. A backspace is outside. */
+static int field_sep(unsigned char c) {
+  return c >= 0x1C && c <= 0x1F;
+}
+
 /* 1 kept, 0 when there is no line, -1 when the line is rejected.
  * A rejected line leaves the buffer empty. */
 static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
@@ -654,7 +659,8 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
       p += n;
       continue;
     }
-    if (*p == ' ' || *p == '\t' || *p == '\v' || *p == '\f') {
+    if (*p == ' ' || *p == '\t' || *p == '\v' || *p == '\f' ||
+        field_sep((unsigned char)*p)) {
       p++;
       continue;
     }
@@ -670,7 +676,8 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
     int n;
     while (i > 0 && (p[i - 1] == '"' || p[i - 1] == '\'' || p[i - 1] == '`' ||
                      p[i - 1] == ' ' || p[i - 1] == '\t' || p[i - 1] == '\v' ||
-                     p[i - 1] == '\f' || p[i - 1] == '.'))
+                     p[i - 1] == '\f' || p[i - 1] == '.' ||
+                     field_sep((unsigned char)p[i - 1])))
       i--;
     if (i >= 3 && (n = edge_quote(p + i - 3)) == 3) {
       i -= 3;
@@ -688,8 +695,9 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   }
   if (i >= cap) i = cap - 1;
   /* A unicode space inside the line is a space. A tab, a vertical tab,
-   * or a form feed inside the line is a space. The words stay.
-   * An em dash stays. A doubled space stays doubled. */
+   * or a form feed inside the line is a space. A separator from U+001C
+   * through U+001F inside the line is a space. A backspace stays.
+   * The words stay. An em dash stays. A doubled space stays doubled. */
   {
     char tmp[SUG_CAP];
     size_t o = 0, k = 0;
@@ -702,7 +710,7 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
         continue;
       }
       c = (unsigned char)p[k];
-      if (c == '\t' || c == '\v' || c == '\f') {
+      if (c == '\t' || c == '\v' || c == '\f' || field_sep(c)) {
         tmp[o++] = ' ';
         k++;
         continue;

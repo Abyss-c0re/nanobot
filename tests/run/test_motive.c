@@ -1280,6 +1280,86 @@ int main(void) {
   expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
          "an interior blank leaves the law rank");
 
+  /* A unit separator is a space. A backspace stays a backspace. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move\\u001fnow\"}");
+  expect(js && strstr(js, "\"suggestion\":\"move now\""),
+         "a unit separator inside a two-word line is a space");
+  expect(js && strstr(js, "\"status\":\"pending\""),
+         "a unit separator does not hide a two-word line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move\\u001cnow\"}");
+  expect(js && strstr(js, "\"suggestion\":\"move now\""),
+         "a file separator inside a two-word line is a space");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read\\u001fthe law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a unit separator inside the law line is a space");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move\\u001f\\u001fnow\"}");
+  expect(js && strstr(js, "\"suggestion\":\"move  now\""),
+         "two unit separators stay two spaces");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"\\u001fread the law and prove\\u001f\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a unit separator at the edge stays off");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"\\u001f\"}");
+  expect(js && strstr(js, "prompt a peer to move") && strstr(js, "\"stored\":true"),
+         "a separator with nothing else still stores the peer line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no\\u001fsuggestion\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a unit separator inside a meta line is still that meta line");
+  expect(js && !strstr(js, "prompt a peer to move"),
+         "a separated meta line is not the peer line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read the\\u0008law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the\\u0008law and prove\""),
+         "a backspace stays a backspace");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move\\u0008now\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a backspace does not become a word space");
+  expect(js && !strstr(js, "prompt a peer to move"),
+         "a backspace between two words is not the peer line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no suggestion!\"}");
+  expect(js && strstr(js, "\"suggestion\":\"no suggestion!\""),
+         "a bang on a meta line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no suggestion?\"}");
+  expect(js && strstr(js, "\"suggestion\":\"no suggestion?\""),
+         "a question on a meta line stays");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read the law and prove\\u2014\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\xe2\x80\x94\""),
+         "an em dash stays beside a unit separator");
+  free(js);
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "a unit separator leaves the law rank");
+  ng_motive_rank("you lied", &m);
+  expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+         "a unit separator leaves you lied");
+  ng_motive_rank("", &m);
+  expect(m.rank == 0, "a unit separator leaves an empty query at rank 0");
+
   /* A second prompt in the same second keeps its own file. The first stays. */
   {
     int tries, got = 0;
