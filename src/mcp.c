@@ -121,24 +121,117 @@ static char *extract_method(const char *json) {
   return ng_json_get_string(json, "method");
 }
 
-/* Get tool name from tools/call body */
-static char *tool_name(const char *json) {
-  const char *params = strstr(json, "\"params\"");
-  if (params) {
-    char *n = ng_json_get_string(params, "name");
-    if (n) return n;
+/* Decode the JSON string that starts at the opening quote. */
+static char *json_string_at(const char *q) {
+  const char *p;
+  char *wrap;
+  char *out;
+  size_t n;
+  if (!q || *q != '"') return NULL;
+  p = q + 1;
+  while (*p) {
+    if (*p == '\\' && p[1]) {
+      p += 2;
+      continue;
+    }
+    if (*p == '"') break;
+    p++;
   }
+  if (*p != '"') return NULL;
+  n = (size_t)(p - q + 1);
+  wrap = malloc(n + 7);
+  if (!wrap) return NULL;
+  memcpy(wrap, "{\"v\":", 5);
+  memcpy(wrap + 5, q, n);
+  wrap[5 + n] = '}';
+  wrap[6 + n] = 0;
+  out = ng_json_get_string(wrap, "v");
+  free(wrap);
+  return out;
+}
+
+/* String field written on this object, not inside a nested object. */
+static char *depth1_string(const char *obj, const char *key) {
+  const char *p;
+  int depth = 0;
+  size_t klen;
+  if (!obj || !key || !key[0]) return NULL;
+  p = obj;
+  while (*p && *p != '{') p++;
+  if (*p != '{') return NULL;
+  klen = strlen(key);
+  while (*p) {
+    if (*p == '"') {
+      const char *s = p + 1;
+      size_t n;
+      int top;
+      p++;
+      while (*p) {
+        if (*p == '\\' && p[1]) {
+          p += 2;
+          continue;
+        }
+        if (*p == '"') break;
+        p++;
+      }
+      n = (size_t)(p - s);
+      if (*p == '"') p++;
+      top = (depth == 1 && n == klen && memcmp(s, key, klen) == 0);
+      if (!top) continue;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (*p != ':') continue;
+      p++;
+      while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+      if (*p != '"') return NULL;
+      return json_string_at(p);
+    }
+    if (*p == '{' || *p == '[') {
+      depth++;
+      p++;
+      continue;
+    }
+    if (*p == '}' || *p == ']') {
+      depth--;
+      if (depth <= 0) return NULL;
+      p++;
+      continue;
+    }
+    p++;
+  }
+  return NULL;
+}
+
+static const char *params_object(const char *json) {
+  const char *p;
+  const char *c;
+  if (!json) return NULL;
+  p = strstr(json, "\"params\"");
+  if (!p) return NULL;
+  c = strchr(p, ':');
+  if (!c) return NULL;
+  c++;
+  while (*c == ' ' || *c == '\t' || *c == '\n' || *c == '\r') c++;
+  if (*c != '{') return NULL;
+  return c;
+}
+
+/* Tool name is the params name, not a name inside arguments. */
+static char *tool_name(const char *json) {
+  const char *obj = params_object(json);
+  if (obj) return depth1_string(obj, "name");
   return ng_json_get_string(json, "name");
 }
 
 static char *tool_arg(const char *json, const char *key) {
-  const char *params = strstr(json, "\"params\"");
-  if (!params) params = json;
-  char *v = ng_json_get_string(params, key);
-  if (v) return v;
-  const char *args = strstr(params, "\"arguments\"");
-  if (args) return ng_json_get_string(args, key);
-  return NULL;
+  const char *params = strstr(json ? json : "", "\"params\"");
+  const char *args;
+  if (!params) params = json ? json : "";
+  args = strstr(params, "\"arguments\"");
+  if (args) {
+    char *v = ng_json_get_string(args, key);
+    if (v) return v;
+  }
+  return ng_json_get_string(params, key);
 }
 
 
