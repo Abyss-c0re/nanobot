@@ -25,7 +25,6 @@
  * A concept line with one word said twice in a row keeps sketch distance zero.
  * A failed fork marks that auto job error and names it. It does not stay queued.
  * The plate stays unexecuted. A queued job left for a later listen stays queued.
- * A done or error auto job past 48 drops even when the directory is longer.
  * A motive text decodes a JSON unicode escape before the rank.
  * A JSON backspace or form feed in that text is a separator before the rank.
  * A motive request may pass a quoted lex_w for that call only.

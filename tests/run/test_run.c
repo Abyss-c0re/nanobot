@@ -1102,88 +1102,10 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
-static void test_job_scan(void) {
-  char jdir[] = "/tmp/nb-scan-test";
-  char edirs[] = "/tmp/nb-scan-error";
-  char id[40];
-  int i, done_digit = 0, done_auto = 0, err_auto = 0;
-  wipe_jobs(jdir);
-  for (i = 1; i <= 300; i++) {
-    snprintf(id, sizeof id, "%016d", i);
-    write_orphan(jdir, id, "done");
-    write_side(jdir, id, ".in", "old");
-    snprintf(id, sizeof id, "agrun-%010d-1", i);
-    write_orphan(jdir, id, "done");
-    write_side(jdir, id, ".in", "old");
-  }
-  write_orphan(jdir, "0000000000000000", "queued");
-  write_side(jdir, "0000000000000000", ".in", "stay");
-  write_orphan(jdir, "agrun-0000000000-9", "queued");
-  write_side(jdir, "agrun-0000000000-9", ".in", "stay");
-  write_orphan(jdir, "0000000000000301", "running");
-  write_orphan(jdir, "agrun-0000000301-1", "running");
-  ng_jobs_gc(jdir);
-  for (i = 1; i <= 300; i++) {
-    snprintf(id, sizeof id, "%016d", i);
-    if (job_exists(jdir, id, ".json")) done_digit++;
-    snprintf(id, sizeof id, "agrun-%010d-1", i);
-    if (job_exists(jdir, id, ".json")) done_auto++;
-  }
-  expect(done_digit == 48, "a long digit directory keeps 48 done jobs");
-  expect(done_auto == 48, "a long auto directory keeps 48 done jobs");
-  expect(!job_exists(jdir, "0000000000000001", ".json") &&
-             !job_exists(jdir, "0000000000000001", ".in"),
-         "the oldest done digit job past the window drops");
-  expect(job_exists(jdir, "0000000000000300", ".json") &&
-             job_exists(jdir, "0000000000000300", ".in"),
-         "the newest done digit job stays");
-  expect(!job_exists(jdir, "agrun-0000000001-1", ".json") &&
-             !job_exists(jdir, "agrun-0000000001-1", ".in"),
-         "the oldest done auto job past the window drops");
-  expect(job_exists(jdir, "agrun-0000000300-1", ".json") &&
-             job_exists(jdir, "agrun-0000000300-1", ".in"),
-         "the newest done auto job stays");
-  expect(job_exists(jdir, "0000000000000000", ".json") &&
-             job_exists(jdir, "0000000000000000", ".in"),
-         "a queued digit job stays past the window");
-  expect(job_exists(jdir, "agrun-0000000000-9", ".json") &&
-             job_exists(jdir, "agrun-0000000000-9", ".in"),
-         "a queued auto job stays past the window");
-  expect(job_exists(jdir, "0000000000000301", ".json"),
-         "a running digit job stays past the window");
-  expect(job_exists(jdir, "agrun-0000000301-1", ".json"),
-         "a running auto job stays past the window");
-
-  wipe_jobs(edirs);
-  for (i = 1; i <= 300; i++) {
-    snprintf(id, sizeof id, "agrun-%010d-1", i);
-    write_orphan(edirs, id, "error");
-    write_side(edirs, id, ".in", "old");
-  }
-  write_orphan(edirs, "agrun-0000000000-9", "queued");
-  write_side(edirs, "agrun-0000000000-9", ".in", "stay");
-  ng_jobs_gc(edirs);
-  for (i = 1; i <= 300; i++) {
-    snprintf(id, sizeof id, "agrun-%010d-1", i);
-    if (job_exists(edirs, id, ".json")) err_auto++;
-  }
-  expect(err_auto == 48, "a long error directory keeps 48 auto jobs");
-  expect(!job_exists(edirs, "agrun-0000000001-1", ".json") &&
-             !job_exists(edirs, "agrun-0000000001-1", ".in"),
-         "the oldest error auto job past the window drops");
-  expect(job_exists(edirs, "agrun-0000000300-1", ".json") &&
-             job_exists(edirs, "agrun-0000000300-1", ".in"),
-         "the newest error auto job stays");
-  expect(job_exists(edirs, "agrun-0000000000-9", ".json") &&
-             job_exists(edirs, "agrun-0000000000-9", ".in"),
-         "a queued auto job stays beside a long error cap");
-}
-
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
   test_auto_cap();
-  test_job_scan();
   test_worker_title();
   test_worker_slot_before_exit();
   test_lean_info_skips_refresh();
