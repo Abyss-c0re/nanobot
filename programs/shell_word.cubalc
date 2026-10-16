@@ -1,0 +1,16 @@
+// The shell plate uses the same word as the command gate.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE word ROLE observer PROTON 1
+CUBE law  ROLE nanobot  PROTON 1
+
+PLUG word law
+
+IMPULSE word 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "word" UNITY DECIDE ENERGY
