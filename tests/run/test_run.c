@@ -5,7 +5,6 @@
 #include "hub_local.h"
 #include "runctl.h"
 #include "shell.h"
-#include "subagent.h"
 #include "util.h"
 
 #include <arpa/inet.h>
@@ -1103,193 +1102,6 @@ static void test_auto_cap(void) {
          "a queued auto job stays beside an error cap");
 }
 
-static unsigned long long sub_ticks(int pid) {
-  char path[64];
-  char buf[512];
-  FILE *fp;
-  size_t n;
-  char *p;
-  int i;
-  if (pid <= 0) return 0;
-  snprintf(path, sizeof path, "/proc/%d/stat", pid);
-  fp = fopen(path, "r");
-  if (!fp) return 0;
-  n = fread(buf, 1, sizeof buf - 1, fp);
-  fclose(fp);
-  if (n == 0) return 0;
-  buf[n] = 0;
-  p = strrchr(buf, ')');
-  if (!p || p[1] != ' ') return 0;
-  p += 2;
-  for (i = 1; i < 20; i++) {
-    while (*p == ' ') p++;
-    if (!*p) return 0;
-    while (*p && *p != ' ') p++;
-  }
-  while (*p == ' ') p++;
-  if (*p < '0' || *p > '9') return 0;
-  return strtoull(p, NULL, 10);
-}
-
-static int sub_running(pid_t pid) {
-  char path[64];
-  char buf[512];
-  FILE *fp;
-  size_t n;
-  char *rp;
-  snprintf(path, sizeof path, "/proc/%d/stat", (int)pid);
-  fp = fopen(path, "r");
-  if (!fp) return 0;
-  n = fread(buf, 1, sizeof buf - 1, fp);
-  fclose(fp);
-  if (n == 0) return 0;
-  buf[n] = 0;
-  rp = strrchr(buf, ')');
-  if (!rp || rp[1] != ' ' || rp[2] == 0) return 0;
-  return rp[2] != 'Z';
-}
-
-static void sub_meta(const char *id, int pid, unsigned long long ticks, int with_ticks) {
-  char dir[700];
-  char path[700];
-  FILE *mf;
-  snprintf(dir, sizeof dir, "%s/subagents", ng_workdir());
-  mkdir(dir, 0755);
-  snprintf(path, sizeof path, "%s/%s.json", dir, id);
-  mf = fopen(path, "w");
-  expect(mf != NULL, "sub meta");
-  if (!mf) return;
-  if (with_ticks)
-    fprintf(mf,
-            "{\"id\":\"%s\",\"type\":\"general\",\"description\":\"\","
-            "\"status\":\"running\",\"pid\":%d,\"start_ticks\":%llu,\"error\":\"\"}",
-            id, pid, ticks);
-  else
-    fprintf(mf,
-            "{\"id\":\"%s\",\"type\":\"general\",\"description\":\"\","
-            "\"status\":\"running\",\"pid\":%d,\"error\":\"\"}",
-            id, pid);
-  fclose(mf);
-}
-
-static int wait_signaled(pid_t child, int *st) {
-  int i;
-  for (i = 0; i < 40; i++) {
-    pid_t w = waitpid(child, st, WNOHANG);
-    if (w == child) return WIFSIGNALED(*st);
-    usleep(100000);
-  }
-  kill(child, SIGKILL);
-  waitpid(child, st, 0);
-  return 0;
-}
-
-static void test_sub_reused_pid(void) {
-  char home[] = "/tmp/nanobot-sub-XXXXXX";
-  char *js = NULL;
-  unsigned long long ticks, fake;
-  pid_t child;
-  int st = 0;
-  expect(mkdtemp(home) != NULL, "sub home");
-  if (!home[0]) return;
-  ng_set_workdir(home);
-  ticks = sub_ticks((int)getpid());
-  expect(ticks > 0, "self start time");
-  fake = ticks == 1 ? 2ull : 1ull;
-  sub_meta("sa-reuse", (int)getpid(), fake, 1);
-  expect(ng_subagent_running_count() == 0, "reused pid is not running");
-  js = ng_subagent_status_json("sa-reuse");
-  expect(js && strstr(js, "\"status\":\"error\"") && strstr(js, "exited"),
-         "reused pid is error exited");
-  expect(js && strstr(js, "\"start_ticks\":"), "reused pid keeps the start time");
-  free(js);
-  {
-    char op[700];
-    FILE *out;
-    snprintf(op, sizeof op, "%s/subagents/sa-out.out", home);
-    out = fopen(op, "w");
-    expect(out != NULL, "sub output");
-    if (out) {
-      fputs("kept", out);
-      fclose(out);
-    }
-    sub_meta("sa-out", (int)getpid(), fake, 1);
-    js = ng_subagent_status_json("sa-out");
-    expect(js && strstr(js, "\"status\":\"done\""), "reused pid with output is done");
-    free(js);
-  }
-  sub_meta("sa-live", (int)getpid(), ticks, 1);
-  expect(ng_subagent_running_count() == 1, "matching start time stays running");
-  js = ng_subagent_status_json("sa-live");
-  expect(js && strstr(js, "\"status\":\"running\""), "matching start time stays the worker");
-  free(js);
-  sub_meta("sa-miss", (int)getpid(), 0, 0);
-  expect(ng_subagent_running_count() == 2, "missing start time stays running");
-  js = ng_subagent_status_json("sa-miss");
-  expect(js && strstr(js, "\"status\":\"running\""), "missing start time is still the worker");
-  free(js);
-
-  child = fork();
-  expect(child >= 0, "zombie fork");
-  if (child == 0) _exit(0);
-  if (child > 0) {
-    int spun = 0;
-    while (spun < 50 && sub_running(child)) {
-      usleep(10000);
-      spun++;
-    }
-    sub_meta("sa-zombie", (int)child, sub_ticks((int)child), 1);
-    js = ng_subagent_status_json("sa-zombie");
-    expect(js && strstr(js, "\"status\":\"error\""), "zombie is not the worker");
-    free(js);
-    waitpid(child, &st, 0);
-  }
-
-  child = fork();
-  expect(child >= 0, "cancel fork");
-  if (child == 0) {
-    for (;;) pause();
-  }
-  if (child > 0) {
-    usleep(20000);
-    sub_meta("sa-cancel", (int)child, fake, 1);
-    expect(ng_subagent_cancel("sa-cancel") == 0, "cancel reused");
-    expect(sub_running(child), "reused pid is not signalled");
-    js = ng_subagent_status_json("sa-cancel");
-    expect(js && strstr(js, "\"status\":\"cancelled\""), "cancel marks cancelled");
-    free(js);
-    kill(child, SIGKILL);
-    waitpid(child, &st, 0);
-  }
-
-  child = fork();
-  expect(child >= 0, "match fork");
-  if (child == 0) {
-    for (;;) pause();
-  }
-  if (child > 0) {
-    unsigned long long ct;
-    usleep(20000);
-    ct = sub_ticks((int)child);
-    expect(ct > 0, "child start time");
-    sub_meta("sa-match", (int)child, ct, 1);
-    expect(ng_subagent_cancel("sa-match") == 0, "cancel match");
-    expect(wait_signaled(child, &st), "matching pid is signalled");
-  }
-
-  child = fork();
-  expect(child >= 0, "old fork");
-  if (child == 0) {
-    for (;;) pause();
-  }
-  if (child > 0) {
-    usleep(20000);
-    sub_meta("sa-old", (int)child, 0, 0);
-    expect(ng_subagent_cancel("sa-old") == 0, "cancel missing");
-    expect(wait_signaled(child, &st), "missing start time still signals");
-  }
-}
-
 int main(void) {
   test_cap_regular_fd();
   test_auto_orphan();
@@ -1310,7 +1122,6 @@ int main(void) {
   test_shell_eof_reap();
   test_tail_ping();
   test_hub_closed_client();
-  test_sub_reused_pid();
   if (fails) {
     fprintf(stderr, "%d run checks failed\n", fails);
     return 1;

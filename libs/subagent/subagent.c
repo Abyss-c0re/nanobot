@@ -116,35 +116,6 @@ static int pid_is_alive(int pid) {
   return 1;
 }
 
-/* Field 22 of /proc/<pid>/stat. 0 if unread. */
-static unsigned long long pid_start_ticks(int pid) {
-  char path[64];
-  char buf[512];
-  FILE *fp;
-  size_t n;
-  char *p;
-  int i;
-  if (pid <= 0) return 0;
-  snprintf(path, sizeof path, "/proc/%d/stat", pid);
-  fp = fopen(path, "r");
-  if (!fp) return 0;
-  n = fread(buf, 1, sizeof buf - 1, fp);
-  fclose(fp);
-  if (n == 0) return 0;
-  buf[n] = 0;
-  p = strrchr(buf, ')');
-  if (!p || p[1] != ' ') return 0;
-  p += 2;
-  for (i = 1; i < 20; i++) {
-    while (*p == ' ') p++;
-    if (!*p) return 0;
-    while (*p && *p != ' ') p++;
-  }
-  while (*p == ' ') p++;
-  if (*p < '0' || *p > '9') return 0;
-  return strtoull(p, NULL, 10);
-}
-
 static int meta_pid(const char *json) {
   char *ps;
   if (!json) return 0;
@@ -153,41 +124,19 @@ static int meta_pid(const char *json) {
   return atoi(ps + 6);
 }
 
-static unsigned long long meta_ticks(const char *json) {
-  const char *p;
-  if (!json) return 0;
-  p = strstr(json, "\"start_ticks\":");
-  if (!p) return 0;
-  p += 14;
-  while (*p == ' ' || *p == '\t') p++;
-  if (*p < '0' || *p > '9') return 0;
-  return strtoull(p, NULL, 10);
-}
-
-/* A different start time is another process. Missing or unreadable stays. */
-static int pid_is_ours(int pid, unsigned long long stored) {
-  unsigned long long live;
-  if (!pid_is_alive(pid)) return 0;
-  if (stored == 0) return 1;
-  live = pid_start_ticks(pid);
-  if (live == 0) return 1;
-  return live == stored;
-}
-
 static void write_meta(const char *id, const char *type, const char *desc,
-                       const char *status, int pid, unsigned long long start_ticks,
-                       const char *err) {
+                       const char *status, int pid, const char *err) {
   char path[600];
   meta_path(path, sizeof path, id);
   char *et = ng_json_escape(type ? type : "general");
   char *ed = ng_json_escape(desc ? desc : "");
   char *es = ng_json_escape(status ? status : "queued");
   char *ee = ng_json_escape(err ? err : "");
-  char buf[1400];
+  char buf[1200];
   snprintf(buf, sizeof buf,
     "{\"id\":\"%s\",\"type\":\"%s\",\"description\":\"%s\","
-    "\"status\":\"%s\",\"pid\":%d,\"start_ticks\":%llu,\"error\":\"%s\"}",
-    id, et ? et : "", ed ? ed : "", es ? es : "", pid, start_ticks, ee ? ee : "");
+    "\"status\":\"%s\",\"pid\":%d,\"error\":\"%s\"}",
+    id, et ? et : "", ed ? ed : "", es ? es : "", pid, ee ? ee : "");
   ng_write_file(path, buf, strlen(buf));
   free(et); free(ed); free(es); free(ee);
 }
@@ -197,24 +146,22 @@ static int reap_meta_file(const char *path, const char *id) {
   char *meta = ng_read_file(path, NULL);
   char op[600];
   int pid;
-  unsigned long long stored;
   if (!meta) return 0;
   if (!status_is_live(meta)) {
     free(meta);
     return 0;
   }
   pid = meta_pid(meta);
-  stored = meta_ticks(meta);
-  if (pid_is_ours(pid, stored)) {
+  if (pid > 1 && pid_is_alive(pid)) {
     free(meta);
     return 1;
   }
-  /* dead, zombie, never started, or a reused pid */
+  /* dead / zombie / never started */
   out_path(op, sizeof op, id);
   if (access(op, R_OK) == 0)
-    write_meta(id, "general", "", "done", pid, stored, NULL);
+    write_meta(id, "general", "", "done", pid, NULL);
   else
-    write_meta(id, "general", "", "error", pid, stored, "exited");
+    write_meta(id, "general", "", "error", pid, "exited");
   free(meta);
   return 0;
 }
@@ -275,7 +222,7 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
   if ((int)plen > maxp) plen = (size_t)maxp;
   ng_write_file(ip, prompt, plen);
 
-  write_meta(id, t, desc, "queued", 0, 0, NULL);
+  write_meta(id, t, desc, "queued", 0, NULL);
 
   /* Max wall time for a subagent — self-terminates so main nanobot stays idle. */
   int max_sec = 90;
@@ -295,14 +242,14 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
    */
   int pipefd[2];
   if (pipe(pipefd) != 0) {
-    write_meta(id, t, desc, "error", 0, 0, "pipe_failed");
+    write_meta(id, t, desc, "error", 0, "pipe_failed");
     return NULL;
   }
   pid_t p = fork();
   if (p < 0) {
     close(pipefd[0]);
     close(pipefd[1]);
-    write_meta(id, t, desc, "error", 0, 0, "fork_failed");
+    write_meta(id, t, desc, "error", 0, "fork_failed");
     return NULL;
   }
   if (p == 0) {
@@ -330,8 +277,7 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
     signal(SIGALRM, SIG_DFL); /* default = kill process */
     alarm((unsigned)max_sec);
 
-    unsigned long long ticks = pid_start_ticks(mypid);
-    write_meta(id, t, desc, "running", mypid, ticks, NULL);
+    write_meta(id, t, desc, "running", mypid, NULL);
     char *pr = ng_read_file(ip, NULL);
     char *full = pr;
     /* Dual-wire role plate prefix — machine must/forbid tokens (no free-text essay). */
@@ -365,7 +311,7 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
     out_path(op, sizeof op, id);
     if (reply) ng_write_file(op, reply, strlen(reply));
     else ng_write_file(op, "", 0);
-    write_meta(id, t, desc, reply ? "done" : "error", mypid, ticks,
+    write_meta(id, t, desc, reply ? "done" : "error", mypid,
                reply ? NULL : "empty_reply");
     free(reply);
     /* hard exit — do not return into parent agent stack */
@@ -385,28 +331,10 @@ char *ng_subagent_spawn(void *agent_cfg, ng_subagent_run_fn run_fn,
     waitpid(p, &st, 0);
   }
   if (real_pid <= 1) {
-    write_meta(id, t, desc, "error", 0, 0, "worker_pid_unknown");
+    write_meta(id, t, desc, "error", 0, "worker_pid_unknown");
     return NULL;
   }
-  /* A finished plate stays. The worker may already have exited. */
-  {
-    char mpath[600];
-    char *cur;
-    char *st;
-    int finished = 0;
-    meta_path(mpath, sizeof mpath, id);
-    cur = ng_read_file(mpath, NULL);
-    st = cur ? ng_json_get_string(cur, "status") : NULL;
-    if (st && (!strcmp(st, "done") || !strcmp(st, "error") ||
-               !strcmp(st, "cancelled")))
-      finished = 1;
-    free(st);
-    free(cur);
-    if (!finished) {
-      unsigned long long ticks = pid_start_ticks(real_pid);
-      write_meta(id, t, desc, "running", real_pid, ticks, NULL);
-    }
-  }
+  write_meta(id, t, desc, "running", real_pid, NULL);
   return strdup(id);
 }
 
@@ -472,18 +400,14 @@ int ng_subagent_cancel(const char *id) {
   meta_path(path, sizeof path, id);
   char *meta = ng_read_file(path, NULL);
   if (!meta) return -1;
-  char *st = ng_json_get_string(meta, "status");
-  int pid = meta_pid(meta);
-  unsigned long long stored = meta_ticks(meta);
-  int live = st && (!strcmp(st, "running") || !strcmp(st, "queued"));
-  /* Only the worker with this start time is signalled. */
-  if (live && pid_is_ours(pid, stored)) {
+  char *ps = strstr(meta, "\"pid\":");
+  int pid = ps ? atoi(ps + 6) : 0;
+  if (pid > 1) {
     kill(pid, SIGTERM);
     sleep(1);
     kill(pid, SIGKILL);
   }
-  free(st);
-  write_meta(id, "general", "", "cancelled", pid, stored, NULL);
+  write_meta(id, "general", "", "cancelled", pid, NULL);
   free(meta);
   return 0;
 }
