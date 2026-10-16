@@ -1232,6 +1232,54 @@ int main(void) {
   ng_motive_rank("", &m);
   expect(m.rank == 0, "an empty query stays rank 0");
 
+  /* An interior blank is a space. A vertical tab does not glue two words. */
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move\\u000bnow\"}");
+  expect(js && strstr(js, "\"suggestion\":\"move now\""),
+         "a vertical tab inside a two-word line is a space");
+  expect(js && strstr(js, "\"status\":\"pending\""),
+         "a vertical tab does not hide a two-word line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read\\tthe law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a tab inside the line is a space");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read\\u000cthe law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\""),
+         "a form feed inside the line is a space");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"no\\tsuggestion\"}");
+  expect(js && strstr(js, "\"status\":\"empty\"") && strstr(js, "\"suggestion\":\"\""),
+         "a tab inside a meta line is still that meta line");
+  expect(js && !strstr(js, "prompt a peer to move"),
+         "a tabbed meta line is not the peer line");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move\\u000b\\u000bnow\"}");
+  expect(js && strstr(js, "\"suggestion\":\"move  now\""),
+         "two vertical tabs stay two spaces");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read  the law and prove\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read  the law and prove\""),
+         "a doubled space stays doubled");
+  free(js);
+  js = ng_augogen_handle(
+      NULL, "{\"action\":\"generate\",\"enqueue\":\"1\","
+            "\"suggestion\":\"read the law and prove\\u2014\"}");
+  expect(js && strstr(js, "\"suggestion\":\"read the law and prove\xe2\x80\x94\""),
+         "an em dash stays beside an interior blank");
+  free(js);
+  ng_motive_rank("read the law and prove", &m);
+  expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+         "an interior blank leaves the law rank");
+
   /* A second prompt in the same second keeps its own file. The first stays. */
   {
     int tries, got = 0;

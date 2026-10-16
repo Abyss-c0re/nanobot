@@ -687,18 +687,27 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
     break;
   }
   if (i >= cap) i = cap - 1;
-  /* A unicode space inside the line is a space. The words stay. */
+  /* A unicode space inside the line is a space. A tab, a vertical tab,
+   * or a form feed inside the line is a space. The words stay.
+   * An em dash stays. A doubled space stays doubled. */
   {
     char tmp[SUG_CAP];
     size_t o = 0, k = 0;
     while (k < i && o + 1 < cap && o + 1 < sizeof tmp) {
       int n = utf8_space(p + k);
+      unsigned char c;
       if (n > 0 && k + (size_t)n <= i) {
         tmp[o++] = ' ';
         k += (size_t)n;
-      } else {
-        tmp[o++] = p[k++];
+        continue;
       }
+      c = (unsigned char)p[k];
+      if (c == '\t' || c == '\v' || c == '\f') {
+        tmp[o++] = ' ';
+        k++;
+        continue;
+      }
+      tmp[o++] = p[k++];
     }
     memcpy(out, tmp, o);
     out[o] = 0;
