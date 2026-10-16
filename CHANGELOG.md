@@ -103,7 +103,6 @@
 - **hive:** a tab, a vertical tab, or a form feed inside a suggestion is a space. A vertical tab does not glue two words. An em dash stays. A doubled space stays doubled. The 2–12 word bound stays. The ranker is unchanged. CubalC board: `programs/motive_blank.cubalc`.
 - **hive:** a unit separator inside a suggestion is a space, and so are the three separators just before it. Two of them stay two spaces. A backspace stays a backspace. An em dash stays. A doubled space stays doubled. The 2–12 word bound stays. The ranker is unchanged. CubalC board: `programs/motive_unit.cubalc`.
 - **hive:** a failed fork marks that auto job `error` `fork_failed` and does not leave it queued. The plate names the id and stays unexecuted. A queued auto job stays queued. The ranker is unchanged. CubalC board: `programs/motive_fork.cubalc`.
-- **hive:** a trailing comma on a suggestion trims with a trailing period. A bang and a question stay. An interior comma stays. The ranker is unchanged. CubalC board: `programs/motive_comma.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

@@ -687,10 +687,9 @@ static int sanitize_suggestion(const char *raw, char *out, size_t cap) {
   i = strlen(p);
   for (;;) {
     int n;
-    /* A trailing comma trims with a trailing period. A bang stays. */
     while (i > 0 && (p[i - 1] == '"' || p[i - 1] == '\'' || p[i - 1] == '`' ||
                      p[i - 1] == ' ' || p[i - 1] == '\t' || p[i - 1] == '\v' ||
-                     p[i - 1] == '\f' || p[i - 1] == '.' || p[i - 1] == ',' ||
+                     p[i - 1] == '\f' || p[i - 1] == '.' ||
                      field_sep((unsigned char)p[i - 1])))
       i--;
     if (i >= 3 && (n = edge_quote(p + i - 3)) == 3) {
