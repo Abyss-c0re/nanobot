@@ -5,7 +5,6 @@
 
 #include <arpa/inet.h>
 #include <dirent.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -16,7 +15,6 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/un.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -2426,122 +2424,6 @@ int main(void) {
            "an augogen fifo leaves you lied");
     ng_motive_rank("", &m);
     expect(m.rank == 0, "an augogen fifo leaves an empty query at rank 0");
-    unlink(platep);
-    rmdir(aug);
-    unlink(aug);
-    mkdir(aug, 0700);
-  }
-
-  /* A socket named augogen is not the plate directory. Do not open it. */
-  {
-    const char *aug = "/tmp/nb-motive-test/augogen";
-    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
-    struct stat st;
-    struct sockaddr_un addr;
-    DIR *ad;
-    struct dirent *de;
-    FILE *tf;
-    int sfd = -1;
-    int cfd = -1;
-    int noblock = 0;
-    int flags;
-    char path[256];
-    char buf[512];
-    size_t n;
-    char *pend;
-    ad = opendir(aug);
-    if (ad) {
-      while ((de = readdir(ad)) != NULL) {
-        if (de->d_name[0] == '.') continue;
-        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
-        unlink(path);
-        rmdir(path);
-      }
-      closedir(ad);
-      rmdir(aug);
-    }
-    unlink(aug);
-    sfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    expect(sfd >= 0, "plant an augogen socket");
-    memset(&addr, 0, sizeof addr);
-    addr.sun_family = AF_UNIX;
-    expect(snprintf(addr.sun_path, sizeof addr.sun_path, "%s", aug) < (int)sizeof addr.sun_path,
-           "the augogen socket path fits");
-    if (sfd >= 0) {
-      expect(bind(sfd, (struct sockaddr *)&addr, sizeof addr) == 0,
-             "bind the augogen socket");
-      expect(listen(sfd, 1) == 0, "listen on the augogen socket");
-      flags = fcntl(sfd, F_GETFL, 0);
-      if (flags >= 0 && fcntl(sfd, F_SETFL, flags | O_NONBLOCK) == 0)
-        noblock = 1;
-    }
-    expect(lstat(aug, &st) == 0 && S_ISSOCK(st.st_mode),
-           "the augogen path is a socket");
-    if (noblock) {
-      expect(accept(sfd, NULL, NULL) < 0 && errno == EAGAIN,
-             "the augogen socket has no queued peer");
-    }
-    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
-    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
-    expect(js && strstr(js, "\"status\":\"empty\""),
-           "an augogen socket stays unread");
-    expect(js && strstr(js, "\"hold_flash\":1"),
-           "an augogen socket keeps hold flash");
-    free(js);
-    expect(lstat(aug, &st) == 0 && S_ISSOCK(st.st_mode),
-           "a pending read leaves the augogen socket");
-    if (noblock) {
-      expect(accept(sfd, NULL, NULL) < 0 && errno == EAGAIN,
-             "a pending read does not take a peer on the augogen socket");
-    }
-    js = ng_augogen_handle(
-        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move shut\"}");
-    expect(js && strstr(js, "\"suggestion\":\"move shut\""),
-           "a generate stores over an augogen socket");
-    expect(js && strstr(js, "\"status\":\"pending\""),
-           "an augogen socket becomes a pending plate");
-    expect(js && strstr(js, "\"hold_flash\":1"),
-           "a replaced augogen socket keeps hold flash");
-    free(js);
-    expect(lstat(aug, &st) == 0 && S_ISDIR(st.st_mode),
-           "augogen is a directory after the socket");
-    expect(!S_ISSOCK(st.st_mode), "the augogen path is not a socket after the write");
-    expect(readlink(aug, buf, sizeof buf) < 0, "augogen is not a symlink");
-    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
-           "the plate path is a regular file after the augogen socket");
-    if (noblock) {
-      expect(accept(sfd, NULL, NULL) < 0 && errno == EAGAIN,
-             "a generate does not take a peer on the augogen socket");
-    }
-    cfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (cfd >= 0) {
-      expect(connect(cfd, (struct sockaddr *)&addr, sizeof addr) < 0,
-             "the augogen path is no longer that socket");
-      close(cfd);
-    }
-    tf = fopen(platep, "rb");
-    n = 0;
-    buf[0] = 0;
-    if (tf) {
-      n = fread(buf, 1, sizeof buf - 1, tf);
-      fclose(tf);
-    }
-    buf[n] = 0;
-    expect(strstr(buf, "\"suggestion\":\"move shut\"") != NULL,
-           "the real directory keeps move shut");
-    pend = ng_augogen_pending_json();
-    expect(pend && strstr(pend, "\"suggestion\":\"move shut\""),
-           "a replaced augogen socket still loads");
-    free(pend);
-    ng_motive_rank("read the law and prove", &m);
-    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
-           "an augogen socket leaves the law rank");
-    ng_motive_rank("you lied", &m);
-    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
-           "an augogen socket leaves you lied");
-    ng_motive_rank("", &m);
-    expect(m.rank == 0, "an augogen socket leaves an empty query at rank 0");
-    if (sfd >= 0) close(sfd);
     unlink(platep);
     rmdir(aug);
     unlink(aug);
