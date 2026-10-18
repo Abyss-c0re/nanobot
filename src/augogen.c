@@ -399,8 +399,7 @@ static void cube_path(char *buf, size_t n, const char *who) {
 }
 
 /* A symlink is not the cube. O_NOFOLLOW leaves the target unread.
- * A directory at this name is not the cube either. A fifo is not the
- * cube. The read does not open it, so a waiting writer is not paired. */
+ * A directory at this name is not the cube either. */
 static char *read_cube_file(const char *path, size_t *out_len) {
   int fd;
   struct stat st;
@@ -408,8 +407,6 @@ static char *read_cube_file(const char *path, size_t *out_len) {
   size_t n = 0;
   if (out_len) *out_len = 0;
   if (!path || !path[0]) return NULL;
-  /* Opening a fifo would pair a writer. Classify it before open. */
-  if (lstat(path, &st) == 0 && S_ISFIFO(st.st_mode)) return NULL;
   fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0) return NULL;
   if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
@@ -476,8 +473,7 @@ static int write_cube_file(const char *path, const void *data, size_t len) {
     return -1;
   }
   /* A directory is not the cube. rmdir removes only an empty one.
-   * A symlink stays on the rename path, which replaces the link.
-   * A fifo is not the cube. rename replaces it and does not open it. */
+   * A symlink stays on the rename path, which replaces the link. */
   if (lstat(path, &st) == 0 && !S_ISLNK(st.st_mode) && S_ISDIR(st.st_mode)) {
     if (rmdir(path) != 0) {
       unlink(tmp);
