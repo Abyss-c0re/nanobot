@@ -437,7 +437,10 @@ static char *read_cube_file(const char *path, size_t *out_len) {
 
 /* rename replaces a symlink. It does not follow the link. An empty
  * directory at this name is not the cube and is removed. A directory
- * that still holds a name stays, and this write does not enter it. */
+ * that still holds a name stays, and this write does not enter it.
+ * An empty directory at the temp name is not the cube file either.
+ * It is removed before the create. A directory there that still holds
+ * a name stays, and this write does not enter it. */
 static int write_cube_file(const char *path, const void *data, size_t len) {
   char tmp[700];
   struct stat st;
@@ -447,9 +450,15 @@ static int write_cube_file(const char *path, const void *data, size_t len) {
   if (!path || !path[0] || !data) return -1;
   nw = snprintf(tmp, sizeof tmp, "%s.tmp-%d", path, (int)getpid());
   if (nw < 0 || (size_t)nw >= sizeof tmp) return -1;
+  /* lstat does not follow a link. rmdir removes only an empty directory.
+   * A directory that still holds a name stays. Anything else is unlinked
+   * and is not opened. */
   if (lstat(tmp, &st) == 0) {
-    if (S_ISDIR(st.st_mode)) return -1;
-    if (unlink(tmp) != 0) return -1;
+    if (S_ISDIR(st.st_mode)) {
+      if (rmdir(tmp) != 0) return -1;
+    } else if (unlink(tmp) != 0) {
+      return -1;
+    }
   }
   fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
   if (fd < 0) return -1;
