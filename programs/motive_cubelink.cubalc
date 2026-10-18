@@ -1,0 +1,18 @@
+// A symlink named guide.bin or oversee.bin is not the cube.
+// The read ignores it. The write replaces that link.
+// Rank, concept, line, and the store stay.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE cubelink ROLE observer PROTON 1
+CUBE law      ROLE nanobot  PROTON 1
+
+PLUG cubelink law
+
+IMPULSE cubelink 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "cubelink" UNITY DECIDE ENERGY

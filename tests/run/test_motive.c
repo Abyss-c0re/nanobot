@@ -300,6 +300,10 @@ int main(void) {
 
   mkdir(home, 0700);
   nb_set_workdir(home);
+  /* A previous run may leave a directory at the plate path. It is not a plate. */
+  unlink("/tmp/nb-motive-test/augogen/pending.json/keep.txt");
+  unlink("/tmp/nb-motive-test/augogen/pending.json");
+  rmdir("/tmp/nb-motive-test/augogen/pending.json");
   setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
   js = ng_augogen_handle(
       NULL, "{\"action\":\"motive\",\"text\":\"hold flash for device join\",\"enqueue\":\"1\"}");
@@ -1886,6 +1890,148 @@ int main(void) {
            "a plate directory leaves you lied");
     ng_motive_rank("", &m);
     expect(m.rank == 0, "a plate directory leaves an empty query at rank 0");
+  }
+
+  /* A symlink named guide.bin or oversee.bin is not the cube. */
+  {
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    const char *kept = "/tmp/nb-motive-test/augogen/pending.json/keep.txt";
+    const char *gbin = "/tmp/nb-motive-test/augogen/guide.bin";
+    const char *obin = "/tmp/nb-motive-test/augogen/oversee.bin";
+    const char *gtarget = "/tmp/nb-motive-cube-guide";
+    const char *otarget = "/tmp/nb-motive-cube-oversee";
+    const char *gmark = "guide target stays";
+    const char *omark = "oversee target stays";
+    struct stat st;
+    struct stat before_g, before_o, after_g, after_o;
+    FILE *tf;
+    char buf[512];
+    size_t n;
+    char *pend;
+    unlink(kept);
+    unlink(platep);
+    rmdir(platep);
+    unlink(gbin);
+    unlink(obin);
+    unlink(gtarget);
+    unlink(otarget);
+    tf = fopen(platep, "wb");
+    expect(tf != NULL, "plant a plate before the cube links");
+    if (tf) {
+      fputs("{\"suggestion\":\"move now\",\"status\":\"pending\","
+            "\"guide_vote\":-1,\"oversee_vote\":-1,\"mesh_vote\":-1}",
+            tf);
+      fclose(tf);
+    }
+    tf = fopen(gtarget, "wb");
+    expect(tf != NULL, "plant the guide cube target");
+    if (tf) {
+      fputs(gmark, tf);
+      fclose(tf);
+    }
+    tf = fopen(otarget, "wb");
+    expect(tf != NULL, "plant the oversee cube target");
+    if (tf) {
+      fputs(omark, tf);
+      fclose(tf);
+    }
+    expect(symlink(gtarget, gbin) == 0, "guide.bin is a symlink");
+    expect(symlink(otarget, obin) == 0, "oversee.bin is a symlink");
+    expect(stat(gtarget, &before_g) == 0, "stat the guide target");
+    expect(stat(otarget, &before_o) == 0, "stat the oversee target");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a pending read still sees the planted plate");
+    expect(js && !strstr(js, "guide target stays"),
+           "a pending read does not name the guide target");
+    expect(js && !strstr(js, "oversee target stays"),
+           "a pending read does not name the oversee target");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a cube symlink keeps hold flash");
+    free(js);
+    expect(lstat(gbin, &st) == 0 && S_ISLNK(st.st_mode),
+           "a pending read leaves the guide symlink");
+    expect(lstat(obin, &st) == 0 && S_ISLNK(st.st_mode),
+           "a pending read leaves the oversee symlink");
+    tf = fopen(gtarget, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, gmark) == 0, "a pending read leaves the guide target");
+    tf = fopen(otarget, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, omark) == 0, "a pending read leaves the oversee target");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"vote\",\"role\":\"mesh\",\"vote\":\"1\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a vote still names the planted line");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a cube vote keeps hold flash");
+    expect(js && !strstr(js, "guide target stays"),
+           "a vote does not name the guide target");
+    expect(js && !strstr(js, "oversee target stays"),
+           "a vote does not name the oversee target");
+    free(js);
+    tf = fopen(gtarget, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, gmark) == 0, "the write leaves the guide target");
+    tf = fopen(otarget, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, omark) == 0, "the write leaves the oversee target");
+    expect(stat(gtarget, &after_g) == 0 && after_g.st_ino == before_g.st_ino,
+           "the guide target inode stays");
+    expect(stat(otarget, &after_o) == 0 && after_o.st_ino == before_o.st_ino,
+           "the oversee target inode stays");
+#if NANOBOT_HAS_BRAINCUBE
+    expect(lstat(gbin, &st) == 0 && S_ISREG(st.st_mode),
+           "guide.bin is a regular file after the vote");
+    expect(lstat(obin, &st) == 0 && S_ISREG(st.st_mode),
+           "oversee.bin is a regular file after the vote");
+    expect(readlink(gbin, buf, sizeof buf) < 0, "guide.bin is not a symlink");
+    expect(readlink(obin, buf, sizeof buf) < 0, "oversee.bin is not a symlink");
+#else
+    expect(lstat(gbin, &st) == 0 && S_ISLNK(st.st_mode),
+           "without a cube the guide symlink stays");
+    expect(lstat(obin, &st) == 0 && S_ISLNK(st.st_mode),
+           "without a cube the oversee symlink stays");
+#endif
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move now\""),
+           "the plate still loads after the cube vote");
+    expect(pend && !strstr(pend, "guide target stays"),
+           "the plate does not name the guide target");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a cube symlink leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a cube symlink leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a cube symlink leaves an empty query at rank 0");
   }
 
   if (g_fail) {

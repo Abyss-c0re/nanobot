@@ -367,6 +367,85 @@ static void cube_path(char *buf, size_t n, const char *who) {
   snprintf(buf, n, "%s/augogen/%s.bin", ng_workdir(), who);
 }
 
+/* A symlink is not the cube. O_NOFOLLOW leaves the target unread. */
+static char *read_cube_file(const char *path, size_t *out_len) {
+  int fd;
+  struct stat st;
+  char *buf;
+  size_t n = 0;
+  if (out_len) *out_len = 0;
+  if (!path || !path[0]) return NULL;
+  fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  if (fd < 0) return NULL;
+  if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
+    close(fd);
+    return NULL;
+  }
+  buf = malloc((size_t)st.st_size + 1);
+  if (!buf) {
+    close(fd);
+    return NULL;
+  }
+  while (n < (size_t)st.st_size) {
+    ssize_t r = read(fd, buf + n, (size_t)st.st_size - n);
+    if (r < 0) {
+      if (errno == EINTR) continue;
+      free(buf);
+      close(fd);
+      return NULL;
+    }
+    if (r == 0) break;
+    n += (size_t)r;
+  }
+  close(fd);
+  buf[n] = 0;
+  if (out_len) *out_len = n;
+  return buf;
+}
+
+/* rename replaces a symlink. It does not follow the link, and it does not
+ * enter a directory at this name. */
+static int write_cube_file(const char *path, const void *data, size_t len) {
+  char tmp[700];
+  struct stat st;
+  int fd;
+  int nw;
+  size_t off = 0;
+  if (!path || !path[0] || !data) return -1;
+  nw = snprintf(tmp, sizeof tmp, "%s.tmp-%d", path, (int)getpid());
+  if (nw < 0 || (size_t)nw >= sizeof tmp) return -1;
+  if (lstat(tmp, &st) == 0) {
+    if (S_ISDIR(st.st_mode)) return -1;
+    if (unlink(tmp) != 0) return -1;
+  }
+  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+  if (fd < 0) return -1;
+  while (off < len) {
+    ssize_t w = write(fd, (const char *)data + off, len - off);
+    if (w < 0) {
+      if (errno == EINTR) continue;
+      close(fd);
+      unlink(tmp);
+      return -1;
+    }
+    if (w == 0) {
+      close(fd);
+      unlink(tmp);
+      return -1;
+    }
+    off += (size_t)w;
+  }
+  if (close(fd) != 0) {
+    unlink(tmp);
+    return -1;
+  }
+  if (rename(tmp, path) != 0) {
+    unlink(tmp);
+    return -1;
+  }
+  return 0;
+}
+
 static void load_cube(lhlam_cube *c, const char *who) {
   char path[640];
   size_t len = 0;
@@ -379,7 +458,7 @@ static void load_cube(lhlam_cube *c, const char *who) {
     return;
   }
   cube_path(path, sizeof path, who);
-  raw = ng_read_file(path, &len);
+  raw = read_cube_file(path, &len);
   if (raw && len > 8 && lhlam_cube_import(c, (const uint8_t *)raw, len) == 0) {
     free(raw);
     return;
@@ -397,7 +476,7 @@ static void save_cube(const lhlam_cube *c, const char *who) {
   if (augogen_dir_is_link()) return;
   if (need == 0 || need > sizeof bin) return;
   cube_path(path, sizeof path, who);
-  ng_write_file(path, (const char *)bin, need);
+  write_cube_file(path, bin, need);
 }
 #endif
 
