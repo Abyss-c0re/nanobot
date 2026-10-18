@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2292,6 +2293,139 @@ int main(void) {
            "an augogen file leaves you lied");
     ng_motive_rank("", &m);
     expect(m.rank == 0, "an augogen file leaves an empty query at rank 0");
+    unlink(aug);
+    mkdir(aug, 0700);
+  }
+
+  /* A fifo named augogen is not the plate directory. Do not open it. */
+  {
+    const char *aug = "/tmp/nb-motive-test/augogen";
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    struct stat st;
+    DIR *ad;
+    struct dirent *de;
+    FILE *tf;
+    int kick[2];
+    int wst = 0;
+    pid_t writer = -1;
+    pid_t got;
+    char path[256];
+    char buf[512];
+    char wchan[64];
+    size_t n;
+    char *pend;
+    int spins;
+    ad = opendir(aug);
+    if (ad) {
+      while ((de = readdir(ad)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
+        unlink(path);
+        rmdir(path);
+      }
+      closedir(ad);
+      rmdir(aug);
+    }
+    unlink(aug);
+    expect(mkfifo(aug, 0600) == 0, "plant an augogen fifo");
+    expect(lstat(aug, &st) == 0 && S_ISFIFO(st.st_mode),
+           "the augogen path is a fifo");
+    kick[0] = -1;
+    kick[1] = -1;
+    expect(pipe(kick) == 0, "a pipe marks the fifo writer");
+    if (kick[0] >= 0) {
+      writer = fork();
+      if (writer == 0) {
+        char one = 1;
+        int wfd;
+        close(kick[0]);
+        if (write(kick[1], &one, 1) != 1) _exit(2);
+        close(kick[1]);
+        wfd = open(aug, O_WRONLY);
+        if (wfd >= 0) close(wfd);
+        _exit(0);
+      }
+      close(kick[1]);
+      kick[1] = -1;
+      buf[0] = 0;
+      if (writer > 0 && read(kick[0], buf, 1) == 1) {
+        snprintf(path, sizeof path, "/proc/%d/wchan", (int)writer);
+        for (spins = 0; spins < 50; spins++) {
+          tf = fopen(path, "r");
+          wchan[0] = 0;
+          if (tf) {
+            if (fgets(wchan, sizeof wchan, tf) == NULL) wchan[0] = 0;
+            fclose(tf);
+          }
+          if (strstr(wchan, "fifo") || strstr(wchan, "pipe")) break;
+          poll(NULL, 0, 20);
+        }
+      }
+      close(kick[0]);
+      kick[0] = -1;
+    }
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "an augogen fifo stays unread");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "an augogen fifo keeps hold flash");
+    free(js);
+    expect(lstat(aug, &st) == 0 && S_ISFIFO(st.st_mode),
+           "a pending read leaves the augogen fifo");
+    if (writer > 0) {
+      got = waitpid(writer, &wst, WNOHANG);
+      expect(got == 0, "a pending read does not pair a writer on the augogen fifo");
+      if (got > 0) writer = -1;
+    }
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move clear\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move clear\""),
+           "a generate stores over an augogen fifo");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "an augogen fifo becomes a pending plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a replaced augogen fifo keeps hold flash");
+    free(js);
+    expect(lstat(aug, &st) == 0 && S_ISDIR(st.st_mode),
+           "augogen is a directory after the fifo");
+    expect(!S_ISFIFO(st.st_mode), "the augogen path is not a fifo after the write");
+    expect(readlink(aug, buf, sizeof buf) < 0, "augogen is not a symlink");
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
+           "the plate path is a regular file after the augogen fifo");
+    if (writer > 0) {
+      got = waitpid(writer, &wst, WNOHANG);
+      expect(got == 0, "a generate does not pair a writer on the augogen fifo");
+      if (got == 0) {
+        kill(writer, SIGTERM);
+        waitpid(writer, &wst, 0);
+      }
+      writer = -1;
+    }
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move clear\"") != NULL,
+           "the real directory keeps move clear");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move clear\""),
+           "a replaced augogen fifo still loads");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "an augogen fifo leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "an augogen fifo leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "an augogen fifo leaves an empty query at rank 0");
+    unlink(platep);
+    rmdir(aug);
     unlink(aug);
     mkdir(aug, 0700);
   }
