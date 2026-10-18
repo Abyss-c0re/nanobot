@@ -2034,6 +2034,147 @@ int main(void) {
     expect(m.rank == 0, "a cube symlink leaves an empty query at rank 0");
   }
 
+  /* A directory named guide.bin or oversee.bin is not the cube. */
+  {
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    const char *gbin = "/tmp/nb-motive-test/augogen/guide.bin";
+    const char *obin = "/tmp/nb-motive-test/augogen/oversee.bin";
+    const char *gmarkp = "/tmp/nb-motive-test/augogen/guide.bin/mark.txt";
+    const char *omarkp = "/tmp/nb-motive-test/augogen/oversee.bin/mark.txt";
+    const char *marked = "cube mark stays";
+    struct stat st;
+    FILE *tf;
+    char buf[512];
+    size_t n;
+    char *pend;
+    unlink(gmarkp);
+    unlink(omarkp);
+    unlink(gbin);
+    unlink(obin);
+    rmdir(gbin);
+    rmdir(obin);
+    unlink(platep);
+    rmdir(platep);
+    tf = fopen(platep, "wb");
+    expect(tf != NULL, "plant a plate before the cube directories");
+    if (tf) {
+      fputs("{\"suggestion\":\"move now\",\"status\":\"pending\","
+            "\"guide_vote\":-1,\"oversee_vote\":-1,\"mesh_vote\":-1}",
+            tf);
+      fclose(tf);
+    }
+    expect(mkdir(gbin, 0700) == 0, "plant an empty guide cube directory");
+    expect(mkdir(obin, 0700) == 0, "plant an empty oversee cube directory");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a pending read still sees the plate beside empty cube directories");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "empty cube directories keep hold flash");
+    free(js);
+    expect(lstat(gbin, &st) == 0 && S_ISDIR(st.st_mode),
+           "a pending read leaves the empty guide directory");
+    expect(lstat(obin, &st) == 0 && S_ISDIR(st.st_mode),
+           "a pending read leaves the empty oversee directory");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"vote\",\"role\":\"mesh\",\"vote\":\"1\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a vote still names the planted line beside empty cube directories");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a vote over empty cube directories keeps hold flash");
+    free(js);
+#if NANOBOT_HAS_BRAINCUBE
+    expect(lstat(gbin, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 8,
+           "an empty guide directory becomes a cube file");
+    expect(lstat(obin, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 8,
+           "an empty oversee directory becomes a cube file");
+    expect(readlink(gbin, buf, sizeof buf) < 0, "the guide cube file is not a link");
+    expect(readlink(obin, buf, sizeof buf) < 0, "the oversee cube file is not a link");
+#else
+    expect(lstat(gbin, &st) == 0 && S_ISDIR(st.st_mode),
+           "without a cube the empty guide directory stays");
+    expect(lstat(obin, &st) == 0 && S_ISDIR(st.st_mode),
+           "without a cube the empty oversee directory stays");
+#endif
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move now\""),
+           "the plate still loads after the empty cube directories");
+    free(pend);
+    unlink(gbin);
+    unlink(obin);
+    rmdir(gbin);
+    rmdir(obin);
+    expect(mkdir(gbin, 0700) == 0, "plant a guide directory that holds a name");
+    expect(mkdir(obin, 0700) == 0, "plant an oversee directory that holds a name");
+    tf = fopen(gmarkp, "wb");
+    expect(tf != NULL, "plant the guide inner name");
+    if (tf) {
+      fputs(marked, tf);
+      fclose(tf);
+    }
+    tf = fopen(omarkp, "wb");
+    expect(tf != NULL, "plant the oversee inner name");
+    if (tf) {
+      fputs(marked, tf);
+      fclose(tf);
+    }
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && !strstr(js, "cube mark stays"),
+           "a cube directory is not read");
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a cube directory leaves the planted plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a cube directory keeps hold flash");
+    free(js);
+    expect(lstat(gbin, &st) == 0 && S_ISDIR(st.st_mode),
+           "a pending read leaves the guide directory");
+    expect(lstat(obin, &st) == 0 && S_ISDIR(st.st_mode),
+           "a pending read leaves the oversee directory");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"vote\",\"role\":\"mesh\",\"vote\":\"1\"}");
+    free(js);
+    expect(lstat(gbin, &st) == 0 && S_ISDIR(st.st_mode),
+           "a guide directory that holds a name stays");
+    expect(lstat(obin, &st) == 0 && S_ISDIR(st.st_mode),
+           "an oversee directory that holds a name stays");
+    tf = fopen(gmarkp, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "the write does not enter the guide directory");
+    tf = fopen(omarkp, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "the write does not enter the oversee directory");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move now\""),
+           "a cube directory does not replace the plate");
+    expect(pend && !strstr(pend, "cube mark stays"),
+           "a cube directory does not load the inner name");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a cube directory leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a cube directory leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a cube directory leaves an empty query at rank 0");
+    unlink(gmarkp);
+    unlink(omarkp);
+    rmdir(gbin);
+    rmdir(obin);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

@@ -367,7 +367,8 @@ static void cube_path(char *buf, size_t n, const char *who) {
   snprintf(buf, n, "%s/augogen/%s.bin", ng_workdir(), who);
 }
 
-/* A symlink is not the cube. O_NOFOLLOW leaves the target unread. */
+/* A symlink is not the cube. O_NOFOLLOW leaves the target unread.
+ * A directory at this name is not the cube either. */
 static char *read_cube_file(const char *path, size_t *out_len) {
   int fd;
   struct stat st;
@@ -403,8 +404,9 @@ static char *read_cube_file(const char *path, size_t *out_len) {
   return buf;
 }
 
-/* rename replaces a symlink. It does not follow the link, and it does not
- * enter a directory at this name. */
+/* rename replaces a symlink. It does not follow the link. An empty
+ * directory at this name is not the cube and is removed. A directory
+ * that still holds a name stays, and this write does not enter it. */
 static int write_cube_file(const char *path, const void *data, size_t len) {
   char tmp[700];
   struct stat st;
@@ -438,6 +440,14 @@ static int write_cube_file(const char *path, const void *data, size_t len) {
   if (close(fd) != 0) {
     unlink(tmp);
     return -1;
+  }
+  /* A directory is not the cube. rmdir removes only an empty one.
+   * A symlink stays on the rename path, which replaces the link. */
+  if (lstat(path, &st) == 0 && !S_ISLNK(st.st_mode) && S_ISDIR(st.st_mode)) {
+    if (rmdir(path) != 0) {
+      unlink(tmp);
+      return -1;
+    }
   }
   if (rename(tmp, path) != 0) {
     unlink(tmp);
