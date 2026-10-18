@@ -49,6 +49,9 @@
  * A directory at the plate path is not the plate. The read ignores it.
  * The write removes that directory only when it is empty. A directory
  * that still holds a name stays, and the write does not enter it.
+ * A fifo at the plate path is not the plate. The read ignores it and
+ * does not open it. The write replaces that fifo and does not open it.
+ * A waiting writer is not paired.
  * A symlink named guide.bin or oversee.bin is not the cube. The read
  * ignores it. The write replaces that link and leaves the target.
  * A directory named guide.bin or oversee.bin is not the cube. The read

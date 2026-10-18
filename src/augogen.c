@@ -646,7 +646,8 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
 }
 
 /* A symlink is not the plate. O_NOFOLLOW leaves the target unread.
- * The directory fd is the real augogen directory, not a link to one. */
+ * The directory fd is the real augogen directory, not a link to one.
+ * A fifo at this name is not the plate. Opening it would pair a writer. */
 static char *read_plate_at(int dfd, size_t *out_len) {
   int fd;
   struct stat st;
@@ -654,6 +655,10 @@ static char *read_plate_at(int dfd, size_t *out_len) {
   size_t n = 0;
   if (out_len) *out_len = 0;
   if (dfd < 0) return NULL;
+  /* Classify a fifo before open. fstatat does not pair a writer. */
+  if (fstatat(dfd, "pending.json", &st, AT_SYMLINK_NOFOLLOW) == 0 &&
+      S_ISFIFO(st.st_mode))
+    return NULL;
   fd = openat(dfd, "pending.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0) return NULL;
   if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
@@ -757,7 +762,9 @@ static void load_plate(ng_augogen *p) {
  * target stays. A directory at the plate path is not the plate. An empty
  * one is removed before the rename. A directory that still holds a name
  * stays, and the write does not enter it. A fifo named augogen is not
- * the plate directory. The write replaces that fifo and does not open it. */
+ * the plate directory. The write replaces that fifo and does not open it.
+ * A fifo at the plate path is not the plate. rename replaces it and does
+ * not open it. A waiting writer is not paired. */
 static int save_plate(const ng_augogen *p) {
   char tmp[64];
   char *js;

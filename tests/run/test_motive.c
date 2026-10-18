@@ -2430,6 +2430,155 @@ int main(void) {
     mkdir(aug, 0700);
   }
 
+  /* A fifo at the plate path is not the plate. Do not open it. */
+  {
+    const char *aug = "/tmp/nb-motive-test/augogen";
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    struct stat st;
+    DIR *ad;
+    struct dirent *de;
+    FILE *tf;
+    int kick[2];
+    int wst = 0;
+    pid_t writer = -1;
+    pid_t got;
+    char path[256];
+    char buf[512];
+    char wchan[64];
+    size_t n;
+    char *pend;
+    int spins;
+    ad = opendir(aug);
+    if (ad) {
+      while ((de = readdir(ad)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
+        unlink(path);
+        rmdir(path);
+      }
+      closedir(ad);
+    }
+    mkdir(aug, 0700);
+    unlink(platep);
+    expect(mkfifo(platep, 0600) == 0, "plant a plate fifo");
+    expect(lstat(platep, &st) == 0 && S_ISFIFO(st.st_mode),
+           "the plate path is a fifo");
+    kick[0] = -1;
+    kick[1] = -1;
+    expect(pipe(kick) == 0, "a pipe marks the plate fifo writer");
+    if (kick[0] >= 0) {
+      writer = fork();
+      if (writer == 0) {
+        char one = 1;
+        int wfd;
+        close(kick[0]);
+        if (write(kick[1], &one, 1) != 1) _exit(2);
+        close(kick[1]);
+        wfd = open(platep, O_WRONLY);
+        if (wfd >= 0) close(wfd);
+        _exit(0);
+      }
+      close(kick[1]);
+      kick[1] = -1;
+      buf[0] = 0;
+      if (writer > 0 && read(kick[0], buf, 1) == 1) {
+        snprintf(path, sizeof path, "/proc/%d/wchan", (int)writer);
+        for (spins = 0; spins < 50; spins++) {
+          tf = fopen(path, "r");
+          wchan[0] = 0;
+          if (tf) {
+            if (fgets(wchan, sizeof wchan, tf) == NULL) wchan[0] = 0;
+            fclose(tf);
+          }
+          if (strstr(wchan, "fifo") || strstr(wchan, "pipe") ||
+              strstr(wchan, "partner"))
+            break;
+          poll(NULL, 0, 20);
+        }
+      }
+      close(kick[0]);
+      kick[0] = -1;
+    }
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "a plate fifo stays unread");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a plate fifo keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISFIFO(st.st_mode),
+           "a pending read leaves the plate fifo");
+    if (writer > 0) {
+      int paired = 0;
+      for (spins = 0; spins < 10; spins++) {
+        got = waitpid(writer, &wst, WNOHANG);
+        if (got != 0) {
+          paired = 1;
+          break;
+        }
+        poll(NULL, 0, 20);
+      }
+      expect(!paired && got == 0,
+             "a pending read does not pair a writer on the plate fifo");
+      if (got > 0) writer = -1;
+    }
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move plate\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move plate\""),
+           "a generate stores over a plate fifo");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "a plate fifo becomes a pending plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a replaced plate fifo keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
+           "the plate path is a regular file after the fifo");
+    expect(!S_ISFIFO(st.st_mode), "the plate path is not a fifo after the write");
+    if (writer > 0) {
+      int paired = 0;
+      for (spins = 0; spins < 10; spins++) {
+        got = waitpid(writer, &wst, WNOHANG);
+        if (got != 0) {
+          paired = 1;
+          break;
+        }
+        poll(NULL, 0, 20);
+      }
+      expect(!paired && got == 0,
+             "a generate does not pair a writer on the plate fifo");
+      if (got == 0) {
+        kill(writer, SIGTERM);
+        waitpid(writer, &wst, 0);
+      }
+      writer = -1;
+    }
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move plate\"") != NULL,
+           "the plate file keeps move plate");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move plate\""),
+           "a replaced plate fifo still loads");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a plate fifo leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a plate fifo leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a plate fifo leaves an empty query at rank 0");
+    unlink(platep);
+    rmdir(aug);
+    mkdir(aug, 0700);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
