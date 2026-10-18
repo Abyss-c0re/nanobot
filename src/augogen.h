@@ -46,6 +46,9 @@
  * A fifo named augogen is not the plate directory. The read ignores
  * it and does not open it. The write replaces that fifo with a
  * directory and does not open it. A waiting writer is not paired.
+ * A socket named augogen is not the plate directory. The read ignores
+ * it and does not open it. The write replaces that socket with a
+ * directory and does not open it.
  * A directory at the plate path is not the plate. The read ignores it.
  * The write removes that directory only when it is empty. A directory
  * that still holds a name stays, and the write does not enter it.

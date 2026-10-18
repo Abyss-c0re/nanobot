@@ -334,7 +334,9 @@ static int augogen_dir_is_link(void) {
  * file only when it holds no bytes, then makes a directory. A file
  * that still holds bytes stays. A fifo is not the plate directory.
  * The read does not open it. replace=1 unlinks that fifo and makes a
- * directory. A waiting writer is not paired. */
+ * directory. A waiting writer is not paired. A socket is not the plate
+ * directory. The read does not open it. replace=1 unlinks that socket
+ * and makes a directory. */
 static int open_plate_dir(int replace) {
   char d[640];
   struct stat st;
@@ -344,6 +346,15 @@ static int open_plate_dir(int replace) {
   for (;;) {
     /* Opening a fifo would pair a writer. Classify it before open. */
     if (lstat(d, &st) == 0 && S_ISFIFO(st.st_mode)) {
+      if (!replace) return -1;
+      if (unlink(d) != 0) return -1;
+      if (mkdir(d, 0700) != 0 && errno != EEXIST) return -1;
+      replace = 0;
+      continue;
+    }
+    /* A socket is not a directory. open on it is ENOTDIR or ENXIO.
+     * Classify it before open so the write can replace the name. */
+    if (lstat(d, &st) == 0 && S_ISSOCK(st.st_mode)) {
       if (!replace) return -1;
       if (unlink(d) != 0) return -1;
       if (mkdir(d, 0700) != 0 && errno != EEXIST) return -1;
@@ -757,7 +768,9 @@ static void load_plate(ng_augogen *p) {
  * target stays. A directory at the plate path is not the plate. An empty
  * one is removed before the rename. A directory that still holds a name
  * stays, and the write does not enter it. A fifo named augogen is not
- * the plate directory. The write replaces that fifo and does not open it. */
+ * the plate directory. The write replaces that fifo and does not open it.
+ * A socket named augogen is not the plate directory. The write replaces
+ * that socket and does not open it. */
 static int save_plate(const ng_augogen *p) {
   char tmp[64];
   char *js;
