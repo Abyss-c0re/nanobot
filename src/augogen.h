@@ -58,6 +58,9 @@
  * A hard link at the plate path is not the plate. The read ignores
  * that file. The other name keeps its bytes. The write replaces the
  * plate path and leaves the other name.
+ * A file longer than 8192 bytes at the plate path is not the plate.
+ * The read ignores it and does not open it. The write replaces that
+ * file with the plate file.
  * A symlink named guide.bin or oversee.bin is not the cube. The read
  * ignores it. The write replaces that link and leaves the target.
  * A directory named guide.bin or oversee.bin is not the cube. The read

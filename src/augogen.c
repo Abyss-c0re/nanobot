@@ -24,6 +24,8 @@
 #define SUG_CAP 240
 #define ID_CAP 40
 #define ROLE_CAP 16
+/* Plate JSON this peer writes fits here. A longer file is not the plate. */
+#define PLATE_BYTES_MAX 8192L
 
 typedef struct {
   char id[ID_CAP];
@@ -649,7 +651,8 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
  * The directory fd is the real augogen directory, not a link to one.
  * A fifo at this name is not the plate. Opening it would pair a writer.
  * A second name on this inode is not the plate. The other name keeps
- * its bytes. This read does not open that inode. */
+ * its bytes. This read does not open that inode. A file longer than
+ * PLATE_BYTES_MAX is not the plate. This read does not open it. */
 static char *read_plate_at(int dfd, size_t *out_len) {
   int fd;
   struct stat st;
@@ -658,14 +661,17 @@ static char *read_plate_at(int dfd, size_t *out_len) {
   if (out_len) *out_len = 0;
   if (dfd < 0) return NULL;
   /* Classify a fifo before open. fstatat does not pair a writer.
-   * A shared inode is not the plate either. Leave that inode unopened. */
+   * A shared inode is not the plate either. Leave that inode unopened.
+   * A long regular file is not the plate either. Leave it unopened. */
   if (fstatat(dfd, "pending.json", &st, AT_SYMLINK_NOFOLLOW) == 0) {
     if (S_ISFIFO(st.st_mode)) return NULL;
     if (S_ISREG(st.st_mode) && st.st_nlink > 1) return NULL;
+    if (S_ISREG(st.st_mode) && st.st_size > PLATE_BYTES_MAX) return NULL;
   }
   fd = openat(dfd, "pending.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0) return NULL;
-  if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
+  if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0 ||
+      st.st_size > PLATE_BYTES_MAX) {
     close(fd);
     return NULL;
   }
@@ -773,7 +779,9 @@ static void load_plate(ng_augogen *p) {
  * A directory that still holds a name stays, and this write does not
  * enter it. A hard link at the plate path is not the plate. renameat
  * replaces that directory entry only. The other name keeps its bytes.
- * This write does not open the shared inode. */
+ * This write does not open the shared inode. A file longer than
+ * PLATE_BYTES_MAX is not the plate. renameat replaces it and does
+ * not read it. */
 static int save_plate(const ng_augogen *p) {
   char tmp[64];
   char *js;

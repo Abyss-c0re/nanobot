@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/inotify.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -2818,6 +2819,151 @@ int main(void) {
     expect(m.rank == 0, "a hard link leaves an empty query at rank 0");
     unlink(platep);
     unlink(side);
+    rmdir(aug);
+    mkdir(aug, 0700);
+  }
+
+  /* A file longer than 8192 bytes at the plate path is not the plate.
+   * The same bytes at 8192 are still the plate. One more byte is not. */
+  {
+    const char *aug = "/tmp/nb-motive-test/augogen";
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    const char *body =
+        "{\"suggestion\":\"stay vast\",\"status\":\"pending\","
+        "\"guide_vote\":-1,\"oversee_vote\":-1,\"mesh_vote\":-1}";
+    struct stat st;
+    struct stat before;
+    DIR *ad;
+    struct dirent *de;
+    FILE *tf;
+    int pfd;
+    int iw;
+    int opened;
+    char path[320];
+    char buf[512];
+    char evbuf[256];
+    size_t n;
+    char *pend;
+    ad = opendir(aug);
+    if (ad) {
+      while ((de = readdir(ad)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
+        unlink(path);
+        rmdir(path);
+      }
+      closedir(ad);
+    }
+    mkdir(aug, 0700);
+    unlink(platep);
+    tf = fopen(platep, "wb");
+    expect(tf != NULL, "plant a short plate");
+    if (tf) {
+      fputs(body, tf);
+      fclose(tf);
+    }
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"suggestion\":\"stay vast\""),
+           "a short plate still loads");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a short plate keeps hold flash");
+    free(js);
+    expect(truncate(platep, 8192) == 0, "grow the plate to 8192");
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 8192,
+           "the plate path is 8192 bytes");
+    iw = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    expect(iw >= 0, "inotify watches the 8192 plate");
+    opened = 0;
+    if (iw >= 0 && inotify_add_watch(iw, platep, IN_OPEN) >= 0) {
+      js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+      while (read(iw, evbuf, sizeof evbuf) > 0) opened = 1;
+      close(iw);
+    } else {
+      if (iw >= 0) close(iw);
+      js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    }
+    expect(opened, "a plate of 8192 bytes is opened");
+    expect(js && strstr(js, "\"suggestion\":\"stay vast\""),
+           "a plate of 8192 bytes still loads");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a plate of 8192 bytes keeps hold flash");
+    free(js);
+    expect(truncate(platep, 8193) == 0, "grow the plate by one byte");
+    expect(lstat(platep, &before) == 0 && before.st_size == 8193,
+           "the plate path is 8193 bytes");
+    iw = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    expect(iw >= 0, "inotify watches the long plate");
+    opened = 0;
+    if (iw >= 0 && inotify_add_watch(iw, platep, IN_OPEN) >= 0) {
+      js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+      while (read(iw, evbuf, sizeof evbuf) > 0) opened = 1;
+      close(iw);
+    } else {
+      if (iw >= 0) close(iw);
+      js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    }
+    expect(!opened, "a long plate is not opened");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "a long plate stays unread");
+    expect(js && !strstr(js, "stay vast"),
+           "a long plate does not return stay vast");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a long plate keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode) &&
+               st.st_size == 8193 && st.st_ino == before.st_ino,
+           "a pending read leaves the long file");
+    pfd = open(platep, O_RDONLY);
+    n = 0;
+    buf[0] = 0;
+    if (pfd >= 0) {
+      ssize_t r = read(pfd, buf, sizeof buf - 1);
+      if (r > 0) n = (size_t)r;
+      close(pfd);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"stay vast\"") != NULL,
+           "the long file still holds stay vast");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move mesa\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move mesa\""),
+           "a generate stores over a long plate");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "a long plate becomes a pending plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a replaced long plate keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0 &&
+               st.st_size <= 8192 && st.st_nlink == 1,
+           "the plate path is a short one-link file after the write");
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move mesa\"") != NULL,
+           "the plate file keeps move mesa");
+    expect(strstr(buf, "stay vast") == NULL,
+           "the new plate file does not keep stay vast");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move mesa\""),
+           "a replaced long plate still loads");
+    expect(pend && !strstr(pend, "stay vast"),
+           "a replaced long plate does not load stay vast");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a long plate leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a long plate leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a long plate leaves an empty query at rank 0");
+    unlink(platep);
     rmdir(aug);
     mkdir(aug, 0700);
   }
