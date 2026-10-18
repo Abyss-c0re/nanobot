@@ -319,8 +319,47 @@ static void augogen_dir(char *buf, size_t n) {
   snprintf(buf, n, "%s/augogen", ng_workdir());
 }
 
-static void plate_path(char *buf, size_t n) {
-  snprintf(buf, n, "%s/augogen/pending.json", ng_workdir());
+/* A symlink named augogen is not the plate directory. */
+static int augogen_dir_is_link(void) {
+  char d[640];
+  struct stat st;
+  augogen_dir(d, sizeof d);
+  if (lstat(d, &st) != 0) return 0;
+  return S_ISLNK(st.st_mode) ? 1 : 0;
+}
+
+/* replace=0 leaves a symlink unread. replace=1 unlinks that link and
+ * makes a directory. The target stays. A final symlink is ENOTDIR. */
+static int open_plate_dir(int replace) {
+  char d[640];
+  struct stat st;
+  int fd;
+  int err;
+  augogen_dir(d, sizeof d);
+  for (;;) {
+    fd = open(d, O_RDONLY | O_NOFOLLOW | O_DIRECTORY);
+    if (fd >= 0) {
+      if (fstat(fd, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        close(fd);
+        return -1;
+      }
+      return fd;
+    }
+    err = errno;
+    if (replace && (err == ELOOP || err == ENOTDIR) &&
+        lstat(d, &st) == 0 && S_ISLNK(st.st_mode)) {
+      if (unlink(d) != 0) return -1;
+      if (mkdir(d, 0700) != 0 && errno != EEXIST) return -1;
+      replace = 0;
+      continue;
+    }
+    if (err == ENOENT && replace) {
+      if (mkdir(d, 0700) != 0 && errno != EEXIST) return -1;
+      replace = 0;
+      continue;
+    }
+    return -1;
+  }
 }
 
 #if NANOBOT_HAS_BRAINCUBE
@@ -333,6 +372,12 @@ static void load_cube(lhlam_cube *c, const char *who) {
   size_t len = 0;
   char *raw;
   uint8_t seed[32];
+  if (augogen_dir_is_link()) {
+    memset(seed, who[0] == 'g' ? 0x17 : 0x0E, sizeof seed);
+    seed[0] = (uint8_t)(who[0] == 'g' ? 3 : 9);
+    lhlam_cube_init(c, seed);
+    return;
+  }
   cube_path(path, sizeof path, who);
   raw = ng_read_file(path, &len);
   if (raw && len > 8 && lhlam_cube_import(c, (const uint8_t *)raw, len) == 0) {
@@ -349,17 +394,12 @@ static void save_cube(const lhlam_cube *c, const char *who) {
   uint8_t bin[8192];
   size_t need = lhlam_cube_export(c, bin, sizeof bin);
   char path[640];
+  if (augogen_dir_is_link()) return;
   if (need == 0 || need > sizeof bin) return;
   cube_path(path, sizeof path, who);
   ng_write_file(path, (const char *)bin, need);
 }
 #endif
-
-static void ensure_dir(void) {
-  char d[640];
-  augogen_dir(d, sizeof d);
-  mkdir(d, 0700);
-}
 
 static void plate_clear(ng_augogen *p) {
   memset(p, 0, sizeof *p);
@@ -485,15 +525,16 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
   return out;
 }
 
-/* A symlink is not the plate. O_NOFOLLOW leaves the target unread. */
-static char *read_plate_file(const char *path, size_t *out_len) {
+/* A symlink is not the plate. O_NOFOLLOW leaves the target unread.
+ * The directory fd is the real augogen directory, not a link to one. */
+static char *read_plate_at(int dfd, size_t *out_len) {
   int fd;
   struct stat st;
   char *buf;
   size_t n = 0;
   if (out_len) *out_len = 0;
-  if (!path || !path[0]) return NULL;
-  fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  if (dfd < 0) return NULL;
+  fd = openat(dfd, "pending.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0) return NULL;
   if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
     close(fd);
@@ -522,13 +563,15 @@ static char *read_plate_file(const char *path, size_t *out_len) {
 }
 
 static void load_plate(ng_augogen *p) {
-  char path[640];
   size_t len = 0;
   char *raw;
   char *s;
+  int dfd;
   plate_clear(p);
-  plate_path(path, sizeof path);
-  raw = read_plate_file(path, &len);
+  dfd = open_plate_dir(0);
+  if (dfd < 0) return;
+  raw = read_plate_at(dfd, &len);
+  close(dfd);
   if (!raw || !raw[0]) {
     free(raw);
     return;
@@ -589,29 +632,36 @@ static void load_plate(ng_augogen *p) {
   free(raw);
 }
 
-/* A symlink at the plate path is not the file it names. rename replaces the
- * link. The target stays. */
+/* A symlink at the plate path is not the file it names. renameat replaces
+ * that link. A symlink named augogen is replaced with a directory. Either
+ * target stays. */
 static int save_plate(const ng_augogen *p) {
-  char path[640];
-  char tmp[700];
+  char tmp[64];
   char *js;
   int fd;
+  int dfd;
   size_t len, off = 0;
-  ensure_dir();
-  plate_path(path, sizeof path);
   js = plate_json(p);
   if (!js) return -1;
   len = strlen(js);
-  if (snprintf(tmp, sizeof tmp, "%s.tmp-%d", path, (int)getpid()) >= (int)sizeof tmp) {
+  dfd = open_plate_dir(1);
+  if (dfd < 0) {
     free(js);
     return -1;
   }
-  if (unlink(tmp) != 0 && errno != ENOENT) {
+  if (snprintf(tmp, sizeof tmp, "pending.json.tmp-%d", (int)getpid()) >= (int)sizeof tmp) {
+    close(dfd);
     free(js);
     return -1;
   }
-  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+  if (unlinkat(dfd, tmp, 0) != 0 && errno != ENOENT) {
+    close(dfd);
+    free(js);
+    return -1;
+  }
+  fd = openat(dfd, tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
   if (fd < 0) {
+    close(dfd);
     free(js);
     return -1;
   }
@@ -620,28 +670,33 @@ static int save_plate(const ng_augogen *p) {
     if (w < 0) {
       if (errno == EINTR) continue;
       close(fd);
-      unlink(tmp);
+      unlinkat(dfd, tmp, 0);
+      close(dfd);
       free(js);
       return -1;
     }
     if (w == 0) {
       close(fd);
-      unlink(tmp);
+      unlinkat(dfd, tmp, 0);
+      close(dfd);
       free(js);
       return -1;
     }
     off += (size_t)w;
   }
   if (fchmod(fd, 0600) != 0 || close(fd) != 0) {
-    unlink(tmp);
+    unlinkat(dfd, tmp, 0);
+    close(dfd);
     free(js);
     return -1;
   }
   free(js);
-  if (rename(tmp, path) != 0) {
-    unlink(tmp);
+  if (renameat(dfd, tmp, dfd, "pending.json") != 0) {
+    unlinkat(dfd, tmp, 0);
+    close(dfd);
     return -1;
   }
+  close(dfd);
   return 0;
 }
 

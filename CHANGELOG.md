@@ -105,6 +105,7 @@
 - **hive:** a failed fork marks that auto job `error` `fork_failed` and does not leave it queued. The plate names the id and stays unexecuted. A queued auto job stays queued. The ranker is unchanged. CubalC board: `programs/motive_fork.cubalc`.
 - **hive:** a quote in a stored plate status, plate name, or cli version stays escaped on the plate JSON. Rank, concept, line, and the store stay. CubalC board: `programs/motive_escape.cubalc`.
 - **hive:** a symlink at the plate path is not the plate. The read ignores it. The write replaces the link and leaves the target. Rank, concept, line, and the store stay. CubalC board: `programs/motive_nofollow.cubalc`.
+- **hive:** a symlink named augogen is not the plate directory. The read ignores it. The write replaces that link with a directory and leaves the target. Rank, concept, line, and the store stay. CubalC board: `programs/motive_dirlink.cubalc`.
 - **wire:** MCP prefers `structuredContent`, cancels a timed-out JSON-RPC call, re-reads `bearer_token_file` / `token_file` on each request, rejects an `mcp__` server id longer than 240 bytes, and honors `toolTimeoutMs`.
 - **wire:** reasoning effort folds case and catalog tokens (`x-high` / `x_high` → `xhigh`). `default`, `off`, and `none` clear the field.
 - **wire:** a failed refresh keeps using the cached access token while `now < expires_at`.

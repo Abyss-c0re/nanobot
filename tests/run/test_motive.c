@@ -1691,6 +1691,107 @@ int main(void) {
     expect(m.rank == 0, "a symlink plate leaves an empty query at rank 0");
   }
 
+  /* A symlink named augogen is not the plate directory. The target stays. */
+  {
+    const char *tdir = "/tmp/nb-motive-dirlink-target";
+    const char *tplate = "/tmp/nb-motive-dirlink-target/pending.json";
+    const char *aug = "/tmp/nb-motive-test/augogen";
+    const char *marked = "{\"suggestion\":\"stolen directory stays\",\"status\":\"pending\"}";
+    struct stat st;
+    DIR *ad;
+    struct dirent *de;
+    FILE *tf;
+    char path[256];
+    char buf[512];
+    size_t n;
+    char *pend;
+    ad = opendir(aug);
+    if (ad) {
+      while ((de = readdir(ad)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
+        unlink(path);
+      }
+      closedir(ad);
+    }
+    rmdir(aug);
+    mkdir(tdir, 0700);
+    unlink(tplate);
+    tf = fopen(tplate, "wb");
+    expect(tf != NULL, "plant the directory target");
+    if (tf) {
+      fputs(marked, tf);
+      fclose(tf);
+    }
+    expect(symlink(tdir, aug) == 0, "augogen is a symlink");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && !strstr(js, "stolen directory stays"),
+           "a symlink directory is not read");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "a symlink directory stays empty");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a symlink directory keeps hold flash");
+    free(js);
+    expect(lstat(aug, &st) == 0 && S_ISLNK(st.st_mode),
+           "a pending read leaves the directory symlink");
+    tf = fopen(tplate, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "a pending read leaves the directory target");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move next\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move next\""),
+           "a generate stores on a replaced directory link");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "a replaced directory link stays a pending plate");
+    free(js);
+    tf = fopen(tplate, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "the write leaves the directory target");
+    expect(lstat(aug, &st) == 0 && S_ISDIR(st.st_mode),
+           "augogen is a directory after the write");
+    expect(readlink(aug, buf, sizeof buf) < 0, "augogen is not a symlink");
+    snprintf(path, sizeof path, "%s/pending.json", aug);
+    tf = fopen(path, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move next\"") != NULL,
+           "the real directory keeps the stored line");
+    expect(strstr(buf, "stolen directory stays") == NULL,
+           "the real directory does not name the target");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move next\""),
+           "a real directory still loads");
+    expect(pend && !strstr(pend, "stolen directory stays"),
+           "a real directory does not load the target");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a symlink directory leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a symlink directory leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a symlink directory leaves an empty query at rank 0");
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
