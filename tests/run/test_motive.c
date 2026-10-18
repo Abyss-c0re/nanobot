@@ -1792,6 +1792,102 @@ int main(void) {
     expect(m.rank == 0, "a symlink directory leaves an empty query at rank 0");
   }
 
+  /* A directory at the plate path is not the plate. */
+  {
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    const char *kept = "/tmp/nb-motive-test/augogen/pending.json/keep.txt";
+    const char *marked = "inner name stays";
+    struct stat st;
+    FILE *tf;
+    char buf[512];
+    size_t n;
+    char *pend;
+    unlink(platep);
+    rmdir(platep);
+    expect(mkdir(platep, 0700) == 0, "plant an empty plate directory");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "an empty plate directory stays unread");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "an empty plate directory keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISDIR(st.st_mode),
+           "a pending read leaves the empty plate directory");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move clear\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move clear\""),
+           "a generate stores over an empty plate directory");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "an empty plate directory becomes a pending plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a replaced plate directory keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
+           "the plate path is a regular file after the empty directory");
+    expect(readlink(platep, buf, sizeof buf) < 0, "the plate path is not a link");
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move clear\"") != NULL,
+           "the regular plate keeps move clear");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move clear\""),
+           "a replaced empty directory still loads");
+    free(pend);
+    unlink(platep);
+    expect(mkdir(platep, 0700) == 0, "plant a plate directory that holds a name");
+    tf = fopen(kept, "wb");
+    expect(tf != NULL, "plant the inner name");
+    if (tf) {
+      fputs(marked, tf);
+      fclose(tf);
+    }
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && !strstr(js, "inner name stays"),
+           "a plate directory is not read");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "a plate directory stays empty");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a plate directory keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISDIR(st.st_mode),
+           "a pending read leaves the plate directory");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move past\"}");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISDIR(st.st_mode),
+           "a plate directory that holds a name stays");
+    tf = fopen(kept, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "the write does not enter the plate directory");
+    pend = ng_augogen_pending_json();
+    expect(pend && !strstr(pend, "move past"),
+           "a plate directory does not load the unsaved line");
+    expect(pend && strstr(pend, "\"status\":\"empty\""),
+           "a plate directory still reads empty");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a plate directory leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a plate directory leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a plate directory leaves an empty query at rank 0");
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

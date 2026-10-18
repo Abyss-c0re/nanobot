@@ -39,6 +39,9 @@
  * and leaves the target.
  * A symlink named augogen is not the plate directory. The read ignores
  * it. The write replaces that link with a directory and leaves the target.
+ * A directory at the plate path is not the plate. The read ignores it.
+ * The write removes that directory only when it is empty. A directory
+ * that still holds a name stays, and the write does not enter it.
  * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */

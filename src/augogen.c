@@ -634,7 +634,9 @@ static void load_plate(ng_augogen *p) {
 
 /* A symlink at the plate path is not the file it names. renameat replaces
  * that link. A symlink named augogen is replaced with a directory. Either
- * target stays. */
+ * target stays. A directory at the plate path is not the plate. An empty
+ * one is removed before the rename. A directory that still holds a name
+ * stays, and the write does not enter it. */
 static int save_plate(const ng_augogen *p) {
   char tmp[64];
   char *js;
@@ -691,6 +693,19 @@ static int save_plate(const ng_augogen *p) {
     return -1;
   }
   free(js);
+  /* A directory is not the plate. AT_SYMLINK_NOFOLLOW keeps a link on the
+   * rename path. rmdir removes only an empty directory. */
+  {
+    struct stat st;
+    if (fstatat(dfd, "pending.json", &st, AT_SYMLINK_NOFOLLOW) == 0 &&
+        S_ISDIR(st.st_mode)) {
+      if (unlinkat(dfd, "pending.json", AT_REMOVEDIR) != 0) {
+        unlinkat(dfd, tmp, 0);
+        close(dfd);
+        return -1;
+      }
+    }
+  }
   if (renameat(dfd, tmp, dfd, "pending.json") != 0) {
     unlinkat(dfd, tmp, 0);
     close(dfd);
