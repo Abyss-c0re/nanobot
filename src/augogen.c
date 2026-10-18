@@ -329,7 +329,10 @@ static int augogen_dir_is_link(void) {
 }
 
 /* replace=0 leaves a symlink unread. replace=1 unlinks that link and
- * makes a directory. The target stays. A final symlink is ENOTDIR. */
+ * makes a directory. The target stays. A final symlink is ENOTDIR.
+ * A regular file is not the plate directory. replace=1 unlinks that
+ * file only when it holds no bytes, then makes a directory. A file
+ * that still holds bytes stays. */
 static int open_plate_dir(int replace) {
   char d[640];
   struct stat st;
@@ -352,6 +355,24 @@ static int open_plate_dir(int replace) {
       if (mkdir(d, 0700) != 0 && errno != EEXIST) return -1;
       replace = 0;
       continue;
+    }
+    /* A regular file is not the directory. An empty one is removed.
+     * A file that still holds bytes stays, and this write does not
+     * replace it. O_NOFOLLOW leaves a link on the other branch. */
+    if (replace && err == ENOTDIR) {
+      int rfd = open(d, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+      if (rfd >= 0) {
+        int reg = (fstat(rfd, &st) == 0 && S_ISREG(st.st_mode));
+        int empty = reg && st.st_size == 0;
+        close(rfd);
+        if (reg && !empty) return -1;
+        if (empty) {
+          if (unlink(d) != 0) return -1;
+          if (mkdir(d, 0700) != 0 && errno != EEXIST) return -1;
+          replace = 0;
+          continue;
+        }
+      }
     }
     if (err == ENOENT && replace) {
       if (mkdir(d, 0700) != 0 && errno != EEXIST) return -1;

@@ -2175,6 +2175,127 @@ int main(void) {
     rmdir(obin);
   }
 
+  /* A regular file named augogen is not the plate directory. */
+  {
+    const char *aug = "/tmp/nb-motive-test/augogen";
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    const char *marked = "augogen file stays";
+    struct stat st;
+    DIR *ad;
+    struct dirent *de;
+    FILE *tf;
+    int efd;
+    char path[256];
+    char buf[512];
+    size_t n;
+    char *pend;
+    ad = opendir(aug);
+    if (ad) {
+      while ((de = readdir(ad)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
+        unlink(path);
+        rmdir(path);
+      }
+      closedir(ad);
+      rmdir(aug);
+    }
+    unlink(aug);
+    efd = open(aug, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+    expect(efd >= 0, "plant an empty augogen file");
+    if (efd >= 0) close(efd);
+    expect(lstat(aug, &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 0,
+           "the empty augogen path is a regular file");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "an empty augogen file stays unread");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "an empty augogen file keeps hold flash");
+    free(js);
+    expect(lstat(aug, &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 0,
+           "a pending read leaves the empty augogen file");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move aside\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move aside\""),
+           "a generate stores over an empty augogen file");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "an empty augogen file becomes a pending plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a replaced augogen file keeps hold flash");
+    free(js);
+    expect(lstat(aug, &st) == 0 && S_ISDIR(st.st_mode),
+           "augogen is a directory after the empty file");
+    expect(readlink(aug, buf, sizeof buf) < 0, "augogen is not a symlink");
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
+           "the plate path is a regular file after the empty augogen file");
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move aside\"") != NULL,
+           "the real directory keeps move aside");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move aside\""),
+           "a replaced empty augogen file still loads");
+    free(pend);
+    unlink(platep);
+    rmdir(aug);
+    unlink(aug);
+    tf = fopen(aug, "wb");
+    expect(tf != NULL, "plant an augogen file that holds bytes");
+    if (tf) {
+      fputs(marked, tf);
+      fclose(tf);
+    }
+    expect(lstat(aug, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0,
+           "the augogen path holds bytes");
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && !strstr(js, "augogen file stays"),
+           "an augogen file is not read");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "an augogen file stays empty");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "an augogen file keeps hold flash");
+    free(js);
+    expect(lstat(aug, &st) == 0 && S_ISREG(st.st_mode),
+           "a pending read leaves the augogen file");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move kept\"}");
+    free(js);
+    expect(lstat(aug, &st) == 0 && S_ISREG(st.st_mode),
+           "an augogen file that holds bytes stays");
+    tf = fopen(aug, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "the write does not replace the augogen file");
+    pend = ng_augogen_pending_json();
+    expect(pend && !strstr(pend, "move kept"),
+           "an augogen file does not load the unsaved line");
+    expect(pend && strstr(pend, "\"status\":\"empty\""),
+           "an augogen file still reads empty");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "an augogen file leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "an augogen file leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "an augogen file leaves an empty query at rank 0");
+    unlink(aug);
+    mkdir(aug, 0700);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

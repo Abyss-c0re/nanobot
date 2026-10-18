@@ -1,0 +1,19 @@
+// A regular file named augogen is not the plate directory.
+// The read ignores it. An empty file is replaced with a directory on write.
+// A file that still holds bytes stays.
+// Rank, concept, line, and the store stay.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE augfile ROLE observer PROTON 1
+CUBE law    ROLE nanobot  PROTON 1
+
+PLUG augfile law
+
+IMPULSE augfile 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "augfile" UNITY DECIDE ENERGY
