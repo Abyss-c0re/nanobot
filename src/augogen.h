@@ -55,6 +55,9 @@
  * ignores it. The write removes that directory only when it is empty.
  * A directory that still holds a name stays, and the write does not
  * enter it.
+ * A fifo named guide.bin or oversee.bin is not the cube. The read
+ * ignores it and does not open it. The write replaces that fifo and
+ * does not open it. A waiting writer is not paired.
  * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */
