@@ -35,6 +35,8 @@
  * A quoted plate, lexical, hamming, or concept that disagrees with the peer
  * rank is not stored. A missing value keeps the store.
  * A quote in the plate status, plate name, or cli version stays escaped.
+ * A symlink at the plate path is not read. The write replaces the link
+ * and leaves the target.
  * Generate does not POST. Without enqueue the plate stays empty.
  * agent may be NULL for pending/vote/reject/reset (no LLM).
  * Returns malloc'd dual-wire plate. */

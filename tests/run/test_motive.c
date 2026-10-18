@@ -1608,6 +1608,89 @@ int main(void) {
     expect(m.rank == 0, "a quoted plate leaves an empty query at rank 0");
   }
 
+  /* A symlink at the plate path is not the plate. The target stays. */
+  {
+    const char *target = "/tmp/nb-motive-nofollow-target";
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    const char *marked = "{\"suggestion\":\"stolen words stay\",\"status\":\"pending\"}";
+    struct stat st;
+    FILE *tf;
+    char buf[512];
+    size_t n;
+    char *pend;
+    unlink(target);
+    tf = fopen(target, "wb");
+    expect(tf != NULL, "plant the symlink target");
+    if (tf) {
+      fputs(marked, tf);
+      fclose(tf);
+    }
+    mkdir("/tmp/nb-motive-test/augogen", 0700);
+    unlink(platep);
+    expect(symlink(target, platep) == 0, "plate path is a symlink");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && !strstr(js, "stolen words stay"),
+           "a symlink plate is not read");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "a symlink plate stays empty");
+    expect(js && strstr(js, "\"hold_flash\":1"), "a symlink plate keeps hold flash");
+    free(js);
+    tf = fopen(target, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "a pending read leaves the symlink target");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move now\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move now\""),
+           "a generate still stores on a replaced link");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "a replaced link stays a pending plate");
+    free(js);
+    tf = fopen(target, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, marked) == 0, "the write leaves the symlink target");
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
+           "the plate path is a regular file after the write");
+    expect(readlink(platep, buf, sizeof buf) < 0, "the plate path is not a symlink");
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move now\"") != NULL,
+           "the regular plate keeps the stored line");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move now\""),
+           "a regular plate still loads");
+    expect(pend && !strstr(pend, "stolen words stay"),
+           "a regular plate does not name the old target");
+    free(pend);
+    unlink(target);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a symlink plate leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a symlink plate leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a symlink plate leaves an empty query at rank 0");
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

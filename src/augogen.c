@@ -485,6 +485,42 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
   return out;
 }
 
+/* A symlink is not the plate. O_NOFOLLOW leaves the target unread. */
+static char *read_plate_file(const char *path, size_t *out_len) {
+  int fd;
+  struct stat st;
+  char *buf;
+  size_t n = 0;
+  if (out_len) *out_len = 0;
+  if (!path || !path[0]) return NULL;
+  fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  if (fd < 0) return NULL;
+  if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
+    close(fd);
+    return NULL;
+  }
+  buf = malloc((size_t)st.st_size + 1);
+  if (!buf) {
+    close(fd);
+    return NULL;
+  }
+  while (n < (size_t)st.st_size) {
+    ssize_t r = read(fd, buf + n, (size_t)st.st_size - n);
+    if (r < 0) {
+      if (errno == EINTR) continue;
+      free(buf);
+      close(fd);
+      return NULL;
+    }
+    if (r == 0) break;
+    n += (size_t)r;
+  }
+  close(fd);
+  buf[n] = 0;
+  if (out_len) *out_len = n;
+  return buf;
+}
+
 static void load_plate(ng_augogen *p) {
   char path[640];
   size_t len = 0;
@@ -492,7 +528,7 @@ static void load_plate(ng_augogen *p) {
   char *s;
   plate_clear(p);
   plate_path(path, sizeof path);
-  raw = ng_read_file(path, &len);
+  raw = read_plate_file(path, &len);
   if (!raw || !raw[0]) {
     free(raw);
     return;
@@ -553,16 +589,60 @@ static void load_plate(ng_augogen *p) {
   free(raw);
 }
 
+/* A symlink at the plate path is not the file it names. rename replaces the
+ * link. The target stays. */
 static int save_plate(const ng_augogen *p) {
   char path[640];
+  char tmp[700];
   char *js;
-  int rc;
+  int fd;
+  size_t len, off = 0;
   ensure_dir();
   plate_path(path, sizeof path);
   js = plate_json(p);
-  rc = ng_write_file(path, js, strlen(js));
+  if (!js) return -1;
+  len = strlen(js);
+  if (snprintf(tmp, sizeof tmp, "%s.tmp-%d", path, (int)getpid()) >= (int)sizeof tmp) {
+    free(js);
+    return -1;
+  }
+  if (unlink(tmp) != 0 && errno != ENOENT) {
+    free(js);
+    return -1;
+  }
+  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+  if (fd < 0) {
+    free(js);
+    return -1;
+  }
+  while (off < len) {
+    ssize_t w = write(fd, js + off, len - off);
+    if (w < 0) {
+      if (errno == EINTR) continue;
+      close(fd);
+      unlink(tmp);
+      free(js);
+      return -1;
+    }
+    if (w == 0) {
+      close(fd);
+      unlink(tmp);
+      free(js);
+      return -1;
+    }
+    off += (size_t)w;
+  }
+  if (fchmod(fd, 0600) != 0 || close(fd) != 0) {
+    unlink(tmp);
+    free(js);
+    return -1;
+  }
   free(js);
-  return rc;
+  if (rename(tmp, path) != 0) {
+    unlink(tmp);
+    return -1;
+  }
+  return 0;
 }
 
 static void recompute(ng_augogen *p) {

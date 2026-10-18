@@ -1,0 +1,18 @@
+// A symlink at the plate path is not the plate.
+// The read ignores it. The write replaces the link.
+// Rank, concept, line, and the store stay.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE nofollow ROLE observer PROTON 1
+CUBE law     ROLE nanobot  PROTON 1
+
+PLUG nofollow law
+
+IMPULSE nofollow 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "nofollow" UNITY DECIDE ENERGY
