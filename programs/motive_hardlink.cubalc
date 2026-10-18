@@ -1,0 +1,20 @@
+// A hard link at the plate path is not the plate.
+// The read ignores that file and does not open it.
+// The other name keeps its bytes.
+// The write replaces the plate path and leaves the other name.
+// Rank, concept, line, and the store stay.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hardlink ROLE observer PROTON 1
+CUBE law      ROLE nanobot  PROTON 1
+
+PLUG hardlink law
+
+IMPULSE hardlink 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "hardlink" UNITY DECIDE ENERGY

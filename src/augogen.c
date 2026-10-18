@@ -647,7 +647,9 @@ static char *with_report(char *js, const char *report, int rank, int lexical,
 
 /* A symlink is not the plate. O_NOFOLLOW leaves the target unread.
  * The directory fd is the real augogen directory, not a link to one.
- * A fifo at this name is not the plate. Opening it would pair a writer. */
+ * A fifo at this name is not the plate. Opening it would pair a writer.
+ * A second name on this inode is not the plate. The other name keeps
+ * its bytes. This read does not open that inode. */
 static char *read_plate_at(int dfd, size_t *out_len) {
   int fd;
   struct stat st;
@@ -655,10 +657,12 @@ static char *read_plate_at(int dfd, size_t *out_len) {
   size_t n = 0;
   if (out_len) *out_len = 0;
   if (dfd < 0) return NULL;
-  /* Classify a fifo before open. fstatat does not pair a writer. */
-  if (fstatat(dfd, "pending.json", &st, AT_SYMLINK_NOFOLLOW) == 0 &&
-      S_ISFIFO(st.st_mode))
-    return NULL;
+  /* Classify a fifo before open. fstatat does not pair a writer.
+   * A shared inode is not the plate either. Leave that inode unopened. */
+  if (fstatat(dfd, "pending.json", &st, AT_SYMLINK_NOFOLLOW) == 0) {
+    if (S_ISFIFO(st.st_mode)) return NULL;
+    if (S_ISREG(st.st_mode) && st.st_nlink > 1) return NULL;
+  }
   fd = openat(dfd, "pending.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0) return NULL;
   if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
@@ -767,7 +771,9 @@ static void load_plate(ng_augogen *p) {
  * not open it. A waiting writer is not paired. An empty directory at
  * the temp name is not the plate file. It is removed before the create.
  * A directory that still holds a name stays, and this write does not
- * enter it. */
+ * enter it. A hard link at the plate path is not the plate. renameat
+ * replaces that directory entry only. The other name keeps its bytes.
+ * This write does not open the shared inode. */
 static int save_plate(const ng_augogen *p) {
   char tmp[64];
   char *js;

@@ -55,6 +55,9 @@
  * An empty directory at the plate temp name is not the plate file.
  * The write removes that directory only when it is empty. A directory
  * that still holds a name stays, and the write does not enter it.
+ * A hard link at the plate path is not the plate. The read ignores
+ * that file. The other name keeps its bytes. The write replaces the
+ * plate path and leaves the other name.
  * A symlink named guide.bin or oversee.bin is not the cube. The read
  * ignores it. The write replaces that link and leaves the target.
  * A directory named guide.bin or oversee.bin is not the cube. The read

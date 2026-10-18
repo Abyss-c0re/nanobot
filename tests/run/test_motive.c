@@ -2702,6 +2702,126 @@ int main(void) {
     mkdir(aug, 0700);
   }
 
+  /* A hard link at the plate path is not the plate.
+   * The other name keeps its bytes. */
+  {
+    const char *aug = "/tmp/nb-motive-test/augogen";
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    const char *side = "/tmp/nb-motive-test/side-plate.json";
+    struct stat st;
+    struct stat side_st;
+    DIR *ad;
+    struct dirent *de;
+    FILE *tf;
+    char path[320];
+    char buf[512];
+    char sidebuf[512];
+    size_t n;
+    char *pend;
+    ad = opendir(aug);
+    if (ad) {
+      while ((de = readdir(ad)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
+        unlink(path);
+        rmdir(path);
+      }
+      closedir(ad);
+    }
+    mkdir(aug, 0700);
+    unlink(platep);
+    unlink(side);
+    tf = fopen(platep, "wb");
+    expect(tf != NULL, "plant a plate for a second name");
+    if (tf) {
+      fputs("{\"suggestion\":\"stay name\",\"status\":\"pending\","
+            "\"guide_vote\":-1,\"oversee_vote\":-1,\"mesh_vote\":-1}",
+            tf);
+      fclose(tf);
+    }
+    expect(link(platep, side) == 0, "plant a second name on the plate inode");
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink > 1,
+           "the plate path has two names");
+    expect(lstat(side, &side_st) == 0 && side_st.st_ino == st.st_ino,
+           "the other name is the same inode");
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"status\":\"empty\""),
+           "a hard-linked plate stays unread");
+    expect(js && !strstr(js, "stay name"),
+           "a hard-linked plate does not return stay name");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a hard-linked plate keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink > 1,
+           "a pending read leaves both names");
+    tf = fopen(side, "rb");
+    n = 0;
+    sidebuf[0] = 0;
+    if (tf) {
+      n = fread(sidebuf, 1, sizeof sidebuf - 1, tf);
+      fclose(tf);
+    }
+    sidebuf[n] = 0;
+    expect(strstr(sidebuf, "\"suggestion\":\"stay name\"") != NULL,
+           "the other name keeps stay name");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move scree\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move scree\""),
+           "a generate stores over a hard-linked plate");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "a hard-linked plate becomes a pending plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a replaced hard link keeps hold flash");
+    free(js);
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink == 1,
+           "the plate path is a one-link file after the write");
+    expect(lstat(side, &side_st) == 0 && S_ISREG(side_st.st_mode) &&
+               side_st.st_ino != st.st_ino,
+           "the other name is not the new plate inode");
+    tf = fopen(side, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, sidebuf) == 0, "the other name keeps its bytes");
+    expect(strstr(buf, "stay name") != NULL, "the other name still says stay name");
+    expect(strstr(buf, "move scree") == NULL, "the other name does not gain move scree");
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move scree\"") != NULL,
+           "the plate file keeps move scree");
+    expect(strstr(buf, "stay name") == NULL,
+           "the new plate file does not keep stay name");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move scree\""),
+           "a replaced hard link still loads");
+    expect(pend && !strstr(pend, "stay name"),
+           "a replaced hard link does not load stay name");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a hard link leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a hard link leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a hard link leaves an empty query at rank 0");
+    unlink(platep);
+    unlink(side);
+    rmdir(aug);
+    mkdir(aug, 0700);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
