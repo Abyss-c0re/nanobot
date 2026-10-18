@@ -22,6 +22,8 @@
  * enqueue=1 stores that concept line and keeps the plate name,
  * rank, lexical, and hamming.
  * The motive JSON and the generate report name lex_w.
+ * The motive JSON names retrieve when the act is a catalog line.
+ * Generate omits retrieve. The plate file omits retrieve.
  * A concept line with one word said twice in a row keeps sketch distance zero.
  * A failed fork marks that auto job error and names it. It does not stay queued.
  * The plate stays unexecuted. A queued job left for a later listen stays queued.

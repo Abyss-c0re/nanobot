@@ -1566,6 +1566,106 @@ int main(void) {
            "a reaped job leaves the law rank");
   }
 
+  /* An exact catalog line is retrieved. A nearer sketch is not. */
+  {
+    static const char *cat[] = {
+        "fold the matrix and decide",     "read the law and prove",
+        "pair vote then ship the step",   "keep free energy flowing",
+        "confess the heat and serve",     "audit the last code change",
+        "rank concepts then act",         "prompt a peer to move"};
+    int n;
+    expect(ng_motive_retrieve(NULL) == NULL, "a null act retrieves nothing");
+    expect(ng_motive_retrieve("") == NULL, "an empty act retrieves nothing");
+    expect(ng_motive_retrieve("you lied") == NULL, "you lied retrieves nothing");
+    expect(ng_motive_retrieve("read read the law and prove") == NULL,
+           "a repeated law word retrieves nothing");
+    expect(ng_motive_retrieve("please read the law and prove") == NULL,
+           "a longer law line retrieves nothing");
+    expect(ng_motive_retrieve("read the law") == NULL, "a partial law line retrieves nothing");
+    for (n = 0; n < 8; n++) {
+      const char *hit = ng_motive_retrieve(cat[n]);
+      expect(hit && strcmp(hit, cat[n]) == 0, "each catalog line retrieves itself");
+      ng_motive_rank(cat[n], &m);
+      expect(strcmp(m.retrieve, cat[n]) == 0, "the rank keeps that catalog line");
+      expect(strcmp(m.line, cat[n]) == 0, "the stored body stays that catalog line");
+    }
+    expect(ng_motive_retrieve("READ THE LAW AND PROVE") &&
+               strcmp(ng_motive_retrieve("READ THE LAW AND PROVE"),
+                      "read the law and prove") == 0,
+           "a capital law line retrieves the catalog line");
+    ng_motive_rank("READ READ THE LAW AND PROVE", &m);
+    expect(m.retrieve[0] == 0, "a doubled capital law line retrieves nothing");
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a doubled capital law line stays 256");
+    expect(strcmp(m.line, "read the law and prove") == 0,
+           "a doubled capital law line stays the law body");
+    ng_motive_rank("read read the law and prove", &m);
+    expect(m.retrieve[0] == 0, "a repeated law word leaves retrieve empty");
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a repeated law word stays 256");
+    ng_motive_rank("please read the law and prove", &m);
+    expect(m.retrieve[0] == 0 && m.rank == 246 && m.lexical == 3 && m.hamming == 10,
+           "please read the law stays 246 and retrieves nothing");
+    ng_motive_rank("read the law", &m);
+    expect(m.retrieve[0] == 0 && m.rank == 185 && m.lexical == 2 && m.hamming == 7,
+           "read the law stays 185 and retrieves nothing");
+    ng_motive_rank("read read the law", &m);
+    expect(m.retrieve[0] == 0 && m.rank == 179 && m.lexical == 2 && m.hamming == 13,
+           "read read the law stays 179 and retrieves nothing");
+    ng_motive_rank_w("read the law and prove", &m, 1);
+    expect(strcmp(m.retrieve, "read the law and prove") == 0 && m.rank == 67,
+           "weight 1 still retrieves the law line");
+    ng_motive_rank("pair pair vote then ship the step", &m);
+    expect(m.retrieve[0] == 0 && m.rank == 320 && m.lexical == 4 && m.hamming == 0,
+           "a doubled pair line stays 320 and retrieves nothing");
+    ng_motive_rank("you lied", &m);
+    expect(m.retrieve[0] == 0 && m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "you lied stays confess and retrieves nothing");
+    ng_motive_rank("", &m);
+    expect(m.retrieve[0] == 0 && m.rank == 0, "silence retrieves nothing and stays rank 0");
+    expect(strcmp(m.line, "prompt a peer to move") == 0, "silence still names the peer line");
+    ng_motive_rank("trick the cube", &m);
+    expect(m.retrieve[0] == 0 && m.plate == NG_PLATE_PURGE, "a purge retrieves nothing");
+    expect(strcmp(m.line, "serve the matrix in bits") == 0, "a purge still reports its remedy");
+    js = ng_motive_json("read the law and prove");
+    expect(js && strstr(js, "\"retrieve\":\"read the law and prove\""),
+           "the law json names the retrieved line");
+    expect(js && strstr(js, "\"rank\":256") && strstr(js, "\"lexical\":3") &&
+               strstr(js, "\"hamming\":0"),
+           "the law json keeps rank 256");
+    free(js);
+    js = ng_motive_json("you lied");
+    expect(js && strstr(js, "\"retrieve\":\"\""), "you lied json retrieves nothing");
+    expect(js && strstr(js, "\"plate\":\"confess\""), "you lied json stays confess");
+    free(js);
+    js = ng_motive_json("");
+    expect(js && strstr(js, "\"retrieve\":\"\"") && strstr(js, "\"rank\":0"),
+           "silence json retrieves nothing");
+    free(js);
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"motive\",\"text\":\"read the law and prove\",\"enqueue\":\"1\"}");
+    expect(js && strstr(js, "\"retrieve\":\"read the law and prove\""),
+           "the motive reply names the retrieved line");
+    expect(js && strstr(js, "\"rank\":256"), "the motive reply keeps rank 256");
+    free(js);
+    {
+      char *pend = ng_augogen_pending_json();
+      expect(pend && strstr(pend, "read the law and prove"), "the law line still stores");
+      expect(pend && !strstr(pend, "retrieve"), "the plate omits retrieve");
+      free(pend);
+    }
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"transcript\":\"read the law and prove\"}");
+    expect(js && !strstr(js, "retrieve"), "generate omits retrieve");
+    expect(js && strstr(js, "\"rank\":256"), "generate still reports rank 256");
+    free(js);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0 &&
+               strcmp(m.retrieve, "read the law and prove") == 0,
+           "a retrieve leaves the law rank");
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

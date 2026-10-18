@@ -38,9 +38,14 @@ typedef struct {
   int lex_w; /* NANOBOT_MOTIVE_LEX_W used for this rank. Unset is 64. */
   char concept[NG_MOTIVE_TEXT];
   char line[NG_MOTIVE_TEXT];
+  /* Catalog line when the normalized act is that line. Empty otherwise. */
+  char retrieve[NG_MOTIVE_TEXT];
 } ng_motive;
 
 const char *ng_motive_plate_name(int plate);
+/* Catalog line when the normalized act is that line. NULL on a miss.
+ * Does not rank and does not allocate. */
+const char *ng_motive_retrieve(const char *text);
 void ng_motive_rank(const char *text, ng_motive *out);
 /* over < 0 reads NANOBOT_MOTIVE_LEX_W. 0-255 applies to this call only. */
 void ng_motive_rank_w(const char *text, ng_motive *out, int over);

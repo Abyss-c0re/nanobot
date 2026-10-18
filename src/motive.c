@@ -300,6 +300,21 @@ static int same_tokens(const char *norm, const char *concept) {
   return *p == 0 && *c == 0;
 }
 
+/* Identity on the eight lines. A miss is not a nearer sketch. */
+static const char *retrieve_norm(const char *norm) {
+  int i;
+  if (!norm || !norm[0]) return NULL;
+  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++)
+    if (!strcmp(norm, kConcept[i])) return kConcept[i];
+  return NULL;
+}
+
+const char *ng_motive_retrieve(const char *text) {
+  char norm[NORM_CAP];
+  norm_text(text, norm, sizeof norm);
+  return retrieve_norm(norm);
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
@@ -310,6 +325,10 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   norm_text(text, norm, sizeof norm);
   lw = (over >= 0 && over <= 255) ? over : lex_weight();
   out->lex_w = lw;
+  {
+    const char *hit = retrieve_norm(norm);
+    if (hit) copy_cap(out->retrieve, sizeof out->retrieve, hit);
+  }
   /* Silence has no tokens to rank. The peer-prompt concept is the motive. */
   if (!norm[0]) {
     int peer = 0;
@@ -359,21 +378,23 @@ int ng_motive_blocks(const char *text) {
 }
 
 char *ng_motive_format(const ng_motive *m) {
-  char *line = NULL, *concept = NULL, *out = NULL;
+  char *line = NULL, *concept = NULL, *got = NULL, *out = NULL;
   if (!m) return NULL;
   line = ng_json_escape(m->line);
   concept = ng_json_escape(m->concept);
+  got = ng_json_escape(m->retrieve);
   asprintf(&out,
            "{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":true,"
            "\"plate\":\"%s\",\"forward\":%s,\"rank\":%d,"
            "\"hamming\":%d,\"lexical\":%d,\"lex_w\":%d,"
-           "\"concept\":\"%s\",\"line\":\"%s\","
+           "\"concept\":\"%s\",\"line\":\"%s\",\"retrieve\":\"%s\","
            "\"concepts\":%d,\"python\":0}",
            ng_motive_plate_name(m->plate), m->forward ? "true" : "false", m->rank,
            m->hamming, m->lexical, m->lex_w, concept ? concept : "", line ? line : "",
-           NG_MOTIVE_CONCEPTS);
+           got ? got : "", NG_MOTIVE_CONCEPTS);
   free(line);
   free(concept);
+  free(got);
   return out ? out
              : strdup("{\"schema\":\"" NG_MOTIVE_SCHEMA "\",\"ok\":false,"
                       "\"error\":\"oom\",\"python\":0}");
