@@ -2579,6 +2579,129 @@ int main(void) {
     mkdir(aug, 0700);
   }
 
+  /* An empty directory at the plate temp name is not the plate file.
+   * A directory that still holds a name stays. */
+  {
+    const char *aug = "/tmp/nb-motive-test/augogen";
+    const char *platep = "/tmp/nb-motive-test/augogen/pending.json";
+    char tmpname[64];
+    char tmpdir[256];
+    char keepp[320];
+    struct stat st;
+    DIR *ad;
+    struct dirent *de;
+    FILE *tf;
+    char path[320];
+    char buf[512];
+    size_t n;
+    char *pend;
+    snprintf(tmpname, sizeof tmpname, "pending.json.tmp-%d", (int)getpid());
+    snprintf(tmpdir, sizeof tmpdir, "%s/%s", aug, tmpname);
+    snprintf(keepp, sizeof keepp, "%s/keep.txt", tmpdir);
+    ad = opendir(aug);
+    if (ad) {
+      while ((de = readdir(ad)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        snprintf(path, sizeof path, "%s/%s", aug, de->d_name);
+        unlink(path);
+        rmdir(path);
+      }
+      closedir(ad);
+    }
+    mkdir(aug, 0700);
+    unlink(platep);
+    unlink(keepp);
+    rmdir(tmpdir);
+    tf = fopen(platep, "wb");
+    expect(tf != NULL, "plant a plate beside a temp directory");
+    if (tf) {
+      fputs("{\"suggestion\":\"stay temp\",\"status\":\"pending\","
+            "\"guide_vote\":-1,\"oversee_vote\":-1,\"mesh_vote\":-1}",
+            tf);
+      fclose(tf);
+    }
+    expect(mkdir(tmpdir, 0700) == 0, "plant a temp directory");
+    tf = fopen(keepp, "wb");
+    expect(tf != NULL, "plant a name inside the temp directory");
+    if (tf) {
+      fputs("temp stays", tf);
+      fclose(tf);
+    }
+    setenv("NANOBOT_AUGOGEN_AUTO", "0", 1);
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move glen\"}");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a full temp directory keeps hold flash");
+    free(js);
+    expect(lstat(tmpdir, &st) == 0 && S_ISDIR(st.st_mode),
+           "a temp directory that holds a name stays");
+    expect(lstat(keepp, &st) == 0 && S_ISREG(st.st_mode),
+           "the write does not enter the temp directory");
+    tf = fopen(keepp, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strcmp(buf, "temp stays") == 0, "the inner name stays unread");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"stay temp\""),
+           "a full temp directory does not replace the plate");
+    expect(pend && !strstr(pend, "move glen"),
+           "a full temp directory does not store move glen");
+    free(pend);
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
+           "the plate path stays a regular file");
+    unlink(keepp);
+    expect(lstat(tmpdir, &st) == 0 && S_ISDIR(st.st_mode),
+           "the temp directory is empty");
+    js = ng_augogen_handle(
+        NULL, "{\"action\":\"generate\",\"enqueue\":\"1\",\"suggestion\":\"move vale\"}");
+    expect(js && strstr(js, "\"suggestion\":\"move vale\""),
+           "a generate stores over an empty temp directory");
+    expect(js && strstr(js, "\"status\":\"pending\""),
+           "an empty temp directory becomes a pending plate");
+    expect(js && strstr(js, "\"hold_flash\":1"),
+           "a replaced temp directory keeps hold flash");
+    free(js);
+    expect(lstat(tmpdir, &st) != 0, "the empty temp directory is removed");
+    expect(lstat(platep, &st) == 0 && S_ISREG(st.st_mode),
+           "the plate path is a regular file after the temp directory");
+    tf = fopen(platep, "rb");
+    n = 0;
+    buf[0] = 0;
+    if (tf) {
+      n = fread(buf, 1, sizeof buf - 1, tf);
+      fclose(tf);
+    }
+    buf[n] = 0;
+    expect(strstr(buf, "\"suggestion\":\"move vale\"") != NULL,
+           "the plate file keeps move vale");
+    expect(strstr(buf, "stay temp") == NULL,
+           "the empty temp directory does not keep the old line");
+    pend = ng_augogen_pending_json();
+    expect(pend && strstr(pend, "\"suggestion\":\"move vale\""),
+           "a replaced temp directory still loads");
+    expect(pend && !strstr(pend, "move glen"),
+           "a replaced temp directory does not load move glen");
+    free(pend);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a temp directory leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a temp directory leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a temp directory leaves an empty query at rank 0");
+    unlink(platep);
+    unlink(keepp);
+    rmdir(tmpdir);
+    rmdir(aug);
+    mkdir(aug, 0700);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

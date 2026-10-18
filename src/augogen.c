@@ -764,7 +764,10 @@ static void load_plate(ng_augogen *p) {
  * stays, and the write does not enter it. A fifo named augogen is not
  * the plate directory. The write replaces that fifo and does not open it.
  * A fifo at the plate path is not the plate. rename replaces it and does
- * not open it. A waiting writer is not paired. */
+ * not open it. A waiting writer is not paired. An empty directory at
+ * the temp name is not the plate file. It is removed before the create.
+ * A directory that still holds a name stays, and this write does not
+ * enter it. */
 static int save_plate(const ng_augogen *p) {
   char tmp[64];
   char *js;
@@ -783,6 +786,21 @@ static int save_plate(const ng_augogen *p) {
     close(dfd);
     free(js);
     return -1;
+  }
+  /* A directory at the temp name is not the plate file. AT_SYMLINK_NOFOLLOW
+   * keeps a link on the unlink path. rmdir removes only an empty directory.
+   * A directory that still holds a name stays, and this write does not
+   * enter it. */
+  {
+    struct stat st;
+    if (fstatat(dfd, tmp, &st, AT_SYMLINK_NOFOLLOW) == 0 &&
+        S_ISDIR(st.st_mode)) {
+      if (unlinkat(dfd, tmp, AT_REMOVEDIR) != 0) {
+        close(dfd);
+        free(js);
+        return -1;
+      }
+    }
   }
   if (unlinkat(dfd, tmp, 0) != 0 && errno != ENOENT) {
     close(dfd);
