@@ -381,18 +381,25 @@ static char *plate_json(const ng_augogen *p) {
   char *id = escape_or_empty(p->id);
   char *st = escape_or_empty(p->status);
   char *jid = escape_or_empty(p->job_id);
+  char *ver = escape_or_empty(ng_cli_version());
+  char *pesc = NULL;
+  char *score = NULL;
   char *out = NULL;
-  char score[128];
   int auto_on = augogen_auto_enabled();
   const char *np = (p->confirmed && p->suggestion[0]) ? (sug ? sug : "") : NULL;
-  score[0] = 0;
-  if (p->score_kept && p->plate_name[0])
-    snprintf(score, sizeof score,
-             "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
-             p->plate_name, p->motive_rank, p->motive_lex, p->motive_ham);
-  else if (p->score_kept)
-    snprintf(score, sizeof score, "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
-             p->motive_rank, p->motive_lex, p->motive_ham);
+  /* A quote in the status, the plate name, or the cli version stays escaped. */
+  if (p->score_kept && p->plate_name[0]) {
+    pesc = escape_or_empty(p->plate_name);
+    if (asprintf(&score,
+                 "\"plate\":\"%s\",\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
+                 pesc ? pesc : "", p->motive_rank, p->motive_lex,
+                 p->motive_ham) < 0)
+      score = NULL;
+  } else if (p->score_kept) {
+    if (asprintf(&score, "\"rank\":%d,\"lexical\":%d,\"hamming\":%d,",
+                 p->motive_rank, p->motive_lex, p->motive_ham) < 0)
+      score = NULL;
+  }
   asprintf(&out,
            "{\"schema\":\"" NG_AUGOGEN_SCHEMA "\",\"ok\":true,"
            "\"action\":\"%s\",\"id\":\"%s\",\"generation\":%lu,"
@@ -405,7 +412,7 @@ static char *plate_json(const ng_augogen *p) {
            "\"cli_compat\":\"%s\","
            "\"hold_flash\":1,\"share\":\"state_matrix_only\","
            "%s\"python\":0}",
-           p->status,
+           st ? st : "",
            id ? id : "",
            p->generation,
            sug ? sug : "",
@@ -417,11 +424,14 @@ static char *plate_json(const ng_augogen *p) {
            p->executed ? "true" : "false",
            jid ? jid : "",
            np ? "\"" : "null", np ? np : "", np ? "\"" : "",
-           ng_cli_version(), score);
+           ver ? ver : "", score ? score : "");
   free(sug);
   free(id);
   free(st);
   free(jid);
+  free(ver);
+  free(pesc);
+  free(score);
   return out ? out
              : strdup("{\"schema\":\"" NG_AUGOGEN_SCHEMA "\",\"ok\":false,"
                       "\"error\":\"oom\",\"python\":0}");

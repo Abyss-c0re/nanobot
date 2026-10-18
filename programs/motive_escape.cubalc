@@ -1,0 +1,17 @@
+// A quote in the plate status or plate name stays escaped.
+// Rank, concept, line, and the store stay.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE escape ROLE observer PROTON 1
+CUBE law    ROLE nanobot  PROTON 1
+
+PLUG escape law
+
+IMPULSE escape 1
+IMPULSE law 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY law
+DECIDE law
+ASSERT CUBES >= 2
+PRINT "escape" UNITY DECIDE ENERGY

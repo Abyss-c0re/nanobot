@@ -1566,6 +1566,48 @@ int main(void) {
            "a reaped job leaves the law rank");
   }
 
+  /* A quote in the plate status or plate name stays escaped. */
+  {
+    FILE *pf;
+    mkdir("/tmp/nb-motive-test/augogen", 0700);
+    pf = fopen("/tmp/nb-motive-test/augogen/pending.json", "wb");
+    expect(pf != NULL, "plant a plate with quotes");
+    if (pf) {
+      fputs("{\"suggestion\":\"read the law and prove\","
+            "\"status\":\"a\\\"b\",\"guide_vote\":-1,\"oversee_vote\":-1,"
+            "\"mesh_vote\":-1,\"rank\":256,\"lexical\":3,\"hamming\":0,"
+            "\"plate\":\"c\\\"d\"}",
+            pf);
+      fclose(pf);
+    }
+    js = ng_augogen_handle(NULL, "{\"action\":\"pending\"}");
+    expect(js && strstr(js, "\"action\":\"a\\\"b\""),
+           "a quote in the status stays escaped on the action");
+    expect(js && strstr(js, "\"status\":\"a\\\"b\""),
+           "a quote in the status stays escaped");
+    expect(js && strstr(js, "\"plate\":\"c\\\"d\""),
+           "a quote in the plate name stays escaped");
+    expect(js && strstr(js, "\"rank\":256"), "a quoted plate keeps the rank");
+    expect(js && strstr(js, "\"lexical\":3"), "a quoted plate keeps lexical");
+    expect(js && strstr(js, "\"hamming\":0"), "a quoted plate keeps hamming");
+    expect(js && strstr(js, "\"cli_compat\":\"1.0.52\""),
+           "the cli version stays a plain token");
+    expect(js && strstr(js, "\"hold_flash\":1"), "hold flash stays on the plate");
+    expect(js && strstr(js, "\"python\":0"), "python stays 0");
+    expect(js && count_substr(js, "\"ok\":true") == 1, "one ok field");
+    expect(js && count_substr(js, "\"rank\":") == 1, "one rank key");
+    expect(js && count_substr(js, "\"plate\":") == 1, "one plate key");
+    free(js);
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0,
+           "a quoted plate leaves the law rank");
+    ng_motive_rank("you lied", &m);
+    expect(m.plate == NG_PLATE_CONFESS && m.lexical == 0,
+           "a quoted plate leaves you lied");
+    ng_motive_rank("", &m);
+    expect(m.rank == 0, "a quoted plate leaves an empty query at rank 0");
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
