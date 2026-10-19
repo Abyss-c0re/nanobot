@@ -164,6 +164,7 @@ int main(void) {
   setenv("NANOBOT_MOTIVE_PEER", "off", 1);
   unsetenv("NANOBOT_MOTIVE_PEER_TOKEN");
   unsetenv("NANOBOT_MOTIVE_PEER_TOKEN_FILE");
+  unsetenv("NANOBOT_MOTIVE_LEARN");
 
   ng_motive_rank("trick the cube", &m);
   expect(m.plate == NG_PLATE_PURGE, "purge trick the cube");
@@ -2966,6 +2967,71 @@ int main(void) {
     unlink(platep);
     rmdir(aug);
     mkdir(aug, 0700);
+  }
+
+  {
+    const char *law_t[] = {"read the law and prove"};
+    const char *law_p[] = {"read the law and prove"};
+    const char *ship_t[] = {"why did the ship fail"};
+    const char *audit_p[] = {"audit the last code change"};
+    const char *bogus_p[] = {"not a catalog line"};
+    const char *tie_t[] = {"read the law and prove", "why did the ship fail"};
+    const char *tie_p[] = {"read the law and prove", "pair vote then ship the step"};
+    const char *path = "/tmp/nb-motive-learn.pairs";
+    int learned;
+    FILE *pf;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_learn_lex_w(NULL, NULL, 0) == 64, "no pairs stay at weight 64");
+    expect(ng_motive_learn_lex_w(law_t, NULL, 1) == 64, "missing prefer stays at weight 64");
+    expect(ng_motive_learn_lex_w(law_t, law_p, 1) == 64,
+           "an exact catalog line keeps weight 64");
+    learned = ng_motive_learn_lex_w(ship_t, audit_p, 1);
+    expect(learned == 0, "the smallest hitting weight is kept");
+    ng_motive_rank_w("why did the ship fail", &m, learned);
+    expect(strcmp(m.concept, "audit the last code change") == 0,
+           "the learned weight ranks the preferred catalog line");
+    ng_motive_rank_w("why did the ship fail", &m, 64);
+    expect(m.lex_w == 64 && strcmp(m.concept, "pair vote then ship the step") == 0,
+           "weight 64 still ranks the pair line");
+    expect(ng_motive_learn_lex_w(ship_t, bogus_p, 1) == 64,
+           "an unknown preferred line keeps weight 64");
+    expect(ng_motive_learn_lex_w(tie_t, tie_p, 2) == 64,
+           "weight 64 wins a tie of hit counts");
+    pf = fopen(path, "w");
+    expect(pf != NULL, "pairs file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fputs("why did the ship fail\taudit the last code change\n", pf);
+      fclose(pf);
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    ng_motive_rank("why did the ship fail", &m);
+    expect(m.lex_w == learned, "the pairs file overrides NANOBOT_MOTIVE_LEX_W");
+    expect(strcmp(m.concept, "audit the last code change") == 0,
+           "the pairs file ranks the preferred line");
+    ng_motive_rank_w("read the law and prove", &m, 64);
+    expect(m.rank == 256 && m.lexical == 3 && m.hamming == 0 && m.lex_w == 64,
+           "a call weight still overrides the pairs file");
+    ng_motive_rank("read the law and prove", &m);
+    expect(strcmp(m.concept, "read the law and prove") == 0, "learned weight keeps the law line");
+    expect(m.lexical == 3 && m.hamming == 0, "learned weight keeps the law features");
+    expect(m.rank == 3 * learned + (64 - 0), "learned weight keeps the hybrid score");
+    expect(m.lex_w == learned, "learned weight is the reported lex_w");
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-learn-missing", 1);
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lex_w == 64, "a missing pairs file keeps weight 64");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("read the law and prove", &m);
+    expect(m.rank == 256 && m.lex_w == 64 && m.lexical == 3 && m.hamming == 0,
+           "clearing the pairs path restores the law rank");
+    ng_motive_rank("why did the ship fail", &m);
+    expect(m.lex_w == 64 && strcmp(m.concept, "pair vote then ship the step") == 0,
+           "clearing the pairs path restores the pair line");
+    unlink(path);
   }
 
   if (g_fail) {

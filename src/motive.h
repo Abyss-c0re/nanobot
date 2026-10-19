@@ -5,6 +5,8 @@
  * Rank uses the caller stack: 192-byte norm, 24 tokens, no heap.
  * A concept line with one word said twice in a row keeps sketch distance zero.
  * NANOBOT_MOTIVE_LEX_W is the lexical weight, 0-255. Unset stays 64.
+ * NANOBOT_MOTIVE_LEARN may name a pairs file that fits that weight.
+ * The fit does not store a line and does not add a concept.
  * A forward plate may become a 2–12 word self-prompt. Destructive plates
  * stay on the wire as a remedy line and are not applied.
  * Schema: nanobot.motive.v1
@@ -44,6 +46,10 @@ const char *ng_motive_plate_name(int plate);
 void ng_motive_rank(const char *text, ng_motive *out);
 /* over < 0 reads NANOBOT_MOTIVE_LEX_W. 0-255 applies to this call only. */
 void ng_motive_rank_w(const char *text, ng_motive *out, int over);
+/* Grid-search lex_w on up to 32 (text, catalog line) pairs.
+ * No pairs, or a tie that includes 64, returns 64. Does not store. */
+int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
+                          int n);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

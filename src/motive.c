@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define NORM_CAP 192
 #define TOK_MAX 24
@@ -240,11 +241,111 @@ static int lexical_hits(const char *norm, const char *concept) {
   return hits;
 }
 
-/* Unset, empty, or outside 0-255 stays 64. The plate cascade is unchanged. */
+/* At most 32 pairs. Each preferred string must be one catalog line.
+ * Hit count is how many pairs rank that line. The smallest weight
+ * with the most hits wins. Weight 64 wins a tie that includes it.
+ * No pair stores a line and none is added to the eight concepts. */
+int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
+                          int n) {
+  int w, best_hits = -1, best_w = 64;
+  if (!text || !prefer || n <= 0) return 64;
+  if (n > 32) n = 32;
+  for (w = 0; w <= 255; w++) {
+    int i, hits = 0;
+    for (i = 0; i < n; i++) {
+      ng_motive m;
+      if (!text[i] || !prefer[i] || !prefer[i][0]) continue;
+      ng_motive_rank_w(text[i], &m, w);
+      if (strcmp(m.concept, prefer[i]) == 0) hits++;
+    }
+    if (hits > best_hits) {
+      best_hits = hits;
+      best_w = w;
+    } else if (hits == best_hits && w == 64)
+      best_w = 64;
+  }
+  return best_w;
+}
+
+/* NANOBOT_MOTIVE_LEARN is a pairs file: query, tab, catalog line.
+ * A missing, empty, or unreadable file leaves the process weight. */
+static char g_learn_path[512];
+static time_t g_learn_mtime;
+static long g_learn_nsec;
+static off_t g_learn_size;
+static int g_learn_weight;
+static int g_learn_valid;
+
+static int learn_file_weight(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char prefs_b[32][80];
+  const char *texts[32];
+  const char *prefs[32];
+  char line[320];
+  int n = 0;
+  int budget = 16384;
+  size_t plen;
+  if (!path || !path[0]) return -1;
+  plen = strlen(path);
+  if (plen >= sizeof g_learn_path) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  if (g_learn_valid && strcmp(g_learn_path, path) == 0 &&
+      g_learn_mtime == st.st_mtime && g_learn_nsec == (long)st.st_mtim.tv_nsec &&
+      g_learn_size == st.st_size)
+    return g_learn_weight;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= sizeof prefs_b[0]) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    memcpy(prefs_b[n], tab, plen_pref + 1);
+    texts[n] = texts_b[n];
+    prefs[n] = prefs_b[n];
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  g_learn_weight = ng_motive_learn_lex_w(texts, prefs, n);
+  memcpy(g_learn_path, path, plen + 1);
+  g_learn_mtime = st.st_mtime;
+  g_learn_nsec = (long)st.st_mtim.tv_nsec;
+  g_learn_size = st.st_size;
+  g_learn_valid = 1;
+  return g_learn_weight;
+}
+
+/* Unset, empty, or outside 0-255 stays 64. A readable pairs file wins.
+ * The plate cascade is unchanged. */
 static int lex_weight(void) {
-  const char *e = getenv("NANOBOT_MOTIVE_LEX_W");
+  const char *learn = getenv("NANOBOT_MOTIVE_LEARN");
+  const char *e;
   char *end = NULL;
   long v;
+  int fitted;
+  if (learn && learn[0]) {
+    fitted = learn_file_weight(learn);
+    if (fitted >= 0 && fitted <= 255) return fitted;
+  }
+  e = getenv("NANOBOT_MOTIVE_LEX_W");
   if (!e || !e[0]) return 64;
   v = strtol(e, &end, 10);
   if (!end || end == e || *end) return 64;

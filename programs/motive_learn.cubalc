@@ -1,0 +1,18 @@
+// Lexical weight stays 64 unless a pairs file fits it.
+// A pair is a query and one catalog line.
+// The fit does not store a line and does not add a concept.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE learn ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG learn rank
+
+IMPULSE learn 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "learn" UNITY DECIDE ENERGY
