@@ -3034,6 +3034,55 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-recall.pairs";
+    char *got = NULL;
+    FILE *pf;
+    ng_motive before, after;
+
+    ng_motive_rank("read the law and prove", &before);
+    got = ng_motive_recall_pref(NULL, path);
+    expect(got == NULL, "a null query recalls nothing");
+    got = ng_motive_recall_pref("", path);
+    expect(got == NULL, "an empty query recalls nothing");
+    got = ng_motive_recall_pref("...", path);
+    expect(got == NULL, "a query with no tokens recalls nothing");
+    got = ng_motive_recall_pref("why did the ship fail",
+                                "/tmp/nb-motive-recall-missing");
+    expect(got == NULL, "a missing pairs file recalls nothing");
+    pf = fopen(path, "w");
+    expect(pf != NULL, "recall pairs file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fputs("read the law\taudit the last code change\n", pf);
+      fputs("ship fail\tkeep free energy flowing\n", pf);
+      fputs("why did the ship fail\trank concepts then act\n", pf);
+      fputs("fail ship\tfold the matrix and decide\n", pf);
+      fputs("the and then\tconfess the heat and serve\n", pf);
+      fclose(pf);
+    }
+    got = ng_motive_recall_pref("why did the ship fail", path);
+    expect(got != NULL && strcmp(got, "rank concepts then act") == 0,
+           "the greatest lexical overlap wins");
+    free(got);
+    got = ng_motive_recall_pref("ship fail", path);
+    expect(got != NULL && strcmp(got, "keep free energy flowing") == 0,
+           "an equal overlap keeps the earlier pair");
+    free(got);
+    got = ng_motive_recall_pref("prompt a peer to move", path);
+    expect(got == NULL, "zero overlap recalls nothing");
+    got = ng_motive_recall_pref("the and then a to", path);
+    expect(got == NULL, "glue words alone are not overlap");
+    ng_motive_rank("read the law and prove", &after);
+    expect(before.rank == 256 && after.rank == 256 && after.lexical == 3 &&
+               after.hamming == 0 && before.lex_w == after.lex_w,
+           "recall leaves the law rank");
+    ng_motive_rank("you lied", &after);
+    expect(after.plate == NG_PLATE_CONFESS && after.lexical == 0,
+           "recall leaves you lied");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

@@ -50,6 +50,10 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over);
  * No pairs, or a tie that includes 64, returns 64. Does not store. */
 int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
                           int n);
+/* Malloc'd catalog line of the pairs-file query with the greatest lexical
+ * overlap. Ties keep the earlier pair. NULL when the file is missing, the
+ * query is empty, or the overlap is below 1. The caller frees the line. */
+char *ng_motive_recall_pref(const char *query, const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

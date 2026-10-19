@@ -267,6 +267,58 @@ int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
   return best_w;
 }
 
+/* Pairs file, same lines as the fit: query, tab, catalog line.
+ * The read stops after 16384 bytes. A longer line is skipped.
+ * The catalog field must fit in the concept buffer. */
+char *ng_motive_recall_pref(const char *query, const char *path) {
+  char norm[NORM_CAP];
+  char best[NG_MOTIVE_TEXT];
+  char line[320];
+  FILE *fp;
+  int best_hits = 0;
+  int budget = 16384;
+  if (!query || !query[0] || !path || !path[0]) return NULL;
+  norm_text(query, norm, sizeof norm);
+  if (!norm[0]) return NULL;
+  fp = fopen(path, "r");
+  if (!fp) return NULL;
+  best[0] = 0;
+  while (budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t plen;
+    int hits;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    plen = strlen(tab);
+    if (plen == 0 || plen >= sizeof best) continue;
+    hits = lexical_hits(norm, line);
+    if (hits > best_hits) {
+      best_hits = hits;
+      memcpy(best, tab, plen + 1);
+    }
+  }
+  fclose(fp);
+  if (best_hits < 1 || !best[0]) return NULL;
+  {
+    size_t n = strlen(best);
+    char *out = (char *)malloc(n + 1);
+    if (!out) return NULL;
+    memcpy(out, best, n + 1);
+    return out;
+  }
+}
+
 /* NANOBOT_MOTIVE_LEARN is a pairs file: query, tab, catalog line.
  * A missing, empty, or unreadable file leaves the process weight. */
 static char g_learn_path[512];
