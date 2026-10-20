@@ -9356,6 +9356,787 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-mlone.pairs";
+    const char *dirp = "/tmp/nb-motive-mlone.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *qs[3];
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, margin, counted, learned, marked, greatest, dots_m, top, sum, least;
+    int under, low, nxt, kinds, mode, lone;
+    int ms[3];
+    int si, seen_m, best_m, least_m, expect_u, least_n, mid_n, kept, expect_n;
+    int span, expect_k, expect_mode, mode_n, expect_lone;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_margin_lone(NULL) == -1, "a null mlone path returns -1");
+    expect(ng_motive_margin_lone("") == -1, "an empty mlone path returns -1");
+    memset(longp, 'm', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long mlone path is 512 bytes");
+    expect(ng_motive_margin_lone(longp) == -1,
+           "an mlone path of 512 bytes returns -1");
+    expect(ng_motive_margin_lone("/tmp/nb-motive-mlone-missing") == -1,
+           "a missing mlone file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "mlone directory creates");
+    expect(ng_motive_margin_lone(dirp) == -1,
+           "a non-regular mlone path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone empty file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_lone(path) == -1,
+           "an mlone file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_lone(path) == -1,
+           "an mlone query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin(qbuf, path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin < 0 || counted != (margin > 0 ? 1 : 0) || greatest != margin ||
+        top != 1 || sum != margin || least != margin || under != 0 ||
+        low != 1 || nxt != -1 || kinds != 1 || mode != margin ||
+        lone != margin || lone == nxt) {
+      fprintf(stderr,
+              "FAIL mlone bounded margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_lone(path) == -1,
+           "an mlone catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin < 0 || counted != (margin > 0 ? 1 : 0) || greatest != margin ||
+        top != 1 || sum != margin || least != margin || under != 0 ||
+        low != 1 || nxt != -1 || kinds != 1 || mode != margin ||
+        lone != margin || lone == nxt) {
+      fprintf(stderr,
+              "FAIL mlone catalog margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_lone(path) == -1,
+           "an mlone pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone overlong line file opens");
+    if (pf) {
+      fprintf(pf, "%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1 ||
+        sum != 65 || least != 65 || under != 0 || low != 1 || nxt != -1 ||
+        kinds != 1 || mode != 65 || mode == nxt || mode == kinds ||
+        lone != 65 || lone == nxt || lone == kinds) {
+      fprintf(stderr,
+              "FAIL mlone skip margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1 ||
+        sum != 65 || least != 65 || under != 0 || low != 1 || nxt != -1 ||
+        kinds != 1 || mode != 65 || mode == nxt || mode == kinds ||
+        mode == counted || mode == (greatest - least) || lone != 65 ||
+        lone == nxt || lone == kinds || lone == counted ||
+        lone == (greatest - least)) {
+      fprintf(stderr,
+              "FAIL mlone ship margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-mlone-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1 ||
+        sum != 65 || least != 65 || under != 0 || low != 1 || nxt != -1 ||
+        kinds != 1 || mode != 65 || mode == nxt || lone != 65 ||
+        lone == nxt) {
+      fprintf(stderr,
+              "FAIL mlone env margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    margin = ng_motive_label_margin(law, path);
+    if (margin <= 0) {
+      fprintf(stderr, "FAIL mlone law margin %d\n", margin);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mlone law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "mlone leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "mlone leaves ship fail on the pair line");
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (greatest != 65 || top != 1 || sum != 65 || least != 65 || under != 0 ||
+        low != 1 || nxt != -1 || kinds != 1 || mode != 65 || mode == nxt ||
+        mode == kinds || lone != 65 || lone == nxt || lone == kinds) {
+      fprintf(stderr,
+              "FAIL mlone ship stays max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              greatest, top, sum, least, under, low, nxt, kinds, mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0)) {
+      fprintf(stderr,
+              "FAIL mlone audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin < 0 || (margin > 0 && counted != 1) ||
+        (margin == 0 && counted != 0) || greatest != margin || top != 1 ||
+        sum != margin || least != margin || under != 0 || low != 1 ||
+        nxt != -1 || kinds != 1 || mode != margin || lone != margin ||
+        lone == nxt) {
+      fprintf(stderr,
+              "FAIL mlone audit margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "mlone cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "mlone pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "mlone cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "mlone does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "mlone does not write the learn cache");
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    if (counted < 0 || margin < 0 || greatest != margin || nxt != -1 ||
+        kinds != 1 || mode != margin || lone != margin) {
+      fprintf(stderr,
+              "FAIL mlone probe hits=%d margin=%d max=%d next=%d kinds=%d mode=%d\n",
+              counted, margin, greatest, nxt, kinds, mode);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mlone trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin < 0 || (margin > 0 && counted != 1) ||
+        (margin == 0 && counted != 0) || greatest != margin || top != 1 ||
+        sum != margin || least != margin || under != 0 || low != 1 ||
+        nxt != -1 || kinds != 1 || mode != margin || lone != margin ||
+        lone == nxt) {
+      fprintf(stderr,
+              "FAIL mlone trail margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin != 0 || counted != 0 || greatest != 0 || top != 1 || sum != 0 ||
+        least != 0 || under != 0 || low != 1 || nxt != -1 || kinds != 1 ||
+        mode != 0 || mode == nxt || lone != 0 || lone == nxt) {
+      fprintf(stderr,
+              "FAIL mlone dots margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone two file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    dots_m = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    kept = (dots_m >= 0 ? 1 : 0) + (margin >= 0 ? 1 : 0);
+    if (dots_m != 0 || margin < 0 || least != 0 || sum != margin ||
+        greatest != (margin > dots_m ? margin : dots_m) || kept != 2 ||
+        (margin > 0 && (mode != margin || kinds != 2 || nxt != margin ||
+                        low != 1 || under != 1 || top != 1 || counted != 1 ||
+                        mode == least || mode == kinds || mode == low ||
+                        lone != 0 || lone == mode)) ||
+        (margin == 0 && (mode != 0 || kinds != 1 || nxt != -1 || low != 2 ||
+                         under != 0 || top != 2 || counted != 0 ||
+                         lone != -1 || lone == mode))) {
+      fprintf(stderr,
+              "FAIL mlone two ship=%d dots=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d kept=%d\n",
+              margin, dots_m, counted, greatest, top, sum, least, under, low, nxt,
+              kinds, mode, kept);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone two-zero file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (margin != 0 || counted != 0 || greatest != 0 || top != 2 || sum != 0 ||
+        least != 0 || under != 0 || low != 2 || nxt != -1 || kinds != 1 ||
+        mode != 0 || mode == kinds || mode == low || mode == top ||
+        lone != -1 || lone == mode) {
+      fprintf(stderr,
+              "FAIL mlone two-zero margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    kept = 2;
+    if (margin < 0 || greatest != margin || least != margin || top != 2 ||
+        counted != (margin > 0 ? 2 : 0) || sum != margin + margin || under != 0 ||
+        low != 2 || nxt != -1 || kinds != 1 || mode != margin || mode == nxt ||
+        mode == kinds || mode == low || mode == top || mode == kept ||
+        lone != -1 || lone == mode) {
+      fprintf(stderr,
+              "FAIL mlone two-ship margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt, kinds,
+              mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone two-dots ship file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    dots_m = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (dots_m != 0 || margin < 0 || least != 0 ||
+        (margin > 0 && (mode != 0 || kinds != 2 || nxt != margin || low != 2 ||
+                        under != 2 || top != 1 || sum != margin ||
+                        greatest != margin || counted != 1 || mode == nxt ||
+                        mode == greatest || mode == kinds ||
+                        mode == (greatest - least) || lone != margin ||
+                        lone == mode || lone == least)) ||
+        (margin == 0 && (mode != 0 || kinds != 1 || nxt != -1 || low != 3 ||
+                         under != 0 || top != 3 || lone != -1 ||
+                         lone == mode))) {
+      fprintf(stderr,
+              "FAIL mlone below ship=%d dots=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, dots_m, counted, greatest, top, sum, least, under, low, nxt,
+              kinds, mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone tie file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    dots_m = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (dots_m != 0 || margin < 0 ||
+        (margin > 0 && (mode != margin || least != 0 || greatest != margin ||
+                        kinds != 2 || low != 2 || top != 2 || nxt != margin ||
+                        under != 2 || sum != margin + margin || counted != 2 ||
+                        mode == least || mode == low || mode == kinds ||
+                        lone != -1 || lone == mode)) ||
+        (margin == 0 && (mode != 0 || kinds != 1 || nxt != -1 || low != 4 ||
+                         top != 4 || under != 0 || lone != -1))) {
+      fprintf(stderr,
+              "FAIL mlone tie ship=%d dots=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, dots_m, counted, greatest, top, sum, least, under, low, nxt,
+              kinds, mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone majority file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    dots_m = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (dots_m != 0 || margin < 0 || least != 0 ||
+        (margin > 0 && (mode != margin || greatest != margin || kinds != 2 ||
+                        low != 1 || top != 2 || under != 1 || nxt != margin ||
+                        counted != 2 || sum != margin + margin || mode == least ||
+                        mode == low || mode == kinds || lone != 0 ||
+                        lone == mode)) ||
+        (margin == 0 && (mode != 0 || kinds != 1 || nxt != -1 || low != 3 ||
+                         top != 3 || under != 0 || lone != -1))) {
+      fprintf(stderr,
+              "FAIL mlone majority ship=%d dots=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              margin, dots_m, counted, greatest, top, sum, least, under, low, nxt,
+              kinds, mode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone spread file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    qs[0] = "...";
+    qs[1] = "why did the ship fail";
+    qs[2] = "ship fail";
+    seen_m = 0;
+    best_m = -1;
+    least_m = 0;
+    expect_u = 0;
+    least_n = 0;
+    mid_n = 0;
+    expect_n = -1;
+    expect_k = 0;
+    expect_mode = -1;
+    mode_n = 0;
+    expect_lone = -1;
+    for (si = 0; si < 3; si++) {
+      int sj, dup = 0;
+      ms[si] = ng_motive_label_margin(qs[si], path);
+      if (ms[si] < 0) continue;
+      if (!seen_m || ms[si] < least_m) least_m = ms[si];
+      if (ms[si] > best_m) best_m = ms[si];
+      for (sj = 0; sj < si; sj++) {
+        if (ms[sj] == ms[si]) dup = 1;
+      }
+      if (!dup) expect_k++;
+      seen_m++;
+    }
+    for (si = 0; si < 3; si++) {
+      int sj, c = 0;
+      if (ms[si] < 0) continue;
+      if (ms[si] < best_m) expect_u++;
+      if (ms[si] == least_m) least_n++;
+      if (ms[si] > least_m && ms[si] < best_m) mid_n++;
+      if (ms[si] > least_m && (expect_n < 0 || ms[si] < expect_n))
+        expect_n = ms[si];
+      for (sj = 0; sj < 3; sj++)
+        if (ms[sj] == ms[si]) c++;
+      if (c > mode_n || (c == mode_n && ms[si] > expect_mode)) {
+        mode_n = c;
+        expect_mode = ms[si];
+      }
+      if (c == 1 && (expect_lone < 0 || ms[si] < expect_lone))
+        expect_lone = ms[si];
+    }
+    under = ng_motive_margin_under(path);
+    least = ng_motive_margin_min(path);
+    greatest = ng_motive_margin_max(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    span = (seen_m > 0 && best_m >= least_m) ? (best_m - least_m) : -1;
+    if ((seen_m == 0 && (kinds != -1 || mode != -1 || lone != -1)) ||
+        (seen_m > 0 && (mode != expect_mode || kinds != expect_k ||
+                        under != expect_u || low != least_n || nxt != expect_n ||
+                        least != least_m || greatest != best_m ||
+                        lone != expect_lone)) ||
+        (seen_m > 0 && least_m == best_m && (kinds != 1 || nxt != -1 ||
+                                              mode != least_m ||
+                                              (seen_m == 1 && lone != least_m) ||
+                                              (seen_m > 1 && lone != -1))) ||
+        (seen_m > 0 && span != expect_mode && mode == span) ||
+        (seen_m > 0 && span != expect_lone && lone == span) ||
+        (expect_n >= 0 && expect_n != expect_mode && mode == expect_n) ||
+        (expect_n >= 0 && expect_n != expect_lone && lone == expect_n) ||
+        (expect_k != expect_mode && mode == expect_k) ||
+        (expect_k != expect_lone && lone == expect_k) ||
+        (seen_m != expect_mode && mode == seen_m) ||
+        (seen_m != expect_lone && lone == seen_m) ||
+        (least_m != expect_mode && mode == least_m && least_n < mode_n) ||
+        (least_m != expect_lone && lone == least_m) ||
+        (expect_mode != expect_lone && lone == expect_mode)) {
+      fprintf(stderr,
+              "FAIL mlone spread mode=%d expect=%d n=%d kinds=%d expect_k=%d next=%d next_e=%d low=%d least_n=%d under=%d expect_u=%d min=%d least=%d max=%d best=%d mid=%d span=%d lone=%d expect_lone=%d margins=%d,%d,%d\n",
+              mode, expect_mode, mode_n, kinds, expect_k, nxt, expect_n, low,
+              least_n, under, expect_u, least, least_m, greatest, best_m, mid_n,
+              span, lone, expect_lone, ms[0], ms[1], ms[2]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mlone sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mlone sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mlone sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kinds = ng_motive_margin_kinds(path);
+    mode = ng_motive_margin_mode(path);
+    lone = ng_motive_margin_lone(path);
+    if (learned != 0 || marked != 1 || counted != 1 || greatest != 65 ||
+        top != 1 || sum != 65 || least != 65 || under != 0 || low != 1 ||
+        nxt != -1 || kinds != 1 || mode != 65 || mode == nxt || mode == kinds ||
+        mode == counted || lone != 65 || lone == nxt || lone == kinds ||
+        lone == counted) {
+      fprintf(stderr,
+              "FAIL mlone sealed counts learn=%d label=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kinds=%d mode=%d\n",
+              learned, marked, counted, greatest, top, sum, least, under, low, nxt,
+              kinds, mode);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "mlone leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "mlone leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
