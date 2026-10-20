@@ -385,6 +385,63 @@ static int learn_file_weight(const char *path) {
   return g_learn_weight;
 }
 
+/* Same pairs read as the fit: 16384 bytes, at most 32 pairs, query under
+ * 192 bytes, catalog line under 80. Blank lines, comments, and overlong
+ * lines are skipped. The fitted weight is counted again with rank_w.
+ * Does not read the environment and does not write the learn cache. */
+int ng_motive_learn_hits(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char prefs_b[32][80];
+  const char *texts[32];
+  const char *prefs[32];
+  char line[320];
+  int n = 0;
+  int budget = 16384;
+  int w, i, hits;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= sizeof prefs_b[0]) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    memcpy(prefs_b[n], tab, plen_pref + 1);
+    texts[n] = texts_b[n];
+    prefs[n] = prefs_b[n];
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  w = ng_motive_learn_lex_w(texts, prefs, n);
+  hits = 0;
+  for (i = 0; i < n; i++) {
+    ng_motive m;
+    if (!texts[i] || !prefs[i] || !prefs[i][0]) continue;
+    ng_motive_rank_w(texts[i], &m, w);
+    if (strcmp(m.concept, prefs[i]) == 0) hits++;
+  }
+  return hits;
+}
+
 /* Unset, empty, or outside 0-255 stays 64. A readable pairs file wins.
  * The plate cascade is unchanged. */
 static int lex_weight(void) {

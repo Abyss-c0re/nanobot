@@ -54,6 +54,11 @@ int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
  * overlap. Ties keep the earlier pair. NULL when the file is missing, the
  * query is empty, or the overlap is below 1. The caller frees the line. */
 char *ng_motive_recall_pref(const char *query, const char *path);
+/* How many pairs rank their preferred catalog line at the fitted weight.
+ * Null, empty, a path of 512 bytes or more, a missing file, a non-regular
+ * file, or no valid pair returns -1. Zero is a real count. Does not read
+ * the environment or write the learn cache. */
+int ng_motive_learn_hits(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

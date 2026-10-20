@@ -3083,6 +3083,218 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-hits.pairs";
+    const char *dirp = "/tmp/nb-motive-hits.dir";
+    const char *ship = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    FILE *pf;
+    ng_motive before, after;
+    struct stat st;
+    struct timespec ts[2];
+    int i;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank("read the law and prove", &before);
+    expect(ng_motive_learn_hits(NULL) == -1, "a null pairs path counts nothing");
+    expect(ng_motive_learn_hits("") == -1, "an empty pairs path counts nothing");
+    memset(longp, 'p', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long pairs path is 512 bytes");
+    expect(ng_motive_learn_hits(longp) == -1,
+           "a pairs path of 512 bytes counts nothing");
+    expect(ng_motive_learn_hits("/tmp/nb-motive-hits-missing") == -1,
+           "a missing pairs file counts nothing");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "hits directory creates");
+    expect(ng_motive_learn_hits(dirp) == -1,
+           "a non-regular pairs path counts nothing");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits pairs file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == -1,
+           "a pairs file with no pair counts nothing");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\taudit the last code change\n", qbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == -1,
+           "a query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\tnot a catalog line\n", qbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 0,
+           "a query under 192 bytes is a pair and can count zero");
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "why did the ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == -1,
+           "a catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "why did the ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 0,
+           "a catalog line under 80 bytes can count zero");
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == -1,
+           "a pair past the 16384 byte budget is not read");
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits budget-after file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fputs(ship, pf);
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fclose(pf);
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-hits-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    expect(ng_motive_learn_hits(path) == 1,
+           "one preferred catalog line counts as one");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank("why did the ship fail", &after);
+    expect(after.lex_w == 64 &&
+               strcmp(after.concept, "pair vote then ship the step") == 0,
+           "hits does not install a learned weight");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits cache file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 1,
+           "the ship pair still counts as one");
+    expect(strlen(ship) == strlen(padded), "cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(ship),
+           "hits pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "hits cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("why did the ship fail", &after);
+    expect(after.lex_w == 64 &&
+               strcmp(after.concept, "pair vote then ship the step") == 0,
+           "hits does not write the learn cache");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits zero file opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 0,
+           "an unknown preferred line counts zero");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits two-pair file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs("read the law and prove\tread the law and prove\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 2,
+           "two preferred catalog lines count as two");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits tie file opens");
+    if (pf) {
+      fputs("read the law and prove\tread the law and prove\n", pf);
+      fputs("keep free energy flowing\tkeep free energy flowing\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 2,
+           "a tie that includes weight 64 still counts both lines");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits cap file opens");
+    if (pf) {
+      for (i = 0; i < 32; i++) fputs("nope\tnot a catalog line\n", pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 0, "the pair past 32 is not counted");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits within-cap file opens");
+    if (pf) {
+      for (i = 0; i < 31; i++) fputs("nope\tnot a catalog line\n", pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 1, "the 32nd pair is counted");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hits full file opens");
+    if (pf) {
+      for (i = 0; i < 32; i++) fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_learn_hits(path) == 32, "thirty-two preferred lines count");
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank("read the law and prove", &after);
+    expect(before.rank == 256 && after.rank == 256 && after.lexical == 3 &&
+               after.hamming == 0 && before.lex_w == after.lex_w,
+           "hits leaves the law rank");
+    ng_motive_rank("you lied", &after);
+    expect(after.plate == NG_PLATE_CONFESS && after.lexical == 0,
+           "hits leaves you lied");
+    ng_motive_rank("", &after);
+    expect(after.rank == 0, "hits leaves an empty query at rank 0");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
