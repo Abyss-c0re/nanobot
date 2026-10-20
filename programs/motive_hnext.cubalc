@@ -1,0 +1,17 @@
+// Least winning labeled hamming strictly above the smallest.
+// No pair returns nothing. Equal hammings return nothing.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hnext ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG hnext rank
+
+IMPULSE hnext 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hnext" UNITY DECIDE ENERGY
