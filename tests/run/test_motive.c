@@ -17195,6 +17195,527 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-hksum.pairs";
+    const char *dirp = "/tmp/nb-motive-hksum.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *qs[3];
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, shipm, auditm, dotm, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, margin, hksum, hosum, hsum, hmax, hupper, hmode, hlone, hmin;
+    int mksum;
+    int learned, marked;
+    int hs[3], si, seen_h, ksum_e, ui, uj, earlier, kept;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_ham_ksum(NULL) == -1, "a null hksum path returns -1");
+    expect(ng_motive_ham_ksum("") == -1, "an empty hksum path returns -1");
+    memset(longp, 'u', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long hksum path is 512 bytes");
+    expect(ng_motive_ham_ksum(longp) == -1, "a hksum path of 512 bytes returns -1");
+    expect(ng_motive_ham_ksum("/tmp/nb-motive-hksum-missing") == -1,
+           "a missing hksum file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "hksum directory creates");
+    expect(ng_motive_ham_ksum(dirp) == -1, "a non-regular hksum path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_ksum(path) == -1, "a hksum file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_ksum(path) == -1, "a hksum query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank(qbuf, path, &m);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (rc != 0 || hksum != m.hamming || hosum != m.hamming || hsum != m.hamming ||
+        hksum < 0) {
+      fprintf(stderr, "FAIL hksum bounded rc=%d ham=%d hksum=%d hosum=%d hsum=%d\n",
+              rc, m.hamming, hksum, hosum, hsum);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_ksum(path) == -1,
+           "a hksum catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (rc != 0 || hksum != m.hamming || hosum != m.hamming || hsum != m.hamming ||
+        hksum < 0) {
+      fprintf(stderr, "FAIL hksum catalog rc=%d ham=%d hksum=%d hosum=%d hsum=%d\n",
+              rc, m.hamming, hksum, hosum, hsum);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_ksum(path) == -1,
+           "a hksum pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(rc == 0 && m.hamming == 22 && margin == 65 && hksum == 22 &&
+          hosum == 22 && hsum == 22 && mksum == 65 && hksum != mksum &&
+          hksum == m.hamming)) {
+      fprintf(stderr,
+              "FAIL hksum skip rc=%d ham=%d margin=%d hksum=%d hosum=%d hsum=%d "
+              "mksum=%d\n",
+              rc, m.hamming, margin, hksum, hosum, hsum, mksum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && margin == 65 &&
+          hksum == 22 && hosum == 22 && hsum == 22 && mksum == 65 &&
+          hksum != mksum && hksum == hosum && hksum == hsum &&
+          hksum == m.hamming)) {
+      fprintf(stderr,
+              "FAIL hksum ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d hksum=%d hosum=%d hsum=%d mksum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, hksum,
+              hosum, hsum, mksum);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-hksum-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (hksum != 22 || hosum != 22 || mksum != 65) {
+      fprintf(stderr, "FAIL hksum env hksum=%d hosum=%d mksum=%d\n", hksum, hosum,
+              mksum);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hksum law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "hksum leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hksum leaves ship fail on the pair line");
+    hksum = ng_motive_ham_ksum(path);
+    if (hksum != 22) {
+      fprintf(stderr, "FAIL hksum ship stays hksum=%d\n", hksum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && margin == 1 &&
+          hksum == 18 && hosum == 18 && mksum == 1 && hksum != mksum &&
+          m.lexical != rw.lexical && m.lexical == rw.lexical + 4 &&
+          hksum == m.hamming)) {
+      fprintf(stderr,
+              "FAIL hksum audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d hksum=%d hosum=%d mksum=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, hksum,
+              hosum, mksum, rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "hksum cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "hksum pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "hksum cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    hksum = ng_motive_ham_ksum(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "hksum does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "hksum does not write the learn cache");
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (rc != 0 || hksum != m.hamming || hksum < 0) {
+      fprintf(stderr, "FAIL hksum probe rc=%d ham=%d hksum=%d\n", rc, m.hamming,
+              hksum);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && margin == 63 &&
+          hksum == 23 && hosum == 23 && mksum == 63 && hksum != mksum &&
+          hksum == m.hamming)) {
+      fprintf(stderr,
+              "FAIL hksum trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d hksum=%d hosum=%d mksum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, hksum,
+              hosum, mksum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    hksum = ng_motive_ham_ksum(path);
+    hupper = ng_motive_ham_upper(path);
+    hosum = ng_motive_ham_osum(path);
+    if (!(rc == 0 && m.hamming == 0 && hksum == 0 && hupper == 0 && hosum == 0 &&
+          hksum == hupper && hksum != 64)) {
+      fprintf(stderr, "FAIL hksum dots rc=%d ham=%d hksum=%d hupper=%d hosum=%d\n",
+              rc, m.hamming, hksum, hupper, hosum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    hksum = ng_motive_ham_ksum(path);
+    hupper = ng_motive_ham_upper(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(hksum == 0 && hupper == -1 && hosum == 0 && hsum == 0 &&
+          hksum != hupper && hksum == hosum && hksum == hsum)) {
+      fprintf(stderr, "FAIL hksum two-dots hksum=%d hupper=%d hosum=%d hsum=%d\n",
+              hksum, hupper, hosum, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hupper = ng_motive_ham_upper(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(hksum == 22 && hosum == 0 && hsum == 44 && hmax == 22 && mksum == 65 &&
+          hupper == -1 && hksum != hosum && hksum != hsum && hksum == hmax &&
+          hksum != mksum && hksum != hupper)) {
+      fprintf(stderr,
+              "FAIL hksum two-ship hksum=%d hosum=%d hsum=%d hmax=%d mksum=%d "
+              "hupper=%d\n",
+              hksum, hosum, hsum, hmax, mksum, hupper);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hksum = ng_motive_ham_ksum(path);
+    hlone = ng_motive_ham_lone(path);
+    mksum = ng_motive_margin_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hmin = ng_motive_ham_min(path);
+    if (!(hksum == 22 && hlone == 0 && mksum == 65 && hosum == 22 && hmin == 0 &&
+          hksum != hlone && hksum != mksum && hksum == hosum && hksum != hmin)) {
+      fprintf(stderr,
+              "FAIL hksum mixed hksum=%d lone=%d mksum=%d hosum=%d hmin=%d\n",
+              hksum, hlone, mksum, hosum, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hksum = ng_motive_ham_ksum(path);
+    hmode = ng_motive_ham_mode(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(hksum == 22 && hmode == 0 && hosum == 22 && hsum == 22 &&
+          hksum != hmode && hksum == hosum && hksum == hsum)) {
+      fprintf(stderr, "FAIL hksum two-dots ship hksum=%d mode=%d hosum=%d hsum=%d\n",
+              hksum, hmode, hosum, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    hupper = ng_motive_ham_upper(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(hksum == 22 && hosum == 0 && hsum == 44 && hupper == 0 && mksum == 65 &&
+          hksum != hosum && hksum != hsum && hksum != hupper && hksum != mksum)) {
+      fprintf(stderr,
+              "FAIL hksum two-ship dots hksum=%d hosum=%d hsum=%d hupper=%d "
+              "mksum=%d\n",
+              hksum, hosum, hsum, hupper, mksum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    qs[0] = "...";
+    qs[1] = "why did the ship fail";
+    qs[2] = "ship fail";
+    seen_h = 0;
+    for (si = 0; si < 3; si++) {
+      if (ng_motive_label_rank(qs[si], path, &m) != 0) {
+        hs[si] = -1;
+        continue;
+      }
+      hs[si] = m.hamming;
+      seen_h++;
+    }
+    ksum_e = 0;
+    kept = 0;
+    for (ui = 0; ui < 3; ui++) {
+      if (hs[ui] < 0) continue;
+      earlier = 0;
+      for (uj = 0; uj < ui; uj++)
+        if (hs[uj] == hs[ui]) earlier = 1;
+      if (!earlier) {
+        ksum_e += hs[ui];
+        kept++;
+      }
+    }
+    rc = ng_motive_label_rank("...", path, &dotm);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL hksum span dots rc=%d\n", rc);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("why did the ship fail", path, &auditm);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL hksum span audit rc=%d\n", rc);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("ship fail", path, &shipm);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL hksum span ship rc=%d\n", rc);
+      g_fail++;
+    }
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(seen_h == 3 && kept == 3 && ksum_e == 40 && hksum == ksum_e &&
+          hksum == 40 && hosum == 40 && hsum == 40 && hmax == 22 && mksum == 134 &&
+          dotm.hamming == 0 && auditm.hamming == 18 && shipm.hamming == 22 &&
+          hksum == hosum && hksum == hsum && hksum != hmax && hksum != mksum &&
+          hs[0] != hs[1] && hs[1] != hs[2] && hs[0] != hs[2])) {
+      fprintf(stderr,
+              "FAIL hksum span hksum=%d ksum_e=%d hosum=%d hsum=%d hmax=%d "
+              "mksum=%d seen=%d kept=%d hammings=%d,%d,%d\n",
+              hksum, ksum_e, hosum, hsum, hmax, mksum, seen_h, kept, hs[0], hs[1],
+              hs[2]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hksum sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hksum sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hksum sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    hksum = ng_motive_ham_ksum(path);
+    hosum = ng_motive_ham_osum(path);
+    hsum = ng_motive_ham_sum(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (learned != 0 || marked != 1 || hksum != 22 || hosum != 22 || hsum != 22 ||
+        mksum != 65 || hksum == mksum || hksum != hosum || hksum != hsum) {
+      fprintf(stderr,
+              "FAIL hksum sealed counts learn=%d label=%d hksum=%d hosum=%d "
+              "hsum=%d mksum=%d\n",
+              learned, marked, hksum, hosum, hsum, mksum);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "hksum leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "hksum leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
