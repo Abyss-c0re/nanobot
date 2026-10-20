@@ -1,0 +1,17 @@
+// How many kept pairs have a labeled margin strictly between the ends.
+// No pair returns nothing. One margin returns nothing in the middle.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mmid ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mmid rank
+
+IMPULSE mmid 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mmid" UNITY DECIDE ENERGY
