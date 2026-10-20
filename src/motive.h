@@ -230,6 +230,17 @@ int ng_motive_ham_mode(const char *path);
  * no valid pair returns -1. Does not read the environment or write
  * the learn cache. */
 int ng_motive_ham_lone(const char *path);
+/* Greatest winning labeled hamming that appears on exactly one kept
+ * pair on this path. A return of -1 from the labeled rank is ignored.
+ * Every call at -1 returns -1. A single kept pair returns that
+ * hamming, including 0. Two or more kept pairs that all share one
+ * hamming return -1. When no hamming has a count of exactly 1, the
+ * result is -1. When two or more hammings each appear once, the
+ * greater hamming is the result. Zero is a real hamming. Null, empty,
+ * a path of 512 bytes or more, a missing file, a non-regular file, or
+ * no valid pair returns -1. Does not read the environment or write
+ * the learn cache. */
+int ng_motive_ham_upper(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

@@ -13803,6 +13803,614 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-hupper.pairs";
+    const char *dirp = "/tmp/nb-motive-hupper.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, shipm, auditm, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, margin, mnext, least, msum, ones, hmin, hmax, hsum, hnext, hmode;
+    int mmode, mlone, hlone, hupper, learned, marked, span_lo, span_hi;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_ham_upper(NULL) == -1, "a null hupper path returns -1");
+    expect(ng_motive_ham_upper("") == -1, "an empty hupper path returns -1");
+    memset(longp, 'h', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long hupper path is 512 bytes");
+    expect(ng_motive_ham_upper(longp) == -1, "a hupper path of 512 bytes returns -1");
+    expect(ng_motive_ham_upper("/tmp/nb-motive-hupper-missing") == -1,
+           "a missing hupper file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "hupper directory creates");
+    expect(ng_motive_ham_upper(dirp) == -1, "a non-regular hupper path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_upper(path) == -1, "a hupper file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_upper(path) == -1, "a hupper query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank(qbuf, path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hsum = ng_motive_ham_sum(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hlone = ng_motive_ham_lone(path);
+    if (rc != 0 || hsum < 0 || hsum != m.hamming || hupper != m.hamming ||
+        hmode != m.hamming || hlone != m.hamming || hnext != -1 ||
+        hupper == hnext) {
+      fprintf(stderr,
+              "FAIL hupper bounded rc=%d ham=%d hsum=%d hupper=%d hmode=%d "
+              "hlone=%d hnext=%d\n",
+              rc, m.hamming, hsum, hupper, hmode, hlone, hnext);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_upper(path) == -1,
+           "a hupper catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hsum = ng_motive_ham_sum(path);
+    hnext = ng_motive_ham_next(path);
+    if (rc != 0 || hsum < 0 || hsum != m.hamming || hupper != m.hamming ||
+        hnext != -1 || hupper == hnext) {
+      fprintf(stderr,
+              "FAIL hupper catalog rc=%d ham=%d hsum=%d hupper=%d hnext=%d\n",
+              rc, m.hamming, hsum, hupper, hnext);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_upper(path) == -1,
+           "a hupper pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hlone = ng_motive_ham_lone(path);
+    mlone = ng_motive_margin_lone(path);
+    if (rc != 0 || m.hamming != 22 || hupper != 22 || hlone != 22 || hmode != 22 ||
+        hsum != 22 || hnext != -1 || mlone != 65 || hupper == hnext ||
+        hupper == mlone) {
+      fprintf(stderr,
+              "FAIL hupper skip rc=%d ham=%d hupper=%d hlone=%d hnext=%d hmode=%d "
+              "hsum=%d mlone=%d\n",
+              rc, m.hamming, hupper, hlone, hnext, hmode, hsum, mlone);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hmin = ng_motive_ham_min(path);
+    msum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    margin = ng_motive_label_margin("ship fail", path);
+    mnext = ng_motive_margin_next(path);
+    mmode = ng_motive_margin_mode(path);
+    mlone = ng_motive_margin_lone(path);
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && hupper == 22 &&
+          hlone == 22 && hnext == -1 && hmode == 22 && hsum == 22 && hmax == 22 &&
+          hmin == 22 && msum == 65 && least == 65 && margin == 65 && mnext == -1 &&
+          mmode == 65 && mlone == 65 && hupper != hnext && hupper != mlone &&
+          hupper != hsum + hsum && hupper != 1)) {
+      fprintf(stderr,
+              "FAIL hupper ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hupper=%d hlone=%d hnext=%d hmode=%d hsum=%d hmax=%d hmin=%d "
+              "msum=%d min=%d margin=%d mnext=%d mmode=%d mlone=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hupper, hlone,
+              hnext, hmode, hsum, hmax, hmin, msum, least, margin, mnext, mmode,
+              mlone);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-hupper-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    hupper = ng_motive_ham_upper(path);
+    hnext = ng_motive_ham_next(path);
+    if (hupper != 22 || hnext != -1) {
+      fprintf(stderr, "FAIL hupper env hupper=%d hnext=%d\n", hupper, hnext);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    margin = ng_motive_label_margin(law, path);
+    if (margin <= 0) {
+      fprintf(stderr, "FAIL hupper law margin %d\n", margin);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hupper law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "hupper leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hupper leaves ship fail on the pair line");
+    hupper = ng_motive_ham_upper(path);
+    hsum = ng_motive_ham_sum(path);
+    hnext = ng_motive_ham_next(path);
+    if (hupper != 22 || hnext != -1 || hsum != 22) {
+      fprintf(stderr, "FAIL hupper ship stays hupper=%d hnext=%d hsum=%d\n",
+              hupper, hnext, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && hupper == 18 &&
+          hlone == 18 && hnext == -1 && hmode == 18 && hsum == 18 &&
+          m.lexical != rw.lexical && m.lexical == rw.lexical + 4 &&
+          hupper != hnext && hupper == hsum)) {
+      fprintf(stderr,
+              "FAIL hupper audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hupper=%d hlone=%d hnext=%d hmode=%d hsum=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hupper, hlone,
+              hnext, hmode, hsum, rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "hupper cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "hupper pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "hupper cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    hupper = ng_motive_ham_upper(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "hupper does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "hupper does not write the learn cache");
+    if (hupper < 0) {
+      fprintf(stderr, "FAIL hupper probe hupper=%d\n", hupper);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hsum = ng_motive_ham_sum(path);
+    hnext = ng_motive_ham_next(path);
+    if (rc != 0 || hsum < 0 || hsum != m.hamming || hupper != m.hamming ||
+        hnext != -1 || hupper == hnext) {
+      fprintf(stderr,
+              "FAIL hupper padded rc=%d ham=%d hsum=%d hupper=%d hnext=%d\n", rc,
+              m.hamming, hsum, hupper, hnext);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hlone = ng_motive_ham_lone(path);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && hupper == 23 &&
+          hlone == 23 && hnext == -1 && hmode == 23 && hsum == 23 &&
+          hupper == m.hamming && hupper != hnext)) {
+      fprintf(stderr,
+              "FAIL hupper trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hupper=%d hlone=%d hnext=%d hmode=%d hsum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hupper, hlone,
+              hnext, hmode, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hmin = ng_motive_ham_min(path);
+    if (!(rc == 0 && m.hamming == 0 && hupper == 0 && hlone == 0 && hnext == -1 &&
+          hmode == 0 && hsum == 0 && hmax == 0 && hmin == 0 && hupper != hnext &&
+          hsum != 64 && hupper != 64 && hupper != -1)) {
+      fprintf(stderr,
+              "FAIL hupper dots rc=%d ham=%d hupper=%d hlone=%d hnext=%d hmode=%d "
+              "hsum=%d hmax=%d hmin=%d\n",
+              rc, m.hamming, hupper, hlone, hnext, hmode, hsum, hmax, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmin = ng_motive_ham_min(path);
+    hlone = ng_motive_ham_lone(path);
+    if (!(rc == 0 && m.hamming == 0 && hupper == -1 && hlone == -1 && hnext == -1 &&
+          hmode == 0 && hsum == 0 && hmin == 0 && hupper != hmode &&
+          hupper != hmin && hupper != 2)) {
+      fprintf(stderr,
+              "FAIL hupper two-dots rc=%d ham=%d hupper=%d hlone=%d hnext=%d "
+              "hmode=%d hsum=%d hmin=%d\n",
+              rc, m.hamming, hupper, hlone, hnext, hmode, hsum, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hmin = ng_motive_ham_min(path);
+    msum = ng_motive_margin_sum(path);
+    if (!(rc == 0 && m.hamming == 22 && hupper == -1 && hlone == -1 && hmode == 22 &&
+          hnext == -1 && hsum == 44 && hmax == 22 && hmin == 22 && hupper != hmode &&
+          hupper != hmax && hupper != hsum && hupper != hmin && hupper != 2 &&
+          hsum != hmax && hsum != msum)) {
+      fprintf(stderr,
+              "FAIL hupper two-ship rc=%d ham=%d hupper=%d hlone=%d hmode=%d "
+              "hnext=%d hsum=%d hmax=%d hmin=%d msum=%d\n",
+              rc, m.hamming, hupper, hlone, hmode, hnext, hsum, hmax, hmin, msum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hmin = ng_motive_ham_min(path);
+    mmode = ng_motive_margin_mode(path);
+    if (!(rc == 0 && m.hamming == 0 && hmin == 0 && hlone == 0 && hupper == 22 &&
+          hmode == 22 && hnext == 22 && hsum == 22 && hmax == 22 &&
+          hupper != hlone && hupper == hmax && hlone == hmin && hmode != mmode &&
+          hsum != 44)) {
+      fprintf(stderr,
+              "FAIL hupper mixed dots rc=%d ham=%d hupper=%d hlone=%d hmode=%d "
+              "hnext=%d hsum=%d hmax=%d hmin=%d mmode=%d\n",
+              rc, m.hamming, hupper, hlone, hmode, hnext, hsum, hmax, hmin, mmode);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("ship fail", path, &shipm);
+    if (!(rc == 0 && shipm.hamming == 22 && hupper == 22 && hlone == 0 &&
+          hmode == 22 && hmin == 0)) {
+      fprintf(stderr,
+              "FAIL hupper mixed ship rc=%d ham=%d hupper=%d hlone=%d hmode=%d "
+              "hmin=%d\n",
+              rc, shipm.hamming, hupper, hlone, hmode, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hmin = ng_motive_ham_min(path);
+    rc = ng_motive_label_rank("...", path, &m);
+    if (!(rc == 0 && m.hamming == 0 && hmin == 0 && hupper == 22 && hlone == 22 &&
+          hmode == 0 && hnext == 22 && hsum == 22 && hmax == 22 && hupper != hmode &&
+          hupper != hmin && hupper == hmax && hsum != 3 && hsum != 66)) {
+      fprintf(stderr,
+              "FAIL hupper below rc=%d ham=%d hupper=%d hlone=%d hmode=%d hnext=%d "
+              "hsum=%d hmax=%d hmin=%d\n",
+              rc, m.hamming, hupper, hlone, hmode, hnext, hsum, hmax, hmin);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("ship fail", path, &shipm);
+    if (!(rc == 0 && shipm.hamming == 22 && hupper == 22 && hlone == 22 &&
+          hmode == 0 && hmin == 0 && hmax == 22)) {
+      fprintf(stderr,
+              "FAIL hupper below ship rc=%d ham=%d hupper=%d hlone=%d hmode=%d "
+              "hmin=%d hmax=%d\n",
+              rc, shipm.hamming, hupper, hlone, hmode, hmin, hmax);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hmin = ng_motive_ham_min(path);
+    rc = ng_motive_label_rank("...", path, &m);
+    if (!(rc == 0 && m.hamming == 0 && hupper == 0 && hlone == 0 && hmax == 22 &&
+          hmode == 22 && hmin == 0 && hnext == 22 && hsum == 44 && hupper != hmax &&
+          hupper != hmode && hupper == hlone && hupper == hmin && hupper != hsum)) {
+      fprintf(stderr,
+              "FAIL hupper two-ship dots rc=%d ham=%d hupper=%d hlone=%d hmode=%d "
+              "hnext=%d hsum=%d hmax=%d hmin=%d\n",
+              rc, m.hamming, hupper, hlone, hmode, hnext, hsum, hmax, hmin);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("ship fail", path, &shipm);
+    if (!(rc == 0 && shipm.hamming == 22 && hupper == 0 && hlone == 0 &&
+          hmode == 22 && hmax == 22 && hmin == 0)) {
+      fprintf(stderr,
+              "FAIL hupper two-ship dots ship rc=%d ham=%d hupper=%d hlone=%d "
+              "hmode=%d hmax=%d hmin=%d\n",
+              rc, shipm.hamming, hupper, hlone, hmode, hmax, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL hupper span dots rc=%d\n", rc);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("why did the ship fail", path, &auditm);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL hupper span audit rc=%d\n", rc);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("ship fail", path, &shipm);
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hmin = ng_motive_ham_min(path);
+    hmax = ng_motive_ham_max(path);
+    hsum = ng_motive_ham_sum(path);
+    span_lo = m.hamming;
+    if (auditm.hamming < span_lo) span_lo = auditm.hamming;
+    if (shipm.hamming < span_lo) span_lo = shipm.hamming;
+    span_hi = m.hamming;
+    if (auditm.hamming > span_hi) span_hi = auditm.hamming;
+    if (shipm.hamming > span_hi) span_hi = shipm.hamming;
+    if (!(rc == 0 && hupper == span_hi && hlone == span_lo && hmin == span_lo &&
+          hmax == span_hi && hmode == span_hi &&
+          hsum == m.hamming + auditm.hamming + shipm.hamming && hupper != hlone &&
+          hupper != hnext && hupper != hsum && hupper != 3)) {
+      fprintf(stderr,
+              "FAIL hupper span rc=%d dots=%d audit=%d ship=%d hupper=%d hlone=%d "
+              "hnext=%d hmode=%d hmin=%d hmax=%d hsum=%d lo=%d hi=%d\n",
+              rc, m.hamming, auditm.hamming, shipm.hamming, hupper, hlone, hnext,
+              hmode, hmin, hmax, hsum, span_lo, span_hi);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hupper sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hupper sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hupper sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    hupper = ng_motive_ham_upper(path);
+    hlone = ng_motive_ham_lone(path);
+    hnext = ng_motive_ham_next(path);
+    hmode = ng_motive_ham_mode(path);
+    hsum = ng_motive_ham_sum(path);
+    hmax = ng_motive_ham_max(path);
+    hmin = ng_motive_ham_min(path);
+    msum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    ones = ng_motive_margin_ones(path);
+    mnext = ng_motive_margin_next(path);
+    mmode = ng_motive_margin_mode(path);
+    mlone = ng_motive_margin_lone(path);
+    if (learned != 0 || marked != 1 || hupper != 22 || hlone != 22 ||
+        hnext != -1 || hmode != 22 || hsum != 22 || hmax != 22 || hmin != 22 ||
+        msum != 65 || least != 65 || ones != 1 || mnext != -1 || mmode != 65 ||
+        mlone != 65 || hupper == hnext || hupper == mlone || hupper == ones ||
+        hsum == msum || hsum == least || hsum == ones || hsum == (64 - least)) {
+      fprintf(stderr,
+              "FAIL hupper sealed counts learn=%d label=%d hupper=%d hlone=%d "
+              "hnext=%d hmode=%d hsum=%d hmax=%d hmin=%d msum=%d min=%d ones=%d "
+              "mnext=%d mmode=%d mlone=%d\n",
+              learned, marked, hupper, hlone, hnext, hmode, hsum, hmax, hmin, msum,
+              least, ones, mnext, mmode, mlone);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "hupper leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "hupper leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

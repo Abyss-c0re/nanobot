@@ -1,0 +1,17 @@
+// Greatest winning labeled hamming that appears on exactly one kept pair.
+// No pair returns nothing. One hamming returns that hamming.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hupper ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG hupper rank
+
+IMPULSE hupper 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hupper" UNITY DECIDE ENERGY

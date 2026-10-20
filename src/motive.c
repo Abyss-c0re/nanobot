@@ -1878,6 +1878,70 @@ int ng_motive_ham_lone(const char *path) {
   return chosen;
 }
 
+/* Same pairs read as the sum. Returns the greatest hamming field from
+ * ng_motive_label_rank that appears on exactly one kept pair. A
+ * return of -1 is ignored. Every call at -1 returns -1. A single kept
+ * pair returns that hamming, including 0. Two or more kept pairs that
+ * all share one hamming return -1. When no hamming has a count of
+ * exactly 1, the result is -1. When two or more hammings each appear
+ * once, the greater hamming is the result. Zero is a real hamming.
+ * Does not read the environment and does not write the learn cache. */
+int ng_motive_ham_upper(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char line[320];
+  int got[32];
+  int n = 0;
+  int budget = 16384;
+  int i, seen, chosen;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= 80) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  seen = 0;
+  for (i = 0; i < n; i++) {
+    ng_motive m;
+    if (ng_motive_label_rank(texts_b[i], path, &m) != 0) continue;
+    got[seen++] = m.hamming;
+  }
+  if (seen == 0) return -1;
+  chosen = -1;
+  for (i = 0; i < seen; i++) {
+    int j, ncount = 0;
+    if (got[i] < 0) continue;
+    for (j = 0; j < seen; j++)
+      if (got[j] >= 0 && got[j] == got[i]) ncount++;
+    if (ncount == 1 && (chosen < 0 || got[i] > chosen)) chosen = got[i];
+  }
+  if (chosen < 0) return -1;
+  return chosen;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
