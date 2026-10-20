@@ -3295,6 +3295,277 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-label.pairs";
+    const char *dirp = "/tmp/nb-motive-label.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m0, m255, ranked;
+    struct stat st;
+    struct timespec ts[2];
+    int i;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_label_lex(NULL, path, keep) == 0, "a null query labels nothing");
+    expect(ng_motive_label_lex("", path, keep) == 0, "an empty query labels nothing");
+    expect(ng_motive_label_lex("ship fail", NULL, keep) == 0, "a null path labels nothing");
+    expect(ng_motive_label_lex("ship fail", "", keep) == 0, "an empty path labels nothing");
+    expect(ng_motive_label_lex("ship fail", path, NULL) == 0, "a null concept labels nothing");
+    expect(ng_motive_label_lex("ship fail", path, "") == 0, "an empty concept labels nothing");
+    expect(ng_motive_label_lex("...", path, keep) == 0, "a query with no tokens labels nothing");
+    expect(ng_motive_label_lex("ship fail", "/tmp/nb-motive-label-missing", keep) == 0,
+           "a missing pairs file labels nothing");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "label directory creates");
+    expect(ng_motive_label_lex("ship fail", dirp, keep) == 0,
+           "a non-regular pairs path labels nothing");
+    rmdir(dirp);
+    expect(ng_motive_label_lex("ship fail", path, "not a catalog line") == 0,
+           "an unknown concept labels nothing");
+    expect(ng_motive_label_lex("ship fail", path, "keep free energy flowing ") == 0,
+           "a concept with trailing spaces labels nothing");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label pairs file opens");
+    if (pf) {
+      fputs("# ship fail\tkeep free energy flowing\n\n", pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 2,
+           "ship fail has two hits beyond the concept line");
+    expect(ng_motive_label_lex("ship fail", path, pair) == 0,
+           "an unlabeled concept adds nothing");
+    expect(ng_motive_label_lex("keep free energy flowing", path, keep) == 0,
+           "a negative label difference is zero");
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-label-missing", 1);
+    expect(ng_motive_label_lex("ship fail", path, keep) == 2,
+           "the label count uses the path, not the environment");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+
+    ng_motive_rank_w("ship fail", &m0, 0);
+    ng_motive_rank_w("ship fail", &m255, 255);
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "unset learn leaves ship fail on the pair line");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL label rank concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank("read the law and prove", &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL label law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 does not add the label");
+    ng_motive_rank_w("ship fail", &ranked, 0);
+    expect(ranked.rank == m0.rank && ranked.lexical == m0.lexical &&
+               ranked.hamming == m0.hamming && ranked.lex_w == m0.lex_w &&
+               strcmp(ranked.concept, m0.concept) == 0,
+           "weight 0 does not read the label");
+    ng_motive_rank_w("ship fail", &ranked, 255);
+    expect(ranked.rank == m255.rank && ranked.lexical == m255.lexical &&
+               ranked.hamming == m255.hamming && ranked.lex_w == m255.lex_w &&
+               strcmp(ranked.concept, m255.concept) == 0,
+           "weight 255 does not read the label");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "clearing the learn path restores the pair line");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label pad file opens");
+    if (pf) {
+      fputs("ship fail\tkeep free energy flowing \n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 0,
+           "a catalog field with trailing spaces is not the concept");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "trailing spaces add nothing");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label law file opens");
+    if (pf) {
+      fputs("read the law and prove\tread the law and prove\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex(law, path, law) == 0,
+           "an exact law pair adds no hits beyond the line");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank(law, &ranked);
+    expect(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+               ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64,
+           "an exact law pair leaves the law rank");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label overlap file opens");
+    if (pf) {
+      fputs("ship\tkeep free energy flowing\n", pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 2,
+           "the greater training overlap wins");
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label overlap-early file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs("ship\tkeep free energy flowing\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 2,
+           "a later smaller overlap does not replace the earlier query");
+
+    memset(qbuf, 'q', 192);
+    memcpy(qbuf, "ship fail ", 10);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 0,
+           "a query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 2,
+           "a query under 192 bytes can label the concept");
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 0,
+           "a catalog line of 80 bytes is not a pair");
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 0,
+           "a pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label overlong line file opens");
+    if (pf) {
+      fprintf(pf, "%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 2,
+           "an overlong line is skipped");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label cap file opens");
+    if (pf) {
+      for (i = 0; i < 32; i++) fputs("nope\tnot a catalog line\n", pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 0,
+           "the pair past 32 is not labeled");
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label within-cap file opens");
+    if (pf) {
+      for (i = 0; i < 31; i++) fputs("nope\tnot a catalog line\n", pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_lex("ship fail", path, keep) == 2, "the 32nd pair is labeled");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label cache file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    expect(strlen(audit) == strlen(padded), "label cache probe stays the same size");
+    expect(ng_motive_label_lex("why did the ship fail", path,
+                               "audit the last code change") == 4,
+           "the audit training query has four hits beyond that line");
+    expect(stat(path, &st) == 0, "label cache stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "label cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "label cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "label does not write the learn cache");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank(law, &ranked);
+    expect(ranked.rank == 256 && ranked.lexical == 3 && ranked.hamming == 0 &&
+               ranked.lex_w == 64,
+           "label leaves the law rank");
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "label leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "label leaves an empty query at rank 0");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105,
+           "label leaves ship fail on the pair line");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

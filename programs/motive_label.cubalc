@@ -1,0 +1,18 @@
+// Training-query hits beyond the concept line enter the hybrid score
+// only when the pairs file supplies the weight.
+// An explicit weight stays on the concept line alone.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE label ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG label rank
+
+IMPULSE label 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "label" UNITY DECIDE ENERGY

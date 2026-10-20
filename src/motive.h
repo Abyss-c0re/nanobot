@@ -44,10 +44,13 @@ typedef struct {
 
 const char *ng_motive_plate_name(int plate);
 void ng_motive_rank(const char *text, ng_motive *out);
-/* over < 0 reads NANOBOT_MOTIVE_LEX_W. 0-255 applies to this call only. */
+/* over < 0 reads NANOBOT_MOTIVE_LEX_W. 0-255 applies to this call only.
+ * Outside that range, a pairs file that supplies the weight also adds
+ * ng_motive_label_lex to that concept's lexical count. */
 void ng_motive_rank_w(const char *text, ng_motive *out, int over);
 /* Grid-search lex_w on up to 32 (text, catalog line) pairs.
- * No pairs, or a tie that includes 64, returns 64. Does not store. */
+ * No pairs, a tie that includes 64, or a peak only at weight 0
+ * returns 64. Does not store. */
 int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
                           int n);
 /* Malloc'd catalog line of the pairs-file query with the greatest lexical
@@ -59,6 +62,12 @@ char *ng_motive_recall_pref(const char *query, const char *path);
  * file, or no valid pair returns -1. Zero is a real count. Does not read
  * the environment or write the learn cache. */
 int ng_motive_learn_hits(const char *path);
+/* Hits of query against the one training query labeled with this catalog
+ * concept, minus the hits already on that concept line. Negative is 0.
+ * Null, empty, a missing or non-regular file, an unknown concept, or no
+ * exact catalog pair returns 0. Same pairs read as the fit. Does not read
+ * the environment, write the learn cache, or allocate. */
+int ng_motive_label_lex(const char *query, const char *path, const char *concept);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

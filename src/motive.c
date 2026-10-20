@@ -244,10 +244,12 @@ static int lexical_hits(const char *norm, const char *concept) {
 /* At most 32 pairs. Each preferred string must be one catalog line.
  * Hit count is how many pairs rank that line. The smallest weight
  * with the most hits wins. Weight 64 wins a tie that includes it.
- * No pair stores a line and none is added to the eight concepts. */
+ * A peak that is only weight 0 returns 64. No pair stores a line
+ * and none is added to the eight concepts. */
 int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
                           int n) {
   int w, best_hits = -1, best_w = 64;
+  int hits_w[256];
   if (!text || !prefer || n <= 0) return 64;
   if (n > 32) n = 32;
   for (w = 0; w <= 255; w++) {
@@ -258,11 +260,17 @@ int ng_motive_learn_lex_w(const char *const *text, const char *const *prefer,
       ng_motive_rank_w(text[i], &m, w);
       if (strcmp(m.concept, prefer[i]) == 0) hits++;
     }
+    hits_w[w] = hits;
     if (hits > best_hits) {
       best_hits = hits;
       best_w = w;
     } else if (hits == best_hits && w == 64)
       best_w = 64;
+  }
+  if (best_hits > 0 && hits_w[0] == best_hits) {
+    for (w = 1; w <= 255; w++)
+      if (hits_w[w] == best_hits) return best_w;
+    return 64;
   }
   return best_w;
 }
@@ -442,6 +450,69 @@ int ng_motive_learn_hits(const char *path) {
   return hits;
 }
 
+/* Same pairs read as the fit: 16384 bytes, at most 32 pairs, query under
+ * 192 bytes, catalog line under 80. Blank lines, comments, and overlong
+ * lines are skipped. The catalog field is not trimmed. Several pairs for
+ * one concept keep the training query with the most lexical hits, and the
+ * earlier pair when the hit count ties. Does not read the environment,
+ * write the learn cache, or allocate. */
+int ng_motive_label_lex(const char *query, const char *path, const char *concept) {
+  struct stat st;
+  FILE *fp;
+  char norm[NORM_CAP];
+  char line[320];
+  int budget = 16384;
+  int n = 0;
+  int best = -1;
+  int known = 0;
+  int i, base, diff;
+  if (!query || !query[0] || !path || !path[0] || !concept || !concept[0])
+    return 0;
+  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
+    if (strcmp(kConcept[i], concept) == 0) {
+      known = 1;
+      break;
+    }
+  }
+  if (!known) return 0;
+  norm_text(query, norm, sizeof norm);
+  if (!norm[0]) return 0;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+  fp = fopen(path, "r");
+  if (!fp) return 0;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    int hits;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= 192 || plen_pref >= 80) continue;
+    n++;
+    if (strcmp(tab, concept) != 0) continue;
+    hits = lexical_hits(norm, line);
+    if (hits > best) best = hits;
+  }
+  fclose(fp);
+  if (best < 0) return 0;
+  base = lexical_hits(norm, concept);
+  diff = best - base;
+  if (diff < 0) return 0;
+  return diff;
+}
+
 /* Unset, empty, or outside 0-255 stays 64. A readable pairs file wins.
  * The plate cascade is unchanged. */
 static int lex_weight(void) {
@@ -515,6 +586,7 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   uint64_t qh;
   int i, best = 0, best_score = -1, best_lex = 0, best_ham = 64;
   int lw;
+  const char *learn_path = NULL;
   if (!out) return;
   memset(out, 0, sizeof *out);
   norm_text(text, norm, sizeof norm);
@@ -532,6 +604,11 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
     copy_cap(out->line, sizeof out->line, kConcept[peer]);
     return;
   }
+  /* An explicit 0..255 weight does not read the pairs file. */
+  if (over < 0 || over > 255) {
+    const char *learn = getenv("NANOBOT_MOTIVE_LEARN");
+    if (learn && learn[0] && learn_file_weight(learn) >= 0) learn_path = learn;
+  }
   out->plate = plate_of(norm);
   out->forward = plate_forward(out->plate);
   qh = simhash_text(norm);
@@ -539,6 +616,8 @@ void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
     int lex = lexical_hits(norm, kConcept[i]);
     int h = ham64(qh, simhash_text(kConcept[i]));
     int score;
+    if (learn_path)
+      lex += ng_motive_label_lex(text, learn_path, kConcept[i]);
     if (same_tokens(norm, kConcept[i])) h = 0;
     score = lex * lw + (64 - h);
     if (score > best_score) {
