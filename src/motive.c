@@ -2194,6 +2194,69 @@ int ng_motive_ham_osum(const char *path) {
   return sum;
 }
 
+/* Same pairs read as the margin sum. Returns the sum of the distinct
+ * margins from ng_motive_label_margin. A return of -1 is ignored.
+ * Every call at -1 returns -1. Each margin value is added once,
+ * whether that value appears on one kept pair or on many. A repeated
+ * value is added once, not once per pair. A repeated 0 is added once
+ * and adds nothing. A single kept pair returns that margin, including
+ * 0. When the only distinct margin is 0, the result is 0. Zero is a
+ * real sum. Does not read the environment and does not write the
+ * learn cache. */
+int ng_motive_margin_ksum(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char line[320];
+  int got[32];
+  int n = 0;
+  int budget = 16384;
+  int i, seen, sum;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= 80) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  seen = 0;
+  for (i = 0; i < n; i++) {
+    int margin = ng_motive_label_margin(texts_b[i], path);
+    if (margin < 0) continue;
+    got[seen++] = margin;
+  }
+  if (seen == 0) return -1;
+  sum = 0;
+  for (i = 0; i < seen; i++) {
+    int j, earlier = 0;
+    for (j = 0; j < i; j++)
+      if (got[j] == got[i]) earlier = 1;
+    if (!earlier) sum += got[i];
+  }
+  return sum;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;

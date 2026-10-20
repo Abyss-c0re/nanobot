@@ -281,6 +281,16 @@ int ng_motive_margin_osum(const char *path);
  * pair returns -1. Does not read the environment or write the learn
  * cache. */
 int ng_motive_ham_osum(const char *path);
+/* Sum of the distinct labeled margins on the kept pairs of this path.
+ * A return of -1 is ignored. Every call at -1 returns -1. Each margin
+ * value is added once, whether that value appears on one kept pair or
+ * on many. A repeated value is added once, not once per pair. A
+ * repeated 0 is added once and adds nothing. A single kept pair
+ * returns that margin, including 0. When the only distinct margin is
+ * 0, the result is 0. Zero is a real sum. Null, empty, a path of 512
+ * bytes or more, a missing file, a non-regular file, or no valid pair
+ * returns -1. Does not read the environment or write the learn cache. */
+int ng_motive_margin_ksum(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
