@@ -1,0 +1,17 @@
+// How many kept pairs share the greatest labeled margin.
+// No pair returns nothing. A zero margin counts when it is the top.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mtop ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mtop rank
+
+IMPULSE mtop 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mtop" UNITY DECIDE ENERGY

@@ -5020,6 +5020,407 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-mtop.pairs";
+    const char *dirp = "/tmp/nb-motive-mtop.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, margin, counted, learned, marked, greatest, dots_m, top;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_margin_top(NULL) == -1, "a null mtop path returns -1");
+    expect(ng_motive_margin_top("") == -1, "an empty mtop path returns -1");
+    memset(longp, 'm', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long mtop path is 512 bytes");
+    expect(ng_motive_margin_top(longp) == -1,
+           "an mtop path of 512 bytes returns -1");
+    expect(ng_motive_margin_top("/tmp/nb-motive-mtop-missing") == -1,
+           "a missing mtop file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "mtop directory creates");
+    expect(ng_motive_margin_top(dirp) == -1,
+           "a non-regular mtop path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop empty file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_top(path) == -1,
+           "an mtop file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_top(path) == -1,
+           "an mtop query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin(qbuf, path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin < 0 || counted != (margin > 0 ? 1 : 0) || greatest != margin ||
+        top != 1) {
+      fprintf(stderr, "FAIL mtop bounded margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_top(path) == -1,
+           "an mtop catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin < 0 || counted != (margin > 0 ? 1 : 0) || greatest != margin ||
+        top != 1) {
+      fprintf(stderr, "FAIL mtop catalog margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_top(path) == -1,
+           "an mtop pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop overlong line file opens");
+    if (pf) {
+      fprintf(pf, "%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1) {
+      fprintf(stderr, "FAIL mtop skip margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1) {
+      fprintf(stderr, "FAIL mtop ship margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-mtop-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1) {
+      fprintf(stderr, "FAIL mtop env margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    margin = ng_motive_label_margin(law, path);
+    if (margin <= 0) {
+      fprintf(stderr, "FAIL mtop law margin %d\n", margin);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mtop law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "mtop leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "mtop leaves ship fail on the pair line");
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (greatest != 65 || top != 1) {
+      fprintf(stderr, "FAIL mtop ship stays max=%d top=%d\n", greatest, top);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0)) {
+      fprintf(stderr,
+              "FAIL mtop audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin < 0 || (margin > 0 && counted != 1) ||
+        (margin == 0 && counted != 0) || greatest != margin || top != 1) {
+      fprintf(stderr, "FAIL mtop audit margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "mtop cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "mtop pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "mtop cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "mtop does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "mtop does not write the learn cache");
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    if (counted < 0 || margin < 0 || greatest != margin || top != 1) {
+      fprintf(stderr, "FAIL mtop probe hits=%d margin=%d max=%d top=%d\n",
+              counted, margin, greatest, top);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mtop trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin < 0 || (margin > 0 && counted != 1) ||
+        (margin == 0 && counted != 0) || greatest != margin || top != 1) {
+      fprintf(stderr, "FAIL mtop trail margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin != 0 || counted != 0 || greatest != 0 || top != 1) {
+      fprintf(stderr, "FAIL mtop dots margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop two file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    dots_m = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (dots_m != 0 || margin < 0 ||
+        greatest != (margin > dots_m ? margin : dots_m) ||
+        (margin > 0 && counted != 1) || (margin == 0 && counted != 0) ||
+        top != (margin == 0 ? 2 : 1)) {
+      fprintf(stderr, "FAIL mtop two ship=%d dots=%d hits=%d max=%d top=%d\n",
+              margin, dots_m, counted, greatest, top);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop two-zero file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin != 0 || counted != 0 || greatest != 0 || top != 2) {
+      fprintf(stderr, "FAIL mtop two-zero margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (margin < 0 || greatest != margin || top != 2 ||
+        counted != (margin > 0 ? 2 : 0) ||
+        (margin != 1 && top == margin + margin)) {
+      fprintf(stderr, "FAIL mtop two-ship margin=%d hits=%d max=%d top=%d\n",
+              margin, counted, greatest, top);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mtop sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mtop sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mtop sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    if (learned != 0 || marked != 1 || counted != 1 || greatest != 65 ||
+        top != 1) {
+      fprintf(stderr,
+              "FAIL mtop sealed counts learn=%d label=%d hits=%d max=%d top=%d\n",
+              learned, marked, counted, greatest, top);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "mtop leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "mtop leaves an empty query at rank 0");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
