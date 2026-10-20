@@ -1,0 +1,17 @@
+// Sum of the labeled margins strictly above the smallest kept margin.
+// One margin returns nothing. A greater margin is added again when repeated.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE masum ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG masum rank
+
+IMPULSE masum 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "masum" UNITY DECIDE ENERGY
