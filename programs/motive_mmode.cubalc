@@ -1,0 +1,17 @@
+// The labeled margin shared by the most kept pairs.
+// No pair returns nothing. One margin returns that margin.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mmode ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mmode rank
+
+IMPULSE mmode 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mmode" UNITY DECIDE ENERGY

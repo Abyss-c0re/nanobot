@@ -154,6 +154,14 @@ int ng_motive_margin_next(const char *path);
  * file, or no valid pair returns -1. Does not read the environment
  * or write the learn cache. */
 int ng_motive_margin_kinds(const char *path);
+/* The labeled margin shared by the most kept pairs on this path.
+ * A return of -1 is ignored. Every call at -1 returns -1. When two
+ * margins are shared by the same number of pairs, the greater margin
+ * is the result. A uniform file returns that one margin, including 0.
+ * Null, empty, a path of 512 bytes or more, a missing file, a
+ * non-regular file, or no valid pair returns -1. Does not read the
+ * environment or write the learn cache. */
+int ng_motive_margin_mode(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

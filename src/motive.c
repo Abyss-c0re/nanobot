@@ -1336,6 +1336,72 @@ int ng_motive_margin_kinds(const char *path) {
   return kinds;
 }
 
+/* Same pairs read as the margin. Returns the labeled margin shared
+ * by the most kept pairs. A return of -1 is ignored. Every call at
+ * -1 returns -1. When two margins are shared by the same number of
+ * pairs, the greater margin is the result. A uniform file returns
+ * that one margin, including 0. Does not read the environment and
+ * does not write the learn cache. */
+int ng_motive_margin_mode(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char line[320];
+  int got[32];
+  int n = 0;
+  int budget = 16384;
+  int i, seen, chosen, best_n;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= 80) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  seen = 0;
+  for (i = 0; i < n; i++) {
+    int margin = ng_motive_label_margin(texts_b[i], path);
+    if (margin < 0) continue;
+    got[seen++] = margin;
+  }
+  if (seen == 0) return -1;
+  chosen = -1;
+  best_n = 0;
+  for (i = 0; i < seen; i++) {
+    int j, ncount = 0;
+    if (got[i] < 0) continue;
+    for (j = 0; j < seen; j++)
+      if (got[j] >= 0 && got[j] == got[i]) ncount++;
+    if (ncount > best_n || (ncount == best_n && got[i] > chosen)) {
+      best_n = ncount;
+      chosen = got[i];
+    }
+  }
+  if (best_n <= 0 || chosen < 0) return -1;
+  return chosen;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
