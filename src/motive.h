@@ -180,6 +180,13 @@ int ng_motive_margin_lone(const char *path);
  * pair returns -1. Does not read the environment or write the learn
  * cache. */
 int ng_motive_margin_ones(const char *path);
+/* Smallest winning labeled hamming among the kept pairs on this path.
+ * A return of -1 from the labeled rank is ignored. Every call at -1
+ * returns -1. A winning hamming of 0 returns 0. Null, empty, a path
+ * of 512 bytes or more, a missing file, a non-regular file, or no
+ * valid pair returns -1. Does not read the environment or write the
+ * learn cache. */
+int ng_motive_ham_min(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
