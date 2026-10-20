@@ -74,6 +74,12 @@ int ng_motive_label_lex(const char *query, const char *path, const char *concept
  * non-regular file, or no valid pair returns -1. Zero is a real count.
  * Does not read the environment or write the learn cache. */
 int ng_motive_label_hits(const char *path);
+/* One motive at the fitted weight. The label count is added on this
+ * call. Null out returns -1. Null, empty, a path of 512 bytes or more,
+ * a missing file, a non-regular file, or no valid pair returns -1 and
+ * zeroes out. Zero is not a hit count. Does not install
+ * NANOBOT_MOTIVE_LEARN or write the learn cache. */
+int ng_motive_label_rank(const char *query, const char *path, ng_motive *out);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

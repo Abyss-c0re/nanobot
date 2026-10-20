@@ -3875,6 +3875,292 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-labrank.pairs";
+    const char *dirp = "/tmp/nb-motive-labrank.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    char longp[520];
+    FILE *pf;
+    ng_motive m, rw, ranked, z;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, learned, marked;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_label_rank("ship fail", path, NULL) == -1,
+           "a null motive returns -1");
+    expect(ng_motive_label_rank(NULL, NULL, NULL) == -1,
+           "a null motive and query returns -1");
+
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank(NULL, path, &m) == -1, "a null query returns -1");
+    memset(&z, 0, sizeof z);
+    expect(memcmp(&m, &z, sizeof m) == 0, "a null query zeroes the motive");
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank("", path, &m) == -1, "an empty query returns -1");
+    expect(memcmp(&m, &z, sizeof m) == 0, "an empty query zeroes the motive");
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank("ship fail", NULL, &m) == -1, "a null path returns -1");
+    expect(memcmp(&m, &z, sizeof m) == 0, "a null path zeroes the motive");
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank("ship fail", "", &m) == -1, "an empty path returns -1");
+    expect(memcmp(&m, &z, sizeof m) == 0, "an empty path zeroes the motive");
+    memset(longp, 'p', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long labrank path is 512 bytes");
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank("ship fail", longp, &m) == -1,
+           "a labrank path of 512 bytes returns -1");
+    expect(memcmp(&m, &z, sizeof m) == 0, "a long labrank path zeroes the motive");
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank("ship fail", "/tmp/nb-motive-labrank-missing", &m) == -1,
+           "a missing labrank file returns -1");
+    expect(memcmp(&m, &z, sizeof m) == 0, "a missing labrank file zeroes the motive");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "labrank directory creates");
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank("ship fail", dirp, &m) == -1,
+           "a non-regular labrank path returns -1");
+    expect(memcmp(&m, &z, sizeof m) == 0, "a non-regular labrank path zeroes the motive");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank empty file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fclose(pf);
+    }
+    memset(&m, 0x5a, sizeof m);
+    expect(ng_motive_label_rank("ship fail", path, &m) == -1,
+           "a labrank file with no pair returns -1");
+    expect(memcmp(&m, &z, sizeof m) == 0, "no labrank pair zeroes the motive");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL labrank ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(m.plate == NG_PLATE_OBSERVE && m.forward == 1 && strcmp(m.line, keep) == 0,
+           "ship fail stays a forward observe line");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL labrank law rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "labrank leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "labrank leaves ship fail on the pair line");
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-labrank-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL labrank env rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 0 || marked != 1) {
+      fprintf(stderr, "FAIL labrank counts learn=%d label=%d\n", learned, marked);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (!(rc == 0 && m.lex_w == 0 && strcmp(m.concept, audit_c) == 0 &&
+          m.rank == rw.rank && m.hamming == rw.hamming && m.lexical == 4 &&
+          m.lexical == rw.lexical + 4 && m.plate == rw.plate &&
+          m.forward == rw.forward && strcmp(m.line, rw.line) == 0)) {
+      fprintf(stderr,
+              "FAIL labrank audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "rw lex=%d ham=%d rank=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, rw.lexical,
+              rw.hamming, rw.rank);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("ship fail", &rw, 64);
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 &&
+          m.rank == rw.rank && m.lexical == rw.lexical && m.hamming == rw.hamming &&
+          strcmp(m.concept, rw.concept) == 0 && m.plate == rw.plate &&
+          m.forward == rw.forward && strcmp(m.line, rw.line) == 0)) {
+      fprintf(stderr,
+              "FAIL labrank trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank confess file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("you lied", &rw, 64);
+    rc = ng_motive_label_rank("you lied", path, &m);
+    if (!(rc == 0 && m.plate == NG_PLATE_CONFESS && m.lexical == 0 &&
+          m.lex_w == 64 && m.rank == rw.rank && m.hamming == rw.hamming &&
+          m.plate == rw.plate && strcmp(m.concept, rw.concept) == 0 &&
+          strcmp(m.line, rw.line) == 0)) {
+      fprintf(stderr,
+              "FAIL labrank lied rc=%d plate=%d concept=%s lex=%d ham=%d rank=%d "
+              "lex_w=%d\n",
+              rc, m.plate, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("wipe", &rw, 64);
+    rc = ng_motive_label_rank("wipe", path, &m);
+    if (!(rc == 0 && m.forward == 0 && m.plate == NG_PLATE_PROTECT &&
+          strcmp(m.line, "keep free energy flowing") == 0 && m.lex_w == 64 &&
+          m.rank == rw.rank && m.lexical == rw.lexical && m.hamming == rw.hamming &&
+          m.plate == rw.plate && strcmp(m.concept, rw.concept) == 0 &&
+          strcmp(m.line, rw.line) == 0)) {
+      fprintf(stderr,
+              "FAIL labrank wipe rc=%d plate=%d fwd=%d concept=%s line=%s lex=%d "
+              "ham=%d rank=%d lex_w=%d\n",
+              rc, m.plate, m.forward, m.concept, m.line, m.lexical, m.hamming,
+              m.rank, m.lex_w);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    if (!(rc == 0 && m.rank == 0 && m.lexical == 0 && m.hamming == 0 &&
+          m.lex_w == 64 && m.plate == NG_PLATE_OBSERVE && m.forward == 1 &&
+          strcmp(m.concept, peer) == 0 && strcmp(m.line, peer) == 0)) {
+      fprintf(stderr,
+              "FAIL labrank dots rc=%d plate=%d concept=%s line=%s lex=%d ham=%d "
+              "rank=%d lex_w=%d\n",
+              rc, m.plate, m.concept, m.line, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank cache file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    expect(strlen(audit) == strlen(padded), "labrank cache probe stays the same size");
+    expect(ng_motive_label_rank("why did the ship fail", path, &m) == 0,
+           "the audit pair fills one motive");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "labrank pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "labrank cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "labrank does not write the learn cache");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "labrank sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL labrank sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL labrank sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 0 || marked != 1) {
+      fprintf(stderr, "FAIL labrank sealed counts learn=%d label=%d\n", learned,
+              marked);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "labrank leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "labrank leaves an empty query at rank 0");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

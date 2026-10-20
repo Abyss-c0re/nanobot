@@ -1,0 +1,17 @@
+// One motive at the fitted weight, with the label count in the score.
+// No pair returns nothing. Zero is not a hit count.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE labrank ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG labrank rank
+
+IMPULSE labrank 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "labrank" UNITY DECIDE ENERGY
