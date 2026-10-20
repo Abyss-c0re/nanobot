@@ -210,6 +210,15 @@ int ng_motive_ham_sum(const char *path);
  * file, a non-regular file, or no valid pair returns -1. Does not read
  * the environment or write the learn cache. */
 int ng_motive_ham_next(const char *path);
+/* Winning labeled hamming shared by the most kept pairs on this path.
+ * A return of -1 from the labeled rank is ignored. Every call at -1
+ * returns -1. When two hammings are shared by the same number of pairs,
+ * the greater hamming is the result. A uniform file returns that
+ * hamming, including 0. Zero is a real hamming. Null, empty, a path of
+ * 512 bytes or more, a missing file, a non-regular file, or no valid
+ * pair returns -1. Does not read the environment or write the learn
+ * cache. */
+int ng_motive_ham_mode(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

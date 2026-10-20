@@ -1,0 +1,17 @@
+// Winning labeled hamming shared by the most kept pairs.
+// A tie of counts returns the greater hamming.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hmode ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG hmode rank
+
+IMPULSE hmode 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hmode" UNITY DECIDE ENERGY
