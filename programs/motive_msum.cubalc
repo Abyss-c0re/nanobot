@@ -1,0 +1,17 @@
+// Sum of the labeled margins on the kept pairs.
+// No pair returns nothing. A zero margin adds nothing.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE msum ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG msum rank
+
+IMPULSE msum 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "msum" UNITY DECIDE ENERGY

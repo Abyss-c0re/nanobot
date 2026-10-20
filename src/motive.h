@@ -106,6 +106,13 @@ int ng_motive_margin_max(const char *path);
  * or no valid pair returns -1. Does not read the environment or
  * write the learn cache. */
 int ng_motive_margin_top(const char *path);
+/* Sum of the labeled margins on the kept pairs of this path.
+ * A return of -1 is ignored. Every call at -1 returns -1.
+ * A margin of 0 adds nothing. Null, empty, a path of 512 bytes
+ * or more, a missing file, a non-regular file, or no valid pair
+ * returns -1. Does not read the environment or write the learn
+ * cache. */
+int ng_motive_margin_sum(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
