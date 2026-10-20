@@ -1,0 +1,17 @@
+// Greatest winning labeled hamming strictly below the greatest kept hamming.
+// One hamming returns nothing. A smaller hamming returns that hamming.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hprev ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG hprev rank
+
+IMPULSE hprev 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hprev" UNITY DECIDE ENERGY
