@@ -1,0 +1,17 @@
+// Greatest labeled margin strictly above the smallest kept margin.
+// One margin returns nothing. A greater margin returns that margin.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mhigh ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mhigh rank
+
+IMPULSE mhigh 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mhigh" UNITY DECIDE ENERGY
