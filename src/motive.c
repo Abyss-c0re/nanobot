@@ -876,6 +876,56 @@ int ng_motive_margin_hits(const char *path) {
   return hits;
 }
 
+/* Same pairs read as the margin. Returns the greatest
+ * ng_motive_label_margin among the kept pairs. A return of -1 is
+ * ignored. Every kept pair at 0 returns 0. Every call at -1 returns
+ * -1. Does not read the environment and does not write the learn
+ * cache. */
+int ng_motive_margin_max(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char line[320];
+  int n = 0;
+  int budget = 16384;
+  int i, best;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= 80) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  best = -1;
+  for (i = 0; i < n; i++) {
+    int margin = ng_motive_label_margin(texts_b[i], path);
+    if (margin < 0) continue;
+    if (margin > best) best = margin;
+  }
+  return best;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
