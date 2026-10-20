@@ -1,0 +1,17 @@
+// How many kept pairs have a labeled margin that appears once.
+// No pair returns nothing. One margin returns one.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mones ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mones rank
+
+IMPULSE mones 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mones" UNITY DECIDE ENERGY
