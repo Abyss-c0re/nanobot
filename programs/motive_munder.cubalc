@@ -1,0 +1,17 @@
+// How many kept pairs sit strictly below the greatest labeled margin.
+// No pair returns nothing. Equal margins stay zero.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE munder ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG munder rank
+
+IMPULSE munder 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "munder" UNITY DECIDE ENERGY
