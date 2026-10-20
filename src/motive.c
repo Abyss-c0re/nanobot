@@ -758,6 +758,76 @@ int ng_motive_label_rank(const char *query, const char *path, ng_motive *out) {
   return 0;
 }
 
+/* Same pairs read as the fit. The margin is the winning labeled score
+ * minus the best score among the other seven. A tie at the top returns
+ * 0. An empty norm returns 0. Does not read the environment and does
+ * not write the learn cache. */
+int ng_motive_label_margin(const char *query, const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char prefs_b[32][80];
+  const char *texts[32];
+  const char *prefs[32];
+  char line[320];
+  char norm[NORM_CAP];
+  uint64_t qh;
+  int n = 0;
+  int budget = 16384;
+  int w, i, best_score, second;
+  if (!query || !query[0] || !path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= sizeof prefs_b[0]) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    memcpy(prefs_b[n], tab, plen_pref + 1);
+    texts[n] = texts_b[n];
+    prefs[n] = prefs_b[n];
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  w = ng_motive_learn_lex_w(texts, prefs, n);
+  norm_text(query, norm, sizeof norm);
+  if (!norm[0]) return 0;
+  qh = simhash_text(norm);
+  best_score = -1;
+  second = -1;
+  for (i = 0; i < NG_MOTIVE_CONCEPTS; i++) {
+    int lex = lexical_hits(norm, kConcept[i]);
+    int h = ham64(qh, simhash_text(kConcept[i]));
+    int score;
+    lex += ng_motive_label_lex(query, path, kConcept[i]);
+    if (same_tokens(norm, kConcept[i])) h = 0;
+    score = lex * w + (64 - h);
+    if (score > best_score) {
+      second = best_score;
+      best_score = score;
+    } else if (score > second)
+      second = score;
+  }
+  return best_score - second;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;

@@ -80,6 +80,12 @@ int ng_motive_label_hits(const char *path);
  * zeroes out. Zero is not a hit count. Does not install
  * NANOBOT_MOTIVE_LEARN or write the learn cache. */
 int ng_motive_label_rank(const char *query, const char *path, ng_motive *out);
+/* Winning labeled score minus the best score among the other seven.
+ * A tie at the top returns 0. An empty norm returns 0. Null, empty,
+ * a path of 512 bytes or more, a missing file, a non-regular file, or
+ * no valid pair returns -1. Does not read the environment or write
+ * the learn cache. */
+int ng_motive_label_margin(const char *query, const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
