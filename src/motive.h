@@ -86,6 +86,12 @@ int ng_motive_label_rank(const char *query, const char *path, ng_motive *out);
  * no valid pair returns -1. Does not read the environment or write
  * the learn cache. */
 int ng_motive_label_margin(const char *query, const char *path);
+/* How many kept pairs have a positive labeled margin on this path.
+ * A return of 0 does not count. Null, empty, a path of 512 bytes or
+ * more, a missing file, a non-regular file, or no valid pair returns
+ * -1. Zero is a real count. Does not read the environment or write
+ * the learn cache. */
+int ng_motive_margin_hits(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

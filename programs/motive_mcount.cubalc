@@ -1,0 +1,17 @@
+// How many kept pairs have a positive labeled margin.
+// No pair returns nothing. A zero margin does not count.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mcount ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mcount rank
+
+IMPULSE mcount 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mcount" UNITY DECIDE ENERGY
