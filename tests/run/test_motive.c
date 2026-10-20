@@ -15544,6 +15544,587 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-mosum.pairs";
+    const char *dirp = "/tmp/nb-motive-mosum.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *qs[3];
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, shipm, auditm, dotm, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, margin, mnext, least, greatest, msum, ones, munder, mlow;
+    int hupper, hsum, mupper, mlone, mmid, mosum, learned, marked;
+    int ms[3], si, seen_m, osum_e, uonce, ui, uj, ucount;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_margin_osum(NULL) == -1, "a null mosum path returns -1");
+    expect(ng_motive_margin_osum("") == -1, "an empty mosum path returns -1");
+    memset(longp, 'u', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long mosum path is 512 bytes");
+    expect(ng_motive_margin_osum(longp) == -1, "a mosum path of 512 bytes returns -1");
+    expect(ng_motive_margin_osum("/tmp/nb-motive-mosum-missing") == -1,
+           "a missing mosum file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "mosum directory creates");
+    expect(ng_motive_margin_osum(dirp) == -1, "a non-regular mosum path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_osum(path) == -1, "a mosum file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_osum(path) == -1, "a mosum query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin(qbuf, path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mnext = ng_motive_margin_next(path);
+    if (margin < 0 || mosum != margin || mmid != 0 || mupper != margin ||
+        mnext != -1) {
+      fprintf(stderr,
+              "FAIL mosum bounded margin=%d mosum=%d mmid=%d mupper=%d next=%d\n",
+              margin, mosum, mmid, mupper, mnext);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_osum(path) == -1,
+           "a mosum catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mnext = ng_motive_margin_next(path);
+    if (margin < 0 || mosum != margin || mmid != 0 || mupper != margin ||
+        mnext != -1) {
+      fprintf(stderr,
+              "FAIL mosum catalog margin=%d mosum=%d mmid=%d mupper=%d next=%d\n",
+              margin, mosum, mmid, mupper, mnext);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_osum(path) == -1,
+           "a mosum pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mlow = ng_motive_margin_low(path);
+    ones = ng_motive_margin_ones(path);
+    mnext = ng_motive_margin_next(path);
+    if (margin != 65 || mosum != 65 || mmid != 0 || mupper != 65 || mlow != 1 ||
+        ones != 1 || mnext != -1 || mosum == mmid) {
+      fprintf(stderr,
+              "FAIL mosum skip margin=%d mosum=%d mmid=%d mupper=%d low=%d "
+              "ones=%d next=%d\n",
+              margin, mosum, mmid, mupper, mlow, ones, mnext);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mlow = ng_motive_margin_low(path);
+    ones = ng_motive_margin_ones(path);
+    mnext = ng_motive_margin_next(path);
+    least = ng_motive_margin_min(path);
+    msum = ng_motive_margin_sum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && margin == 65 &&
+          mosum == 65 && mmid == 0 && mupper == 65 && mlow == 1 && ones == 1 &&
+          mnext == -1 && least == 65 && msum == 65 && hsum == 22 &&
+          mosum != mmid && mosum != mlow && mosum != ones && mosum != hsum &&
+          mosum == msum && mosum == mupper && mosum == least)) {
+      fprintf(stderr,
+              "FAIL mosum ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d mosum=%d mmid=%d mupper=%d low=%d ones=%d next=%d "
+              "min=%d msum=%d hsum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, mosum,
+              mmid, mupper, mlow, ones, mnext, least, msum, hsum);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-mosum-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mnext = ng_motive_margin_next(path);
+    if (mosum != 65 || mmid != 0 || mupper != 65 || mnext != -1) {
+      fprintf(stderr, "FAIL mosum env mosum=%d mmid=%d mupper=%d next=%d\n", mosum,
+              mmid, mupper, mnext);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mosum law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "mosum leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "mosum leaves ship fail on the pair line");
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    hsum = ng_motive_ham_sum(path);
+    least = ng_motive_margin_min(path);
+    msum = ng_motive_margin_sum(path);
+    mupper = ng_motive_margin_upper(path);
+    if (mosum != 65 || mmid != 0 || mupper != 65 || hsum != 22 || least != 65 ||
+        msum != 65) {
+      fprintf(stderr,
+              "FAIL mosum ship stays mosum=%d mmid=%d mupper=%d hsum=%d min=%d "
+              "msum=%d\n",
+              mosum, mmid, mupper, hsum, least, msum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    hupper = ng_motive_ham_upper(path);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && margin == 1 &&
+          mosum == 1 && mmid == 0 && mupper == 1 && hupper == 18 &&
+          m.lexical != rw.lexical && m.lexical == rw.lexical + 4 &&
+          mosum != mmid && mosum != hupper)) {
+      fprintf(stderr,
+              "FAIL mosum audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d mosum=%d mmid=%d mupper=%d hupper=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, mosum,
+              mmid, mupper, hupper, rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "mosum cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "mosum pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "mosum cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "mosum does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "mosum does not write the learn cache");
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    if (margin < 0 || mosum != margin || mmid != 0) {
+      fprintf(stderr, "FAIL mosum probe margin=%d mosum=%d mmid=%d\n", margin,
+              mosum, mmid);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && margin == 63 &&
+          mosum == 63 && mmid == 0 && mupper == 63 && mosum != mmid)) {
+      fprintf(stderr,
+              "FAIL mosum trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d mosum=%d mmid=%d mupper=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, mosum,
+              mmid, mupper);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mlow = ng_motive_margin_low(path);
+    if (!(margin == 0 && mosum == 0 && mmid == 0 && mupper == 0 && mlow == 1 &&
+          mosum == mupper && mosum != mlow && mosum != 64)) {
+      fprintf(stderr,
+              "FAIL mosum dots margin=%d mosum=%d mmid=%d mupper=%d low=%d\n",
+              margin, mosum, mmid, mupper, mlow);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mlow = ng_motive_margin_low(path);
+    if (!(margin == 0 && mosum == 0 && mmid == 0 && mupper == -1 && mlow == 2 &&
+          mosum != mupper && mosum != mlow)) {
+      fprintf(stderr,
+              "FAIL mosum two-dots margin=%d mosum=%d mmid=%d mupper=%d low=%d\n",
+              margin, mosum, mmid, mupper, mlow);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mlow = ng_motive_margin_low(path);
+    greatest = ng_motive_margin_max(path);
+    msum = ng_motive_margin_sum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(margin == 65 && mosum == 0 && mmid == 0 && mupper == -1 && mlow == 2 &&
+          greatest == 65 && msum == 130 && hsum == 44 && mosum != msum &&
+          mosum != greatest && mosum != mlow && mosum != hsum &&
+          mosum != mupper && mosum != margin)) {
+      fprintf(stderr,
+              "FAIL mosum two-ship margin=%d mosum=%d mmid=%d mupper=%d low=%d "
+              "max=%d msum=%d hsum=%d\n",
+              margin, mosum, mmid, mupper, mlow, greatest, msum, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mlone = ng_motive_margin_lone(path);
+    munder = ng_motive_margin_under(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(margin == 0 && mosum == 65 && mmid == 0 && munder == 1 && mupper == 65 &&
+          mlone == 0 && hsum == 22 && mosum != mmid && mosum != munder &&
+          mosum != hsum && mosum == mupper)) {
+      fprintf(stderr,
+              "FAIL mosum mixed margin=%d mosum=%d mmid=%d under=%d mupper=%d "
+              "lone=%d hsum=%d\n",
+              margin, mosum, mmid, munder, mupper, mlone, hsum);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("ship fail", path, &shipm);
+    if (!(rc == 0 && shipm.hamming == 22 && mosum == 65 && mmid == 0)) {
+      fprintf(stderr, "FAIL mosum mixed ship rc=%d ham=%d mosum=%d mmid=%d\n", rc,
+              shipm.hamming, mosum, mmid);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    munder = ng_motive_margin_under(path);
+    mlow = ng_motive_margin_low(path);
+    if (!(margin == 65 && mosum == 65 && mmid == 0 && munder == 2 && mlow == 2 &&
+          mupper == 65 && mosum != mmid && mosum != munder && mosum != mlow &&
+          mosum == mupper && mosum == margin)) {
+      fprintf(stderr,
+              "FAIL mosum two-dots ship margin=%d mosum=%d mmid=%d under=%d "
+              "low=%d mupper=%d\n",
+              margin, mosum, mmid, munder, mlow, mupper);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    greatest = ng_motive_margin_max(path);
+    msum = ng_motive_margin_sum(path);
+    munder = ng_motive_margin_under(path);
+    if (!(margin == 0 && mosum == 0 && mmid == 0 && greatest == 65 &&
+          mupper == 0 && msum == 130 && munder == 1 && mosum != greatest &&
+          mosum != msum && mosum == mupper && mosum != munder)) {
+      fprintf(stderr,
+              "FAIL mosum two-ship dots margin=%d mosum=%d mmid=%d max=%d "
+              "mupper=%d msum=%d under=%d\n",
+              margin, mosum, mmid, greatest, mupper, msum, munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    qs[0] = "...";
+    qs[1] = "why did the ship fail";
+    qs[2] = "ship fail";
+    seen_m = 0;
+    for (si = 0; si < 3; si++) {
+      ms[si] = ng_motive_label_margin(qs[si], path);
+      if (ms[si] >= 0) seen_m++;
+    }
+    osum_e = 0;
+    uonce = 0;
+    for (ui = 0; ui < 3; ui++) {
+      if (ms[ui] < 0) continue;
+      ucount = 0;
+      for (uj = 0; uj < 3; uj++)
+        if (ms[uj] == ms[ui]) ucount++;
+      if (ucount == 1) {
+        osum_e += ms[ui];
+        uonce++;
+      }
+    }
+    rc = ng_motive_label_rank("...", path, &dotm);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL mosum span dots rc=%d\n", rc);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("why did the ship fail", path, &auditm);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL mosum span audit rc=%d\n", rc);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank("ship fail", path, &shipm);
+    if (rc != 0) {
+      fprintf(stderr, "FAIL mosum span ship rc=%d\n", rc);
+      g_fail++;
+    }
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    munder = ng_motive_margin_under(path);
+    mlow = ng_motive_margin_low(path);
+    mnext = ng_motive_margin_next(path);
+    ones = ng_motive_margin_ones(path);
+    greatest = ng_motive_margin_max(path);
+    msum = ng_motive_margin_sum(path);
+    hupper = ng_motive_ham_upper(path);
+    if (!(seen_m == 3 && uonce == 3 && osum_e == 134 && mosum == osum_e &&
+          mosum == 134 && msum == 134 && greatest == 132 && mupper == 132 &&
+          mmid == 1 && mnext == 2 && ones == 3 && munder == 2 && mlow == 1 &&
+          hupper == 22 && dotm.hamming == 0 && auditm.hamming == 18 &&
+          shipm.hamming == 22 && mosum != mmid && mosum != mnext &&
+          mosum != ones && mosum != greatest && mosum != mupper &&
+          mosum != hupper && ms[0] != ms[1] && ms[1] != ms[2] &&
+          ms[0] != ms[2])) {
+      fprintf(stderr,
+              "FAIL mosum span mosum=%d osum_e=%d msum=%d max=%d mupper=%d "
+              "mmid=%d next=%d ones=%d under=%d low=%d hupper=%d seen=%d "
+              "margins=%d,%d,%d ham=%d,%d,%d\n",
+              mosum, osum_e, msum, greatest, mupper, mmid, mnext, ones, munder,
+              mlow, hupper, seen_m, ms[0], ms[1], ms[2], dotm.hamming,
+              auditm.hamming, shipm.hamming);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mosum sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mosum sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mosum sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    mosum = ng_motive_margin_osum(path);
+    mmid = ng_motive_margin_mid(path);
+    mupper = ng_motive_margin_upper(path);
+    mlow = ng_motive_margin_low(path);
+    ones = ng_motive_margin_ones(path);
+    mnext = ng_motive_margin_next(path);
+    msum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    hsum = ng_motive_ham_sum(path);
+    if (learned != 0 || marked != 1 || mosum != 65 || mmid != 0 || mupper != 65 ||
+        mlow != 1 || ones != 1 || mnext != -1 || msum != 65 || least != 65 ||
+        hsum != 22 || mosum == mmid || mosum == mlow || hsum == msum ||
+        mosum != msum) {
+      fprintf(stderr,
+              "FAIL mosum sealed counts learn=%d label=%d mosum=%d mmid=%d "
+              "mupper=%d low=%d ones=%d next=%d msum=%d min=%d hsum=%d\n",
+              learned, marked, mosum, mmid, mupper, mlow, ones, mnext, msum,
+              least, hsum);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "mosum leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "mosum leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

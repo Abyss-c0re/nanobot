@@ -1,0 +1,17 @@
+// Sum of the labeled margins that appear on exactly one kept pair.
+// No pair returns nothing. One margin returns that margin.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mosum ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mosum rank
+
+IMPULSE mosum 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mosum" UNITY DECIDE ENERGY
