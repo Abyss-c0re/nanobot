@@ -18257,6 +18257,543 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-mprev.pairs";
+    const char *dirp = "/tmp/nb-motive-mprev.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *qs[3];
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, margin, mprev, mmax, mksum, mupper, mmin, mnext, hprev;
+    int mosum, msum, mmode, mlone, munder, mmid;
+    int learned, marked;
+    int ms[3], si, seen_m, top_m, below_m, least_m, sum_below;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_margin_prev(NULL) == -1, "a null mprev path returns -1");
+    expect(ng_motive_margin_prev("") == -1, "an empty mprev path returns -1");
+    memset(longp, 'u', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long mprev path is 512 bytes");
+    expect(ng_motive_margin_prev(longp) == -1, "a mprev path of 512 bytes returns -1");
+    expect(ng_motive_margin_prev("/tmp/nb-motive-mprev-missing") == -1,
+           "a missing mprev file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "mprev directory creates");
+    expect(ng_motive_margin_prev(dirp) == -1, "a non-regular mprev path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_prev(path) == -1, "a mprev file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_prev(path) == -1, "a mprev query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin(qbuf, path);
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (margin < 0 || mprev != -1 || mksum != margin) {
+      fprintf(stderr, "FAIL mprev bounded margin=%d mprev=%d mksum=%d\n", margin,
+              mprev, mksum);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_prev(path) == -1,
+           "a mprev catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (margin < 0 || mprev != -1 || mksum != margin) {
+      fprintf(stderr, "FAIL mprev catalog margin=%d mprev=%d mksum=%d\n", margin,
+              mprev, mksum);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_prev(path) == -1,
+           "a mprev pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    mprev = ng_motive_margin_prev(path);
+    mmax = ng_motive_margin_max(path);
+    mksum = ng_motive_margin_ksum(path);
+    mmin = ng_motive_margin_min(path);
+    mnext = ng_motive_margin_next(path);
+    munder = ng_motive_margin_under(path);
+    hprev = ng_motive_ham_prev(path);
+    if (!(rc == 0 && m.hamming == 22 && margin == 65 && mprev == -1 &&
+          mmax == 65 && mksum == 65 && mmin == 65 && mnext == -1 &&
+          munder == 0 && hprev == -1 && mprev != mmax && mprev != mksum &&
+          mprev != munder && mprev == mnext && mprev == hprev)) {
+      fprintf(stderr,
+              "FAIL mprev skip rc=%d ham=%d margin=%d mprev=%d mmax=%d mksum=%d "
+              "mmin=%d mnext=%d munder=%d hprev=%d\n",
+              rc, m.hamming, margin, mprev, mmax, mksum, mmin, mnext, munder,
+              hprev);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    mprev = ng_motive_margin_prev(path);
+    mmax = ng_motive_margin_max(path);
+    mksum = ng_motive_margin_ksum(path);
+    mupper = ng_motive_margin_upper(path);
+    mmin = ng_motive_margin_min(path);
+    mnext = ng_motive_margin_next(path);
+    munder = ng_motive_margin_under(path);
+    hprev = ng_motive_ham_prev(path);
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && margin == 65 &&
+          mprev == -1 && mmax == 65 && mksum == 65 && mupper == 65 &&
+          mmin == 65 && mnext == -1 && munder == 0 && hprev == -1 &&
+          mprev != mmax && mprev != mksum && mprev != mupper && mprev != mmin &&
+          mprev != munder && mprev == mnext && mprev == hprev)) {
+      fprintf(stderr,
+              "FAIL mprev ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d mprev=%d mmax=%d mksum=%d mupper=%d mmin=%d mnext=%d "
+              "munder=%d hprev=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, mprev,
+              mmax, mksum, mupper, mmin, mnext, munder, hprev);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-mprev-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    hprev = ng_motive_ham_prev(path);
+    if (mprev != -1 || mksum != 65 || hprev != -1) {
+      fprintf(stderr, "FAIL mprev env mprev=%d mksum=%d hprev=%d\n", mprev, mksum,
+              hprev);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mprev law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "mprev leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "mprev leaves ship fail on the pair line");
+    mprev = ng_motive_margin_prev(path);
+    if (mprev != -1) {
+      fprintf(stderr, "FAIL mprev ship stays mprev=%d\n", mprev);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && margin == 1 &&
+          mprev == -1 && mksum == 1 && mprev != mksum && m.lexical != rw.lexical &&
+          m.lexical == rw.lexical + 4)) {
+      fprintf(stderr,
+              "FAIL mprev audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d mprev=%d mksum=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, mprev,
+              mksum, rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "mprev cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "mprev pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "mprev cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    mprev = ng_motive_margin_prev(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "mprev does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "mprev does not write the learn cache");
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (rc != 0 || mprev != -1 || m.hamming < 0) {
+      fprintf(stderr, "FAIL mprev probe rc=%d ham=%d mprev=%d\n", rc, m.hamming,
+              mprev);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    margin = ng_motive_label_margin("ship fail", path);
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && margin == 63 &&
+          mprev == -1 && mksum == 63 && mprev != mksum)) {
+      fprintf(stderr,
+              "FAIL mprev trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "margin=%d mprev=%d mksum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, margin, mprev,
+              mksum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    margin = ng_motive_label_margin("...", path);
+    mprev = ng_motive_margin_prev(path);
+    mmin = ng_motive_margin_min(path);
+    mksum = ng_motive_margin_ksum(path);
+    mupper = ng_motive_margin_upper(path);
+    mnext = ng_motive_margin_next(path);
+    if (!(rc == 0 && m.hamming == 0 && margin == 0 && mprev == -1 && mmin == 0 &&
+          mksum == 0 && mupper == 0 && mnext == -1 && mprev != mmin &&
+          mprev != mksum && mprev != mupper && mprev == mnext)) {
+      fprintf(stderr,
+              "FAIL mprev dots rc=%d ham=%d margin=%d mprev=%d mmin=%d mksum=%d "
+              "mupper=%d mnext=%d\n",
+              rc, m.hamming, margin, mprev, mmin, mksum, mupper, mnext);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    mupper = ng_motive_margin_upper(path);
+    mmode = ng_motive_margin_mode(path);
+    if (!(mprev == -1 && mksum == 0 && mupper == -1 && mmode == 0 &&
+          mprev != mksum && mprev == mupper && mprev != mmode)) {
+      fprintf(stderr, "FAIL mprev two-dots mprev=%d mksum=%d mupper=%d mmode=%d\n",
+              mprev, mksum, mupper, mmode);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    mosum = ng_motive_margin_osum(path);
+    msum = ng_motive_margin_sum(path);
+    mupper = ng_motive_margin_upper(path);
+    mnext = ng_motive_margin_next(path);
+    if (!(mprev == -1 && mksum == 65 && mosum == 0 && msum == 130 &&
+          mupper == -1 && mnext == -1 && mprev != mksum && mprev != mosum &&
+          mprev != msum && mprev == mupper && mprev == mnext)) {
+      fprintf(stderr,
+              "FAIL mprev two-ship mprev=%d mksum=%d mosum=%d msum=%d mupper=%d "
+              "mnext=%d\n",
+              mprev, mksum, mosum, msum, mupper, mnext);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    mprev = ng_motive_margin_prev(path);
+    mnext = ng_motive_margin_next(path);
+    mmax = ng_motive_margin_max(path);
+    mksum = ng_motive_margin_ksum(path);
+    mmin = ng_motive_margin_min(path);
+    mlone = ng_motive_margin_lone(path);
+    mmode = ng_motive_margin_mode(path);
+    munder = ng_motive_margin_under(path);
+    hprev = ng_motive_ham_prev(path);
+    if (!(mprev == 0 && mnext == 65 && mmax == 65 && mksum == 65 && mmin == 0 &&
+          mlone == 0 && mmode == 65 && munder == 1 && hprev == 0 &&
+          mprev != mnext && mprev != mmax && mprev != mksum && mprev == mmin &&
+          mprev == mlone && mprev != mmode && mprev != munder &&
+          mprev == hprev)) {
+      fprintf(stderr,
+              "FAIL mprev mixed mprev=%d mnext=%d mmax=%d mksum=%d mmin=%d "
+              "lone=%d mode=%d under=%d hprev=%d\n",
+              mprev, mnext, mmax, mksum, mmin, mlone, mmode, munder, hprev);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    mprev = ng_motive_margin_prev(path);
+    mnext = ng_motive_margin_next(path);
+    mlone = ng_motive_margin_lone(path);
+    mmode = ng_motive_margin_mode(path);
+    mksum = ng_motive_margin_ksum(path);
+    munder = ng_motive_margin_under(path);
+    if (!(mprev == 0 && mnext == 65 && mlone == 65 && mmode == 0 && mksum == 65 &&
+          munder == 2 && mprev != mnext && mprev != mlone && mprev == mmode &&
+          mprev != mksum && mprev != munder)) {
+      fprintf(stderr,
+              "FAIL mprev two-dots ship mprev=%d mnext=%d lone=%d mode=%d "
+              "mksum=%d under=%d\n",
+              mprev, mnext, mlone, mmode, mksum, munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    mprev = ng_motive_margin_prev(path);
+    mnext = ng_motive_margin_next(path);
+    mksum = ng_motive_margin_ksum(path);
+    mupper = ng_motive_margin_upper(path);
+    mosum = ng_motive_margin_osum(path);
+    msum = ng_motive_margin_sum(path);
+    if (!(mprev == 0 && mnext == 65 && mksum == 65 && mupper == 0 && mosum == 0 &&
+          msum == 130 && mprev != mnext && mprev != mksum && mprev == mupper &&
+          mprev == mosum && mprev != msum)) {
+      fprintf(stderr,
+              "FAIL mprev two-ship dots mprev=%d mnext=%d mksum=%d mupper=%d "
+              "mosum=%d msum=%d\n",
+              mprev, mnext, mksum, mupper, mosum, msum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    qs[0] = "...";
+    qs[1] = "why did the ship fail";
+    qs[2] = "ship fail";
+    seen_m = 0;
+    for (si = 0; si < 3; si++) {
+      ms[si] = ng_motive_label_margin(qs[si], path);
+      if (ms[si] >= 0) seen_m++;
+    }
+    top_m = -1;
+    least_m = -1;
+    for (si = 0; si < 3; si++) {
+      if (ms[si] < 0) continue;
+      if (top_m < 0 || ms[si] > top_m) top_m = ms[si];
+      if (least_m < 0 || ms[si] < least_m) least_m = ms[si];
+    }
+    below_m = -1;
+    sum_below = 0;
+    for (si = 0; si < 3; si++) {
+      int earlier = 0;
+      int sj;
+      if (ms[si] < 0 || top_m < 0 || ms[si] >= top_m) continue;
+      for (sj = 0; sj < si; sj++)
+        if (ms[sj] == ms[si]) earlier = 1;
+      if (!earlier) sum_below += ms[si];
+      if (ms[si] > below_m) below_m = ms[si];
+    }
+    mprev = ng_motive_margin_prev(path);
+    mnext = ng_motive_margin_next(path);
+    mmax = ng_motive_margin_max(path);
+    mksum = ng_motive_margin_ksum(path);
+    mmin = ng_motive_margin_min(path);
+    munder = ng_motive_margin_under(path);
+    mmid = ng_motive_margin_mid(path);
+    hprev = ng_motive_ham_prev(path);
+    if (!(seen_m == 3 && below_m == 2 && sum_below == below_m && mprev == below_m &&
+          mprev == 2 && mnext == 2 && mmax == 132 && mksum == 134 && mmin == 0 &&
+          munder == 2 && mmid == 1 && hprev == 18 && mprev == mnext &&
+          mprev != mmax && mprev != mksum && mprev != mmin && mprev == munder &&
+          mprev != mmid && mprev != hprev && top_m > least_m &&
+          mprev != top_m - least_m && ms[0] != ms[1] && ms[1] != ms[2] &&
+          ms[0] != ms[2])) {
+      fprintf(stderr,
+              "FAIL mprev span mprev=%d below=%d sum_below=%d mnext=%d mmax=%d "
+              "mksum=%d mmin=%d under=%d mid=%d hprev=%d seen=%d margins=%d,%d,%d\n",
+              mprev, below_m, sum_below, mnext, mmax, mksum, mmin, munder, mmid,
+              hprev, seen_m, ms[0], ms[1], ms[2]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mprev sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mprev sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mprev sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    mprev = ng_motive_margin_prev(path);
+    mksum = ng_motive_margin_ksum(path);
+    msum = ng_motive_margin_sum(path);
+    hprev = ng_motive_ham_prev(path);
+    if (learned != 0 || marked != 1 || mprev != -1 || mksum != 65 || msum != 65 ||
+        hprev != -1 || mprev == mksum || mprev == msum || mprev != hprev) {
+      fprintf(stderr,
+              "FAIL mprev sealed counts learn=%d label=%d mprev=%d mksum=%d "
+              "msum=%d hprev=%d\n",
+              learned, marked, mprev, mksum, msum, hprev);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "mprev leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "mprev leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
