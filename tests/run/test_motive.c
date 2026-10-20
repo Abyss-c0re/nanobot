@@ -7407,6 +7407,595 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-mnext.pairs";
+    const char *dirp = "/tmp/nb-motive-mnext.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *qs[3];
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, margin, counted, learned, marked, greatest, dots_m, top, sum, least;
+    int under, low, nxt;
+    int ms[3];
+    int si, seen_m, best_m, least_m, expect_u, least_n, mid_n, kept, expect_n;
+    int span;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_margin_next(NULL) == -1, "a null mnext path returns -1");
+    expect(ng_motive_margin_next("") == -1, "an empty mnext path returns -1");
+    memset(longp, 'm', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long mnext path is 512 bytes");
+    expect(ng_motive_margin_next(longp) == -1,
+           "an mnext path of 512 bytes returns -1");
+    expect(ng_motive_margin_next("/tmp/nb-motive-mnext-missing") == -1,
+           "a missing mnext file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "mnext directory creates");
+    expect(ng_motive_margin_next(dirp) == -1,
+           "a non-regular mnext path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext empty file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_next(path) == -1,
+           "an mnext file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_next(path) == -1,
+           "an mnext query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin(qbuf, path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin < 0 || counted != (margin > 0 ? 1 : 0) || greatest != margin ||
+        top != 1 || sum != margin || least != margin || under != 0 ||
+        low != 1 || nxt != -1 || nxt == greatest) {
+      fprintf(stderr,
+              "FAIL mnext bounded margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_next(path) == -1,
+           "an mnext catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin < 0 || counted != (margin > 0 ? 1 : 0) || greatest != margin ||
+        top != 1 || sum != margin || least != margin || under != 0 ||
+        low != 1 || nxt != -1) {
+      fprintf(stderr,
+              "FAIL mnext catalog margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_margin_next(path) == -1,
+           "an mnext pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext overlong line file opens");
+    if (pf) {
+      fprintf(pf, "%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1 ||
+        sum != 65 || least != 65 || under != 0 || low != 1 || nxt != -1) {
+      fprintf(stderr,
+              "FAIL mnext skip margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1 ||
+        sum != 65 || least != 65 || under != 0 || low != 1 || nxt != -1 ||
+        nxt == greatest || sum != greatest || least != greatest) {
+      fprintf(stderr,
+              "FAIL mnext ship margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-mnext-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin != 65 || counted != 1 || greatest != 65 || top != 1 ||
+        sum != 65 || least != 65 || under != 0 || low != 1 || nxt != -1) {
+      fprintf(stderr,
+              "FAIL mnext env margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    margin = ng_motive_label_margin(law, path);
+    if (margin <= 0) {
+      fprintf(stderr, "FAIL mnext law margin %d\n", margin);
+      g_fail++;
+    }
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mnext law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "mnext leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "mnext leaves ship fail on the pair line");
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (greatest != 65 || top != 1 || sum != 65 || least != 65 || under != 0 ||
+        low != 1 || nxt != -1 || nxt == greatest) {
+      fprintf(stderr,
+              "FAIL mnext ship stays max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0)) {
+      fprintf(stderr,
+              "FAIL mnext audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin < 0 || (margin > 0 && counted != 1) ||
+        (margin == 0 && counted != 0) || greatest != margin || top != 1 ||
+        sum != margin || least != margin || under != 0 || low != 1 ||
+        nxt != -1) {
+      fprintf(stderr,
+              "FAIL mnext audit margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "mnext cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "mnext pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "mnext cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    nxt = ng_motive_margin_next(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "mnext does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "mnext does not write the learn cache");
+    margin = ng_motive_label_margin("why did the ship fail", path);
+    if (counted < 0 || margin < 0 || greatest != margin || nxt != -1) {
+      fprintf(stderr, "FAIL mnext probe hits=%d margin=%d max=%d next=%d\n",
+              counted, margin, greatest, nxt);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mnext trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin < 0 || (margin > 0 && counted != 1) ||
+        (margin == 0 && counted != 0) || greatest != margin || top != 1 ||
+        sum != margin || least != margin || under != 0 || low != 1 ||
+        nxt != -1) {
+      fprintf(stderr,
+              "FAIL mnext trail margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin != 0 || counted != 0 || greatest != 0 || top != 1 || sum != 0 ||
+        least != 0 || under != 0 || low != 1 || nxt != -1) {
+      fprintf(stderr,
+              "FAIL mnext dots margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext two file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    dots_m = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    kept = (dots_m >= 0 ? 1 : 0) + (margin >= 0 ? 1 : 0);
+    if (dots_m != 0 || margin < 0 || least != 0 || sum != margin ||
+        greatest != (margin > dots_m ? margin : dots_m) || kept != 2 ||
+        (margin > 0 && (nxt != margin || low != 1 || under != 1 || top != 1 ||
+                        counted != 1 || nxt == least || nxt == kept ||
+                        (margin != (kept - low) && nxt == (kept - low)) ||
+                        (margin != (kept - top) && nxt == (kept - top)))) ||
+        (margin == 0 && (nxt != -1 || low != 2 || under != 0 || top != 2 ||
+                         counted != 0))) {
+      fprintf(stderr,
+              "FAIL mnext two ship=%d dots=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d kept=%d\n",
+              margin, dots_m, counted, greatest, top, sum, least, under, low, nxt,
+              kept);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext two-zero file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin != 0 || counted != 0 || greatest != 0 || top != 2 || sum != 0 ||
+        least != 0 || under != 0 || low != 2 || nxt != -1) {
+      fprintf(stderr,
+              "FAIL mnext two-zero margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (margin < 0 || greatest != margin || least != margin || top != 2 ||
+        counted != (margin > 0 ? 2 : 0) || sum != margin + margin || under != 0 ||
+        low != 2 || nxt != -1 || (low == 2 && nxt != -1) ||
+        (greatest == margin && nxt == greatest)) {
+      fprintf(stderr,
+              "FAIL mnext two-ship margin=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext two-dots ship file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    margin = ng_motive_label_margin("ship fail", path);
+    dots_m = ng_motive_label_margin("...", path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (dots_m != 0 || margin < 0 || least != 0 ||
+        (margin > 0 && (nxt != margin || low != 2 || under != 2 || top != 1 ||
+                        sum != margin || greatest != margin || counted != 1 ||
+                        nxt == least)) ||
+        (margin == 0 && (nxt != -1 || low != 3 || under != 0 || top != 3))) {
+      fprintf(stderr,
+              "FAIL mnext below ship=%d dots=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              margin, dots_m, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext spread file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    qs[0] = "...";
+    qs[1] = "why did the ship fail";
+    qs[2] = "ship fail";
+    seen_m = 0;
+    best_m = -1;
+    least_m = 0;
+    expect_u = 0;
+    least_n = 0;
+    mid_n = 0;
+    expect_n = -1;
+    for (si = 0; si < 3; si++) {
+      ms[si] = ng_motive_label_margin(qs[si], path);
+      if (ms[si] < 0) continue;
+      if (!seen_m || ms[si] < least_m) least_m = ms[si];
+      if (ms[si] > best_m) best_m = ms[si];
+      seen_m++;
+    }
+    for (si = 0; si < 3; si++) {
+      if (ms[si] < 0) continue;
+      if (ms[si] < best_m) expect_u++;
+      if (ms[si] == least_m) least_n++;
+      if (ms[si] > least_m && ms[si] < best_m) mid_n++;
+      if (ms[si] > least_m && (expect_n < 0 || ms[si] < expect_n))
+        expect_n = ms[si];
+    }
+    under = ng_motive_margin_under(path);
+    least = ng_motive_margin_min(path);
+    greatest = ng_motive_margin_max(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    span = (seen_m > 0 && best_m >= least_m) ? (best_m - least_m) : -1;
+    if ((seen_m == 0 && (under != -1 || low != -1 || nxt != -1)) ||
+        (seen_m > 0 && (under != expect_u || low != least_n || nxt != expect_n)) ||
+        (seen_m > 0 && (least != least_m || greatest != best_m)) ||
+        (seen_m > 0 && least_m == best_m && nxt != -1) ||
+        (expect_n >= 0 && span != expect_n && nxt == span) ||
+        (expect_n >= 0 && best_m > expect_n && nxt == best_m) ||
+        (mid_n > 0 && nxt == best_m)) {
+      fprintf(stderr,
+              "FAIL mnext spread next=%d expect=%d low=%d least_n=%d under=%d expect_u=%d min=%d least=%d max=%d best=%d mid=%d span=%d margins=%d,%d,%d\n",
+              nxt, expect_n, low, least_n, under, expect_u, least, least_m,
+              greatest, best_m, mid_n, span, ms[0], ms[1], ms[2]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "mnext sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mnext sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL mnext sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    counted = ng_motive_margin_hits(path);
+    greatest = ng_motive_margin_max(path);
+    top = ng_motive_margin_top(path);
+    sum = ng_motive_margin_sum(path);
+    least = ng_motive_margin_min(path);
+    under = ng_motive_margin_under(path);
+    low = ng_motive_margin_low(path);
+    nxt = ng_motive_margin_next(path);
+    if (learned != 0 || marked != 1 || counted != 1 || greatest != 65 ||
+        top != 1 || sum != 65 || least != 65 || under != 0 || low != 1 ||
+        nxt != -1 || nxt == greatest || sum != greatest || least != greatest) {
+      fprintf(stderr,
+              "FAIL mnext sealed counts learn=%d label=%d hits=%d max=%d top=%d sum=%d min=%d under=%d low=%d next=%d\n",
+              learned, marked, counted, greatest, top, sum, least, under, low, nxt);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "mnext leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "mnext leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

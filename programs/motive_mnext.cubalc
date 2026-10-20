@@ -1,0 +1,17 @@
+// Least labeled margin strictly above the smallest.
+// No pair returns nothing. Equal margins return nothing.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mnext ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mnext rank
+
+IMPULSE mnext 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mnext" UNITY DECIDE ENERGY

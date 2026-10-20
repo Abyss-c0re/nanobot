@@ -136,6 +136,16 @@ int ng_motive_margin_under(const char *path);
  * valid pair returns -1. Does not read the environment or write the
  * learn cache. */
 int ng_motive_margin_low(const char *path);
+/* Least labeled margin strictly greater than the smallest margin
+ * on this path. A return of -1 is ignored. Every call at -1
+ * returns -1. Every kept pair at the same margin returns -1.
+ * A margin of 0 is the smallest when it is present, and the result
+ * is then the least margin strictly above 0. When no kept margin
+ * is strictly above the smallest, the result is -1. Null, empty,
+ * a path of 512 bytes or more, a missing file, a non-regular file,
+ * or no valid pair returns -1. Does not read the environment or
+ * write the learn cache. */
+int ng_motive_margin_next(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

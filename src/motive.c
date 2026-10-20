@@ -1207,6 +1207,68 @@ int ng_motive_margin_low(const char *path) {
   return low;
 }
 
+/* Same pairs read as the margin. Returns the least
+ * ng_motive_label_margin that is strictly greater than the smallest
+ * margin on this path. A return of -1 is ignored. Every call at -1
+ * returns -1. Every kept pair at the same margin returns -1. A
+ * margin of 0 is the smallest when it is present, and the result is
+ * then the least margin strictly above 0. When no kept margin is
+ * strictly above the smallest, the result is -1. Does not read the
+ * environment and does not write the learn cache. */
+int ng_motive_margin_next(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char line[320];
+  int got[32];
+  int n = 0;
+  int budget = 16384;
+  int i, seen, least, nxt;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= 80) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  seen = 0;
+  least = 0;
+  for (i = 0; i < n; i++) {
+    int margin = ng_motive_label_margin(texts_b[i], path);
+    if (margin < 0) continue;
+    got[seen] = margin;
+    if (!seen || margin < least) least = margin;
+    seen++;
+  }
+  if (seen == 0) return -1;
+  nxt = -1;
+  for (i = 0; i < seen; i++) {
+    if (got[i] > least && (nxt < 0 || got[i] < nxt)) nxt = got[i];
+  }
+  return nxt;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
