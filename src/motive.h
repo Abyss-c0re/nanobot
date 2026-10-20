@@ -68,6 +68,12 @@ int ng_motive_learn_hits(const char *path);
  * exact catalog pair returns 0. Same pairs read as the fit. Does not read
  * the environment, write the learn cache, or allocate. */
 int ng_motive_label_lex(const char *query, const char *path, const char *concept);
+/* How many pairs the labeled hybrid score names as their preferred
+ * catalog line at the fitted weight. The label count is added on this
+ * call. Null, empty, a path of 512 bytes or more, a missing file, a
+ * non-regular file, or no valid pair returns -1. Zero is a real count.
+ * Does not read the environment or write the learn cache. */
+int ng_motive_label_hits(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

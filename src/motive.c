@@ -581,6 +581,87 @@ static int same_tokens(const char *norm, const char *concept) {
   return *p == 0 && *c == 0;
 }
 
+/* Same pairs read as the fit. Each pair is scored at the fitted weight
+ * with the label count added to every concept. rank_w is not used for
+ * that score, so the fitted weight still includes the label. An empty
+ * norm names the peer-prompt concept. Does not read the environment
+ * and does not write the learn cache. */
+int ng_motive_label_hits(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char prefs_b[32][80];
+  const char *texts[32];
+  const char *prefs[32];
+  char line[320];
+  int n = 0;
+  int budget = 16384;
+  int w, i, hits;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= sizeof prefs_b[0]) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    memcpy(prefs_b[n], tab, plen_pref + 1);
+    texts[n] = texts_b[n];
+    prefs[n] = prefs_b[n];
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  w = ng_motive_learn_lex_w(texts, prefs, n);
+  hits = 0;
+  for (i = 0; i < n; i++) {
+    char norm[NORM_CAP];
+    uint64_t qh;
+    int c, best = 0, best_score = -1;
+    if (!texts[i] || !prefs[i] || !prefs[i][0]) continue;
+    norm_text(texts[i], norm, sizeof norm);
+    if (!norm[0]) {
+      int peer = 0;
+      for (c = 0; c < NG_MOTIVE_CONCEPTS; c++) {
+        if (!strcmp(kConcept[c], "prompt a peer to move")) peer = c;
+      }
+      if (strcmp(kConcept[peer], prefs[i]) == 0) hits++;
+      continue;
+    }
+    qh = simhash_text(norm);
+    for (c = 0; c < NG_MOTIVE_CONCEPTS; c++) {
+      int lex = lexical_hits(norm, kConcept[c]);
+      int h = ham64(qh, simhash_text(kConcept[c]));
+      int score;
+      lex += ng_motive_label_lex(texts[i], path, kConcept[c]);
+      if (same_tokens(norm, kConcept[c])) h = 0;
+      score = lex * w + (64 - h);
+      if (score > best_score) {
+        best = c;
+        best_score = score;
+      }
+    }
+    if (strcmp(kConcept[best], prefs[i]) == 0) hits++;
+  }
+  return hits;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;

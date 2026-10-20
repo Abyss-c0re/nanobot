@@ -1,0 +1,17 @@
+// Labeled hybrid score counts pairs that name the preferred catalog line.
+// No pair returns nothing. Zero is a real count.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE marked ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG marked rank
+
+IMPULSE marked 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "marked" UNITY DECIDE ENERGY

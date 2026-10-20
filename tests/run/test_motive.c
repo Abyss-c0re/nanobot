@@ -3566,6 +3566,315 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-marked.pairs";
+    const char *dirp = "/tmp/nb-motive-marked.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *lawln = "read the law and prove\tread the law and prove\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive before, after, ranked;
+    struct stat st;
+    struct timespec ts[2];
+    const char *one_t[1];
+    const char *one_p[1];
+    int i, learned, marked;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank(law, &before);
+    expect(ng_motive_label_hits(NULL) == -1, "a null marked path counts nothing");
+    expect(ng_motive_label_hits("") == -1, "an empty marked path counts nothing");
+    memset(longp, 'p', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long marked path is 512 bytes");
+    expect(ng_motive_label_hits(longp) == -1,
+           "a marked path of 512 bytes counts nothing");
+    expect(ng_motive_label_hits("/tmp/nb-motive-marked-missing") == -1,
+           "a missing marked file counts nothing");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "marked directory creates");
+    expect(ng_motive_label_hits(dirp) == -1,
+           "a non-regular marked path counts nothing");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked empty file opens");
+    if (pf) {
+      fputs("# note\n\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == -1,
+           "a marked file with no pair counts nothing");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, audit_c);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == -1,
+           "a marked query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\tnot a catalog line\n", qbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == 0,
+           "a marked query under 192 bytes can count zero");
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "why did the ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == -1,
+           "a marked catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "why did the ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == 0,
+           "a marked catalog line under 80 bytes can count zero");
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == -1,
+           "a marked pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked overlong line file opens");
+    if (pf) {
+      fprintf(pf, "%s\n", big);
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 1 || marked != 1) {
+      fprintf(stderr, "FAIL marked skip learn=%d label=%d\n", learned, marked);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 0 || marked != 1) {
+      fprintf(stderr, "FAIL marked ship learn=%d label=%d\n", learned, marked);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-marked-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    expect(ng_motive_label_hits(path) == 1,
+           "the marked count does not read the environment");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank("why did the ship fail", &after);
+    expect(after.lex_w == 64 && strcmp(after.concept, pair) == 0,
+           "marked does not install a learned weight");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    one_t[0] = "why did the ship fail";
+    one_p[0] = audit_c;
+    if (learned != 1 || marked != 1 ||
+        ng_motive_learn_lex_w(one_t, one_p, 1) != 0) {
+      fprintf(stderr, "FAIL marked audit learn=%d label=%d fit=%d\n", learned,
+              marked, ng_motive_learn_lex_w(one_t, one_p, 1));
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked law file opens");
+    if (pf) {
+      fputs(lawln, pf);
+      fclose(pf);
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 1 || marked != 1) {
+      fprintf(stderr, "FAIL marked law learn=%d label=%d\n", learned, marked);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 0 || marked != 0) {
+      fprintf(stderr, "FAIL marked trail learn=%d label=%d\n", learned, marked);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked empty-norm file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == 1,
+           "an empty norm names the peer-prompt concept");
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked empty-norm other file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", keep);
+      fclose(pf);
+    }
+    expect(ng_motive_label_hits(path) == 0,
+           "an empty norm does not name another concept");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked cap file opens");
+    if (pf) {
+      for (i = 0; i < 32; i++) fputs("nope\tnot a catalog line\n", pf);
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 0 || marked != 0) {
+      fprintf(stderr, "FAIL marked past learn=%d label=%d\n", learned, marked);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked within-cap file opens");
+    if (pf) {
+      for (i = 0; i < 31; i++) fputs("nope\tnot a catalog line\n", pf);
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    if (learned != 1 || marked != 1) {
+      fprintf(stderr, "FAIL marked 32 learn=%d label=%d\n", learned, marked);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked cache file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    expect(strlen(audit) == strlen(padded), "marked cache probe stays the same size");
+    expect(ng_motive_label_hits(path) == 1, "the audit pair is marked once");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "marked pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "marked cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("why did the ship fail", &after);
+    expect(after.lex_w == 64 && strcmp(after.concept, pair) == 0,
+           "marked does not write the learn cache");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    ng_motive_rank("why did the ship fail", &after);
+    expect(after.lex_w == 64 && strcmp(after.concept, pair) == 0,
+           "marked leaves why did the ship fail on the pair line");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "marked sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL marked rank concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL marked law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    expect(before.rank == 256 && before.lexical == 3 && before.hamming == 0 &&
+               before.lex_w == ranked.lex_w,
+           "marked leaves the law rank");
+    ng_motive_rank("you lied", &after);
+    expect(after.plate == NG_PLATE_CONFESS && after.lexical == 0,
+           "marked leaves you lied");
+    ng_motive_rank("", &after);
+    expect(after.rank == 0, "marked leaves an empty query at rank 0");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
