@@ -1,0 +1,17 @@
+// Sum of the winning labeled hammings among the kept pairs.
+// No pair returns nothing. A winning hamming of zero adds nothing.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hsum ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG hsum rank
+
+IMPULSE hsum 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hsum" UNITY DECIDE ENERGY
