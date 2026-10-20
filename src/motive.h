@@ -332,6 +332,16 @@ int ng_motive_margin_prev(const char *path);
  * valid pair returns -1. Does not read the environment or write the
  * learn cache. */
 int ng_motive_margin_high(const char *path);
+/* Greatest winning labeled hamming strictly greater than the smallest
+ * winning labeled hamming among the kept pairs on this path. A return
+ * of -1 from the labeled rank is ignored. Every call at -1 returns -1.
+ * Every kept pair at the same hamming returns -1, including 0. Zero is
+ * a real hamming. When that greatest-above value is 0, the result is
+ * 0. When no kept hamming is strictly above the smallest, the result
+ * is -1. Null, empty, a path of 512 bytes or more, a missing file, a
+ * non-regular file, or no valid pair returns -1. Does not read the
+ * environment or write the learn cache. */
+int ng_motive_ham_high(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
