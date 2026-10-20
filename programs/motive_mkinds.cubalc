@@ -1,0 +1,17 @@
+// Distinct labeled margins on the kept pairs.
+// No pair returns nothing. One margin returns one.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE mkinds ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG mkinds rank
+
+IMPULSE mkinds 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "mkinds" UNITY DECIDE ENERGY

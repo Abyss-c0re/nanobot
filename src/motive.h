@@ -146,6 +146,14 @@ int ng_motive_margin_low(const char *path);
  * or no valid pair returns -1. Does not read the environment or
  * write the learn cache. */
 int ng_motive_margin_next(const char *path);
+/* How many distinct labeled margins the kept pairs have on this path.
+ * A return of -1 is ignored. Every call at -1 returns -1. Every kept
+ * pair at the same margin returns 1. A margin of 0 is one distinct
+ * margin when it is present. Two different margins return 2. Null,
+ * empty, a path of 512 bytes or more, a missing file, a non-regular
+ * file, or no valid pair returns -1. Does not read the environment
+ * or write the learn cache. */
+int ng_motive_margin_kinds(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
