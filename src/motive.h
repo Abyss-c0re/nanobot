@@ -490,6 +490,22 @@ int ng_motive_ham_over(const char *path);
  * non-regular file, or no valid pair returns -1. Does not read the
  * environment or write the learn cache. */
 int ng_motive_ham_ones(const char *path);
+/* Count of kept pairs whose winning labeled hamming appears on at
+ * least two kept pairs of this path. A return of -1 from the labeled
+ * rank is ignored. Every call at -1 returns -1. A hamming that appears
+ * once adds nothing, including a unique 0. A hamming that appears
+ * twice or more counts once for every kept pair that has it, including
+ * a repeated 0. When no kept pair has a hamming that appears at least
+ * twice, the result is -1, not 0. A single kept pair returns -1,
+ * including when that hamming is 0. Two or more kept pairs that all
+ * share one hamming return the number of those pairs. A uniform file
+ * of two or more pairs returns that pair count, including when every
+ * winning hamming is 0. A file where every winning hamming appears
+ * once returns -1. Zero is a real hamming. An empty shared count is
+ * -1, not 0. Null, empty, a path of 512 bytes or more, a missing file,
+ * a non-regular file, or no valid pair returns -1. Does not read the
+ * environment or write the learn cache. */
+int ng_motive_ham_many(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

@@ -1,0 +1,17 @@
+// Count of kept pairs whose winning labeled hamming appears at least twice.
+// When none are shared, that count is not a kept one.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hmany ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hmany rank
+
+IMPULSE hmany 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hmany" UNITY DECIDE ENERGY
