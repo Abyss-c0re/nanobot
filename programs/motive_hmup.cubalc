@@ -1,0 +1,17 @@
+// Upper median of the winning labeled hammings.
+// Even counts keep the larger of the two central values.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hmup ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hmup rank
+
+IMPULSE hmup 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hmup" UNITY DECIDE ENERGY
