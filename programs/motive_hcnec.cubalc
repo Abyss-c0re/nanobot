@@ -1,0 +1,17 @@
+// Count of kept winning labeled hammings equal to neither central value.
+// An empty complement returns -1, not 0.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hcnec ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hcnec rank
+
+IMPULSE hcnec 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hcnec" UNITY DECIDE ENERGY
