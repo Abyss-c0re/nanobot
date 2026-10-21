@@ -403,6 +403,21 @@ int ng_motive_ham_esum(const char *path);
  * or more, a missing file, a non-regular file, or no valid pair
  * returns -1. Does not read the environment or write the learn cache. */
 int ng_motive_margin_esum(const char *path);
+/* Sum of the labeled margins strictly greater than the least kept
+ * margin and strictly less than the greatest kept margin on this
+ * path. A return of -1 is ignored. Every call at -1 returns -1. A
+ * margin equal to the least adds nothing. A margin equal to the
+ * greatest adds nothing. A repeated interior margin is added again.
+ * When no kept margin is strictly inside the extremes, the result
+ * is -1. A uniform file returns -1, including when every labeled
+ * margin is 0. A file with exactly two distinct margins returns -1.
+ * A single kept pair returns -1. Zero is a real margin. Zero is
+ * never strictly greater than the least nonnegative margin. When
+ * interior margins exist and their sum is 0, the result is 0. Null,
+ * empty, a path of 512 bytes or more, a missing file, a non-regular
+ * file, or no valid pair returns -1. Does not read the environment
+ * or write the learn cache. */
+int ng_motive_margin_xsum(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
