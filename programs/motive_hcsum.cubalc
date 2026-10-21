@@ -1,0 +1,17 @@
+// Sum of the lower and upper central winning labeled hammings.
+// An odd count adds that central value twice.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hcsum ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hcsum rank
+
+IMPULSE hcsum 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hcsum" UNITY DECIDE ENERGY

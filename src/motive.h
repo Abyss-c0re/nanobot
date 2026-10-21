@@ -549,6 +549,22 @@ int ng_motive_ham_med(const char *path);
  * a missing file, a non-regular file, or no valid pair returns -1.
  * Does not read the environment or write the learn cache. */
 int ng_motive_ham_mup(const char *path);
+/* Sum of the lower and upper central winning labeled hammings on the
+ * kept pairs of this path. A return of -1 from the labeled rank is
+ * ignored. Every call at -1 returns -1. A negative hamming is ignored.
+ * When no nonnegative hamming is kept, the result is -1. Kept hammings,
+ * including duplicates and 0, are sorted ascending. The lower index is
+ * (count - 1) / 2. The upper index is count / 2. The result is the sum
+ * of those two values. When the count is odd, both indexes are the same
+ * and that central value is added twice, including a repeated 0. When
+ * the count is even, both central values are added, including 0. A
+ * single kept pair returns that hamming added twice, including 0. A
+ * uniform file returns that hamming added twice, including 0. Zero is a
+ * real hamming. The result is a sum of kept hammings, not a pair count.
+ * Null, empty, a path of 512 bytes or more, a missing file, a
+ * non-regular file, or no valid pair returns -1. Does not read the
+ * environment or write the learn cache. */
+int ng_motive_ham_csum(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
