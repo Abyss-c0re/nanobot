@@ -1,0 +1,17 @@
+// Count of distinct winning labeled hammings that appear at least twice.
+// When none are shared, that count is not a kept one.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hkmany ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hkmany rank
+
+IMPULSE hkmany 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hkmany" UNITY DECIDE ENERGY

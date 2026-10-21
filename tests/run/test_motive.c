@@ -27064,6 +27064,585 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-hkmany.pairs";
+    const char *dirp = "/tmp/nb-motive-hkmany.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *qs[3];
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, hkmany, hmany, hones, hover, hunder, hmid, hesum, hsum, hrsum, hksum;
+    int hmode;
+    int learned, marked;
+    int hs[3], si, seen_h, least_h, greatest_h, n_once, n_least, n_great;
+    int distinct_n, kept;
+    int seen_vals[3], nv;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_ham_kmany(NULL) == -1, "a null hkmany path returns -1");
+    expect(ng_motive_ham_many(NULL) == -1 && ng_motive_ham_ones(NULL) == -1,
+           "a null shared pair count is not a shared kind count");
+    expect(ng_motive_ham_kmany("") == -1, "an empty hkmany path returns -1");
+    memset(longp, 'k', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long hkmany path is 512 bytes");
+    expect(ng_motive_ham_kmany(longp) == -1, "a hkmany path of 512 bytes returns -1");
+    expect(ng_motive_ham_kmany("/tmp/nb-motive-hkmany-missing") == -1,
+           "a missing hkmany file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "hkmany directory creates");
+    expect(ng_motive_ham_kmany(dirp) == -1, "a non-regular hkmany path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_kmany(path) == -1, "a hkmany file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_kmany(path) == -1, "a hkmany query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank(qbuf, path, &m);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hesum = ng_motive_ham_esum(path);
+    if (rc != 0 || m.hamming < 0 || hkmany != -1 || hmany != -1 || hones != 1 ||
+        hesum != m.hamming + m.hamming || hkmany == hones || hkmany != hmany ||
+        hkmany == 0) {
+      fprintf(stderr,
+              "FAIL hkmany bounded rc=%d ham=%d hkmany=%d hmany=%d hones=%d hesum=%d\n",
+              rc, m.hamming, hkmany, hmany, hones, hesum);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_kmany(path) == -1,
+           "a hkmany catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hesum = ng_motive_ham_esum(path);
+    if (rc != 0 || m.hamming < 0 || hkmany != -1 || hmany != -1 || hones != 1 ||
+        hesum != m.hamming + m.hamming || hkmany == hones || hkmany != hmany) {
+      fprintf(stderr,
+              "FAIL hkmany catalog rc=%d ham=%d hkmany=%d hmany=%d hones=%d hesum=%d\n",
+              rc, m.hamming, hkmany, hmany, hones, hesum);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_kmany(path) == -1,
+           "a hkmany pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(rc == 0 && m.hamming == 22 && hkmany == -1 && hmany == -1 &&
+          hones == 1 && hesum == 44 && hsum == 22 && hkmany == hmany &&
+          hkmany != hones && hkmany != hsum && hkmany != hesum && hkmany != 0)) {
+      fprintf(stderr,
+              "FAIL hkmany skip rc=%d ham=%d hkmany=%d hmany=%d hones=%d "
+              "hesum=%d hsum=%d\n",
+              rc, m.hamming, hkmany, hmany, hones, hesum, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    hrsum = ng_motive_ham_rsum(path);
+    n_great = 1;
+    kept = 1;
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && hkmany == -1 &&
+          hmany == -1 && hones == 1 && hesum == 44 && hsum == 22 &&
+          hrsum == -1 && hkmany == hmany && hkmany == hrsum &&
+          hkmany != hones && hkmany != hsum && hkmany != hesum &&
+          hkmany != n_great && hkmany != kept && (kept - hones) == 0 &&
+          hkmany != (kept - hones))) {
+      fprintf(stderr,
+              "FAIL hkmany ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hkmany=%d hmany=%d hones=%d hesum=%d hsum=%d hrsum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hkmany,
+              hmany, hones, hesum, hsum, hrsum);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-hkmany-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    hkmany = ng_motive_ham_kmany(path);
+    hesum = ng_motive_ham_esum(path);
+    if (hkmany != -1 || hesum != 44) {
+      fprintf(stderr, "FAIL hkmany env hkmany=%d hesum=%d\n", hkmany, hesum);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hkmany law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "hkmany leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hkmany leaves ship fail on the pair line");
+    hkmany = ng_motive_ham_kmany(path);
+    if (hkmany != -1) {
+      fprintf(stderr, "FAIL hkmany ship stays hkmany=%d\n", hkmany);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hesum = ng_motive_ham_esum(path);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && hkmany == -1 &&
+          hmany == -1 && hones == 1 && hesum == 36 && hkmany == hmany &&
+          hkmany != hones && hkmany != hesum && m.lexical != rw.lexical &&
+          m.lexical == rw.lexical + 4)) {
+      fprintf(stderr,
+              "FAIL hkmany audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hkmany=%d hmany=%d hones=%d hesum=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hkmany,
+              hmany, hones, hesum, rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "hkmany cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "hkmany pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "hkmany cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    hkmany = ng_motive_ham_kmany(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "hkmany does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "hkmany does not write the learn cache");
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (rc != 0 || hkmany != -1) {
+      fprintf(stderr, "FAIL hkmany probe rc=%d hkmany=%d\n", rc, hkmany);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hmode = ng_motive_ham_mode(path);
+    hones = ng_motive_ham_ones(path);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && hkmany == -1 &&
+          hmany == -1 && hmode == 23 && hones == 1 && hkmany == hmany &&
+          hkmany != hmode && hkmany != hones)) {
+      fprintf(stderr,
+              "FAIL hkmany trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hkmany=%d hmany=%d hmode=%d hones=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hkmany,
+              hmany, hmode, hones);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hesum = ng_motive_ham_esum(path);
+    if (!(rc == 0 && m.hamming == 0 && hkmany == -1 && hmany == -1 &&
+          hones == 1 && hesum == 0 && hkmany == hmany && hkmany != hones &&
+          hkmany != hesum)) {
+      fprintf(stderr,
+              "FAIL hkmany dots rc=%d ham=%d hkmany=%d hmany=%d hones=%d hesum=%d\n",
+              rc, m.hamming, hkmany, hmany, hones, hesum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hrsum = ng_motive_ham_rsum(path);
+    hksum = ng_motive_ham_ksum(path);
+    distinct_n = 1;
+    kept = 2;
+    if (!(hkmany == 1 && hmany == 2 && hones == -1 && hrsum == 0 &&
+          hksum == 0 && hkmany != hmany && hkmany != hones &&
+          hkmany != hrsum && hkmany != hksum && hkmany == distinct_n &&
+          hkmany != kept)) {
+      fprintf(stderr,
+              "FAIL hkmany two-dots hkmany=%d hmany=%d hones=%d hrsum=%d "
+              "hksum=%d distinct=%d kept=%d\n",
+              hkmany, hmany, hones, hrsum, hksum, distinct_n, kept);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hsum = ng_motive_ham_sum(path);
+    hrsum = ng_motive_ham_rsum(path);
+    hksum = ng_motive_ham_ksum(path);
+    hunder = ng_motive_ham_under(path);
+    hover = ng_motive_ham_over(path);
+    n_great = 2;
+    kept = 2;
+    distinct_n = 1;
+    if (!(hkmany == 1 && hmany == 2 && hones == -1 && hsum == 44 &&
+          hrsum == 44 && hksum == 22 && hunder == -1 && hover == -1 &&
+          hkmany != hmany && hkmany != hones && hkmany != hsum &&
+          hkmany != hrsum && hkmany != hksum && hkmany != hunder &&
+          hkmany != hover && hkmany == distinct_n && hkmany != kept &&
+          hkmany != n_great)) {
+      fprintf(stderr,
+              "FAIL hkmany two-ship hkmany=%d hmany=%d hones=%d hsum=%d "
+              "hrsum=%d hksum=%d hunder=%d hover=%d great=%d kept=%d "
+              "distinct=%d\n",
+              hkmany, hmany, hones, hsum, hrsum, hksum, hunder, hover, n_great,
+              kept, distinct_n);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hover = ng_motive_ham_over(path);
+    hunder = ng_motive_ham_under(path);
+    distinct_n = 2;
+    if (!(hkmany == -1 && hmany == -1 && hones == 2 && hover == 1 &&
+          hunder == 1 && hkmany == hmany && hkmany != hones &&
+          hkmany != hover && hkmany != hunder && hkmany != distinct_n)) {
+      fprintf(stderr,
+              "FAIL hkmany mixed hkmany=%d hmany=%d hones=%d hover=%d "
+              "hunder=%d distinct=%d\n",
+              hkmany, hmany, hones, hover, hunder, distinct_n);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hunder = ng_motive_ham_under(path);
+    hover = ng_motive_ham_over(path);
+    hrsum = ng_motive_ham_rsum(path);
+    n_least = 2;
+    kept = 3;
+    distinct_n = 2;
+    if (!(hkmany == 1 && hmany == 2 && hones == 1 && hunder == 2 &&
+          hover == 1 && hrsum == 0 && hkmany != hmany && hkmany == hones &&
+          hkmany == hover && hkmany != hunder && hkmany != hrsum &&
+          hkmany != kept && hkmany != distinct_n && hkmany != n_least)) {
+      fprintf(stderr,
+              "FAIL hkmany two-dots ship hkmany=%d hmany=%d hones=%d "
+              "hunder=%d hover=%d hrsum=%d least=%d kept=%d distinct=%d\n",
+              hkmany, hmany, hones, hunder, hover, hrsum, n_least, kept,
+              distinct_n);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hover = ng_motive_ham_over(path);
+    hunder = ng_motive_ham_under(path);
+    hrsum = ng_motive_ham_rsum(path);
+    distinct_n = 2;
+    if (!(hkmany == 1 && hmany == 2 && hones == 1 && hover == 2 &&
+          hunder == 1 && hrsum == 44 && hkmany != hmany && hkmany == hones &&
+          hkmany == hunder && hkmany != hover && hkmany != hrsum &&
+          hkmany != distinct_n)) {
+      fprintf(stderr,
+              "FAIL hkmany two-ship dots hkmany=%d hmany=%d hones=%d "
+              "hover=%d hunder=%d hrsum=%d distinct=%d\n",
+              hkmany, hmany, hones, hover, hunder, hrsum, distinct_n);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    qs[0] = "...";
+    qs[1] = "why did the ship fail";
+    qs[2] = "ship fail";
+    seen_h = 0;
+    least_h = 0;
+    greatest_h = 0;
+    for (si = 0; si < 3; si++) {
+      rc = ng_motive_label_rank(qs[si], path, &m);
+      hs[si] = (rc == 0) ? m.hamming : -1;
+      if (hs[si] >= 0) {
+        if (!seen_h || hs[si] < least_h) least_h = hs[si];
+        if (!seen_h || hs[si] > greatest_h) greatest_h = hs[si];
+        seen_h++;
+      }
+    }
+    n_once = 0;
+    n_least = 0;
+    n_great = 0;
+    nv = 0;
+    for (si = 0; si < 3; si++) {
+      int vi, known, ncount;
+      if (hs[si] < 0) continue;
+      if (hs[si] == least_h) n_least++;
+      if (hs[si] == greatest_h) n_great++;
+      ncount = 0;
+      for (vi = 0; vi < 3; vi++) {
+        if (hs[vi] == hs[si]) ncount++;
+      }
+      if (ncount == 1) n_once++;
+      known = 0;
+      for (vi = 0; vi < nv; vi++) {
+        if (seen_vals[vi] == hs[si]) known = 1;
+      }
+      if (!known && nv < 3) seen_vals[nv++] = hs[si];
+    }
+    kept = seen_h;
+    distinct_n = nv;
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hover = ng_motive_ham_over(path);
+    hunder = ng_motive_ham_under(path);
+    hmid = ng_motive_ham_mid(path);
+    hrsum = ng_motive_ham_rsum(path);
+    hksum = ng_motive_ham_ksum(path);
+    if (!(seen_h == 3 && n_once == 3 && n_least == 1 && n_great == 1 &&
+          distinct_n == 3 && kept == 3 && hkmany == -1 && hmany == -1 &&
+          hones == 3 && hover == 2 && hunder == 2 && hmid == 1 &&
+          hrsum == -1 && hksum == 40 && least_h == 0 && greatest_h == 22 &&
+          hkmany == hmany && hkmany == hrsum && hkmany != hones &&
+          hkmany != hover && hkmany != hunder && hkmany != hmid &&
+          hkmany != hksum && hkmany != kept && hkmany != distinct_n &&
+          hkmany != n_least && hkmany != n_great &&
+          hkmany != (kept - hones) && hs[0] != hs[1] && hs[1] != hs[2] &&
+          hs[0] != hs[2])) {
+      fprintf(stderr,
+              "FAIL hkmany span hkmany=%d hmany=%d hones=%d n_once=%d "
+              "n_least=%d n_great=%d distinct=%d kept=%d hover=%d hunder=%d "
+              "hmid=%d hrsum=%d hksum=%d least=%d greatest=%d hams=%d,%d,%d\n",
+              hkmany, hmany, hones, n_once, n_least, n_great, distinct_n, kept,
+              hover, hunder, hmid, hrsum, hksum, least_h, greatest_h, hs[0],
+              hs[1], hs[2]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hkmany sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hkmany sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hkmany weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "hkmany unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hkmany sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    hkmany = ng_motive_ham_kmany(path);
+    hmany = ng_motive_ham_many(path);
+    hones = ng_motive_ham_ones(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (learned != 0 || marked != 1 || hkmany != -1 || hmany != -1 ||
+        hones != 1 || hesum != 44 || hsum != 22 || hkmany == hones ||
+        hkmany != hmany || hkmany == hesum || hkmany == hsum) {
+      fprintf(stderr,
+              "FAIL hkmany sealed counts learn=%d label=%d hkmany=%d hmany=%d "
+              "hones=%d hesum=%d hsum=%d\n",
+              learned, marked, hkmany, hmany, hones, hesum, hsum);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "hkmany leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "hkmany leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
