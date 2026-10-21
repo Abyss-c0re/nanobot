@@ -1,0 +1,17 @@
+// Sum of the least and the greatest winning labeled hammings.
+// When they are the same value, that value is added twice.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hesum ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG hesum rank
+
+IMPULSE hesum 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hesum" UNITY DECIDE ENERGY
