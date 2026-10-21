@@ -25434,6 +25434,541 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-hover.pairs";
+    const char *dirp = "/tmp/nb-motive-hover.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *qs[3];
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, hover, hunder, hmid, hxsum, hesum, hsum, hnext, hasum, hrsum;
+    int hmode, mmid, xsum, munder, mlow;
+    int learned, marked;
+    int hs[3], si, seen_h, least_h, greatest_h, n_above, n_least, n_great;
+    int distinct_above, diff_least, kept;
+    int seen_vals[3], nv;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    expect(ng_motive_ham_over(NULL) == -1, "a null hover path returns -1");
+    expect(ng_motive_ham_under(NULL) == -1 && ng_motive_margin_under(NULL) == -1,
+           "a null under is not a hamming over");
+    expect(ng_motive_ham_over("") == -1, "an empty hover path returns -1");
+    memset(longp, 'o', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long hover path is 512 bytes");
+    expect(ng_motive_ham_over(longp) == -1, "a hover path of 512 bytes returns -1");
+    expect(ng_motive_ham_over("/tmp/nb-motive-hover-missing") == -1,
+           "a missing hover file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "hover directory creates");
+    expect(ng_motive_ham_over(dirp) == -1, "a non-regular hover path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_over(path) == -1, "a hover file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_over(path) == -1, "a hover query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank(qbuf, path, &m);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    munder = ng_motive_margin_under(path);
+    if (rc != 0 || m.hamming < 0 || hover != -1 || hesum != m.hamming + m.hamming ||
+        munder != 0 || hover == munder) {
+      fprintf(stderr,
+              "FAIL hover bounded rc=%d ham=%d hover=%d hesum=%d munder=%d\n",
+              rc, m.hamming, hover, hesum, munder);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_over(path) == -1,
+           "a hover catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    if (rc != 0 || m.hamming < 0 || hover != -1 || hesum != m.hamming + m.hamming) {
+      fprintf(stderr, "FAIL hover catalog rc=%d ham=%d hover=%d hesum=%d\n", rc,
+              m.hamming, hover, hesum);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_over(path) == -1,
+           "a hover pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    hmid = ng_motive_ham_mid(path);
+    hunder = ng_motive_ham_under(path);
+    munder = ng_motive_margin_under(path);
+    if (!(rc == 0 && m.hamming == 22 && hover == -1 && hesum == 44 && hsum == 22 &&
+          hmid == -1 && hunder == -1 && munder == 0 && hover != hesum &&
+          hover != hsum && hover == hmid && hover == hunder && hover != munder)) {
+      fprintf(stderr,
+              "FAIL hover skip rc=%d ham=%d hover=%d hesum=%d hsum=%d hmid=%d "
+              "hunder=%d munder=%d\n",
+              rc, m.hamming, hover, hesum, hsum, hmid, hunder, munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    hmid = ng_motive_ham_mid(path);
+    hunder = ng_motive_ham_under(path);
+    munder = ng_motive_margin_under(path);
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && hover == -1 &&
+          hesum == 44 && hsum == 22 && hmid == -1 && hunder == -1 && munder == 0 &&
+          hover != hesum && hover != hsum && hover == hmid && hover == hunder &&
+          hover != munder && hover != 1 && hover != 0)) {
+      fprintf(stderr,
+              "FAIL hover ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hover=%d hesum=%d hsum=%d hmid=%d hunder=%d munder=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hover, hesum,
+              hsum, hmid, hunder, munder);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-hover-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    if (hover != -1 || hesum != 44) {
+      fprintf(stderr, "FAIL hover env hover=%d hesum=%d\n", hover, hesum);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hover law rank rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "hover leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hover leaves ship fail on the pair line");
+    hover = ng_motive_ham_over(path);
+    if (hover != -1) {
+      fprintf(stderr, "FAIL hover ship stays hover=%d\n", hover);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    munder = ng_motive_margin_under(path);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && hover == -1 &&
+          hesum == 36 && munder == 0 && hover != hesum && hover != munder &&
+          m.lexical != rw.lexical && m.lexical == rw.lexical + 4)) {
+      fprintf(stderr,
+              "FAIL hover audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hover=%d hesum=%d munder=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hover, hesum,
+              munder, rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "hover cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "hover pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "hover cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    hover = ng_motive_ham_over(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "hover does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "hover does not write the learn cache");
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    if (rc != 0 || hover != -1) {
+      fprintf(stderr, "FAIL hover probe rc=%d hover=%d\n", rc, hover);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    hover = ng_motive_ham_over(path);
+    hmode = ng_motive_ham_mode(path);
+    munder = ng_motive_margin_under(path);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && hover == -1 &&
+          hmode == 23 && munder == 0 && hover != hmode && hover != munder)) {
+      fprintf(stderr,
+              "FAIL hover trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "hover=%d hmode=%d munder=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, hover, hmode,
+              munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover dots file opens");
+    if (pf) {
+      fprintf(pf, "...\t%s\n", peer);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    munder = ng_motive_margin_under(path);
+    if (!(rc == 0 && m.hamming == 0 && hover == -1 && hesum == 0 && munder == 0 &&
+          hover != hesum && hover != munder)) {
+      fprintf(stderr, "FAIL hover dots rc=%d ham=%d hover=%d hesum=%d munder=%d\n",
+              rc, m.hamming, hover, hesum, munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    hover = ng_motive_ham_over(path);
+    hrsum = ng_motive_ham_rsum(path);
+    mlow = ng_motive_margin_low(path);
+    munder = ng_motive_margin_under(path);
+    if (!(hover == -1 && hrsum == 0 && mlow == 2 && munder == 0 &&
+          hover != hrsum && hover != mlow && hover != munder)) {
+      fprintf(stderr, "FAIL hover two-dots hover=%d hrsum=%d mlow=%d munder=%d\n",
+              hover, hrsum, mlow, munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hover = ng_motive_ham_over(path);
+    hsum = ng_motive_ham_sum(path);
+    munder = ng_motive_margin_under(path);
+    mlow = ng_motive_margin_low(path);
+    if (!(hover == -1 && hsum == 44 && munder == 0 && mlow == 2 &&
+          hover != hsum && hover != munder && hover != mlow && hover != 2)) {
+      fprintf(stderr, "FAIL hover two-ship hover=%d hsum=%d munder=%d mlow=%d\n",
+              hover, hsum, munder, mlow);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hover = ng_motive_ham_over(path);
+    hmid = ng_motive_ham_mid(path);
+    hnext = ng_motive_ham_next(path);
+    hxsum = ng_motive_ham_xsum(path);
+    hunder = ng_motive_ham_under(path);
+    xsum = ng_motive_margin_xsum(path);
+    munder = ng_motive_margin_under(path);
+    if (!(hover == 1 && hmid == -1 && hnext == 22 && hxsum == -1 && hunder == 1 &&
+          xsum == -1 && munder == 1 && hover != hmid && hover != hnext &&
+          hover != hxsum && hover == hunder && hover != xsum && hover == munder)) {
+      fprintf(stderr,
+              "FAIL hover mixed hover=%d hmid=%d hnext=%d hxsum=%d hunder=%d "
+              "xsum=%d munder=%d\n",
+              hover, hmid, hnext, hxsum, hunder, xsum, munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    hover = ng_motive_ham_over(path);
+    hunder = ng_motive_ham_under(path);
+    hmid = ng_motive_ham_mid(path);
+    hesum = ng_motive_ham_esum(path);
+    hnext = ng_motive_ham_next(path);
+    munder = ng_motive_margin_under(path);
+    if (!(hover == 1 && hunder == 2 && hmid == -1 && hesum == 22 && hnext == 22 &&
+          munder == 2 && hover != hunder && hover != hmid && hover != hesum &&
+          hover != hnext && hover != munder)) {
+      fprintf(stderr,
+              "FAIL hover two-dots ship hover=%d hunder=%d hmid=%d hesum=%d "
+              "hnext=%d munder=%d\n",
+              hover, hunder, hmid, hesum, hnext, munder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    hover = ng_motive_ham_over(path);
+    hunder = ng_motive_ham_under(path);
+    hmid = ng_motive_ham_mid(path);
+    hasum = ng_motive_ham_asum(path);
+    hnext = ng_motive_ham_next(path);
+    munder = ng_motive_margin_under(path);
+    distinct_above = 1;
+    if (!(hover == 2 && hunder == 1 && hmid == -1 && hasum == 44 && hnext == 22 &&
+          munder == 1 && hover != hunder && hover != hmid && hover != hasum &&
+          hover != hnext && hover != munder && hover != distinct_above)) {
+      fprintf(stderr,
+              "FAIL hover two-ship dots hover=%d hunder=%d hmid=%d hasum=%d "
+              "hnext=%d munder=%d distinct=%d\n",
+              hover, hunder, hmid, hasum, hnext, munder, distinct_above);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    qs[0] = "...";
+    qs[1] = "why did the ship fail";
+    qs[2] = "ship fail";
+    seen_h = 0;
+    least_h = 0;
+    greatest_h = 0;
+    for (si = 0; si < 3; si++) {
+      rc = ng_motive_label_rank(qs[si], path, &m);
+      hs[si] = (rc == 0) ? m.hamming : -1;
+      if (hs[si] >= 0) {
+        if (!seen_h || hs[si] < least_h) least_h = hs[si];
+        if (!seen_h || hs[si] > greatest_h) greatest_h = hs[si];
+        seen_h++;
+      }
+    }
+    n_above = 0;
+    n_least = 0;
+    n_great = 0;
+    nv = 0;
+    for (si = 0; si < 3; si++) {
+      int vi, known;
+      if (hs[si] < 0) continue;
+      if (hs[si] > least_h) n_above++;
+      if (hs[si] == least_h) n_least++;
+      if (hs[si] == greatest_h) n_great++;
+      known = 0;
+      for (vi = 0; vi < nv; vi++) {
+        if (seen_vals[vi] == hs[si]) known = 1;
+      }
+      if (!known && hs[si] > least_h && nv < 3) seen_vals[nv++] = hs[si];
+    }
+    kept = seen_h;
+    diff_least = kept - n_least;
+    distinct_above = nv;
+    hover = ng_motive_ham_over(path);
+    hunder = ng_motive_ham_under(path);
+    hmid = ng_motive_ham_mid(path);
+    hxsum = ng_motive_ham_xsum(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    xsum = ng_motive_margin_xsum(path);
+    munder = ng_motive_margin_under(path);
+    mmid = ng_motive_margin_mid(path);
+    if (!(seen_h == 3 && n_above == 2 && n_least == 1 && n_great == 1 &&
+          diff_least == 2 && distinct_above == 2 && hover == n_above &&
+          hover == 2 && hunder == 2 && hmid == 1 && hxsum == 18 && hesum == 22 &&
+          hsum == 40 && xsum == 2 && munder == 2 && mmid == 1 && least_h == 0 &&
+          greatest_h == 22 && hover == hunder && hover != hmid &&
+          hover != hxsum && hover != hesum && hover != hsum && hover == xsum &&
+          hover == munder && hover != mmid && hover != kept &&
+          hover != n_least && hover != n_great && hover == diff_least &&
+          hs[0] != hs[1] && hs[1] != hs[2] && hs[0] != hs[2])) {
+      fprintf(stderr,
+              "FAIL hover span hover=%d n_above=%d n_least=%d n_great=%d "
+              "diff=%d distinct=%d kept=%d hunder=%d hmid=%d hxsum=%d hesum=%d "
+              "hsum=%d xsum=%d munder=%d mmid=%d least=%d greatest=%d "
+              "hams=%d,%d,%d\n",
+              hover, n_above, n_least, n_great, diff_least, distinct_above, kept,
+              hunder, hmid, hxsum, hesum, hsum, xsum, munder, mmid, least_h,
+              greatest_h, hs[0], hs[1], hs[2]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hover sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hover sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hover weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "hover unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hover sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    hover = ng_motive_ham_over(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    munder = ng_motive_margin_under(path);
+    hunder = ng_motive_ham_under(path);
+    hmid = ng_motive_ham_mid(path);
+    if (learned != 0 || marked != 1 || hover != -1 || hesum != 44 || hsum != 22 ||
+        munder != 0 || hunder != -1 || hmid != -1 || hover == hesum ||
+        hover == hsum || hover == munder || hover != hunder || hover != hmid) {
+      fprintf(stderr,
+              "FAIL hover sealed counts learn=%d label=%d hover=%d hesum=%d "
+              "hsum=%d munder=%d hunder=%d hmid=%d\n",
+              learned, marked, hover, hesum, hsum, munder, hunder, hmid);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "hover leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "hover leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

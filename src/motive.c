@@ -3240,6 +3240,75 @@ int ng_motive_ham_under(const char *path) {
   return count;
 }
 
+/* Same pairs read as the below-greatest hamming count. Returns how many
+ * winning labeled hammings from ng_motive_label_rank are strictly
+ * greater than the least kept hamming. A return of -1 is ignored.
+ * Every call at -1 returns -1. A hamming equal to the least adds
+ * nothing, including 0. A hamming equal to the greatest counts when
+ * it is strictly greater than the least. A repeated hamming above the
+ * least is counted again. When none are strictly greater, the result
+ * is -1, not 0. A uniform file returns -1, including when every
+ * winning hamming is 0. A single kept pair returns -1. Zero is a real
+ * hamming. Zero is never strictly greater than the least nonnegative
+ * hamming. Does not read the environment and does not write the
+ * learn cache. */
+int ng_motive_ham_over(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char line[320];
+  int got[32];
+  int n = 0;
+  int budget = 16384;
+  int i, seen, least, count;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= 80) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  seen = 0;
+  for (i = 0; i < n; i++) {
+    ng_motive m;
+    if (ng_motive_label_rank(texts_b[i], path, &m) < 0) continue;
+    if (m.hamming < 0) continue;
+    got[seen++] = m.hamming;
+  }
+  if (seen == 0) return -1;
+  least = got[0];
+  for (i = 1; i < seen; i++) {
+    if (got[i] < least) least = got[i];
+  }
+  count = 0;
+  for (i = 0; i < seen; i++) {
+    if (got[i] > least) count++;
+  }
+  if (count == 0) return -1;
+  return count;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;
