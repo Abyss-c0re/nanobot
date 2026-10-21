@@ -1,0 +1,17 @@
+// Count of the winning labeled hammings strictly inside the least and the greatest.
+// When none are strictly inside, that count is not a kept interior.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hmid ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hmid rank
+
+IMPULSE hmid 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hmid" UNITY DECIDE ENERGY

@@ -433,6 +433,21 @@ int ng_motive_margin_xsum(const char *path);
  * file, a non-regular file, or no valid pair returns -1. Does not
  * read the environment or write the learn cache. */
 int ng_motive_ham_xsum(const char *path);
+/* Count of the winning labeled hammings strictly greater than the
+ * least kept hamming and strictly less than the greatest kept
+ * hamming on this path. A return of -1 from the labeled rank is
+ * ignored. Every call at -1 returns -1. A hamming equal to the least
+ * adds nothing. A hamming equal to the greatest adds nothing. A
+ * repeated interior hamming is counted again. When no kept hamming
+ * is strictly inside the extremes, the result is -1. A uniform file
+ * returns -1, including when every winning hamming is 0. A file with
+ * exactly two distinct hammings returns -1. A single kept pair
+ * returns -1. Zero is a real hamming. Zero is never strictly greater
+ * than the least nonnegative hamming. An empty interior is -1, not
+ * 0. Null, empty, a path of 512 bytes or more, a missing file, a
+ * non-regular file, or no valid pair returns -1. Does not read the
+ * environment or write the learn cache. */
+int ng_motive_ham_mid(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
