@@ -1,0 +1,17 @@
+// Lower median of the winning labeled hammings.
+// Even counts keep the smaller of the two central values.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hmed ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hmed rank
+
+IMPULSE hmed 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hmed" UNITY DECIDE ENERGY
