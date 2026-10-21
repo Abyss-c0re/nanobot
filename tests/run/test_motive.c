@@ -34631,6 +34631,581 @@ int main(void) {
     unlink(path);
   }
 
+  {
+    const char *path = "/tmp/nb-motive-hbelc.pairs";
+    const char *dirp = "/tmp/nb-motive-hbelc.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, belc, huphi, hcnel, hcnec, hcneq, hunder, hmin, hsum;
+    int learned, marked, hceq, hcsum, hmup, hmed, hesum;
+    int seq[10], up_seq[10], cnel_seq[10], cnec_seq[10], under_seq[10];
+    int si;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    for (si = 0; si < 10; si++) {
+      seq[si] = -2;
+      up_seq[si] = -2;
+      cnel_seq[si] = -2;
+      cnec_seq[si] = -2;
+      under_seq[si] = -2;
+    }
+    expect(ng_motive_ham_belc(NULL) == -1, "a null hbelc path returns -1");
+    expect(ng_motive_ham_belc("") == -1, "an empty hbelc path returns -1");
+    memset(longp, 'd', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long hbelc path is 512 bytes");
+    expect(ng_motive_ham_belc(longp) == -1, "a hbelc path of 512 bytes returns -1");
+    expect(ng_motive_ham_belc("/tmp/nb-motive-hbelc-missing") == -1,
+           "a missing hbelc file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "hbelc directory creates");
+    expect(ng_motive_ham_belc(dirp) == -1, "a non-regular hbelc path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_belc(path) == -1, "a hbelc file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_belc(path) == -1, "a hbelc query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank(qbuf, path, &m);
+    belc = ng_motive_ham_belc(path);
+    hmin = ng_motive_ham_min(path);
+    if (rc != 0 || m.hamming < 0 || belc != -1 || hmin != m.hamming ||
+        belc == hmin) {
+      fprintf(stderr, "FAIL hbelc bounded rc=%d ham=%d belc=%d hmin=%d\n", rc,
+              m.hamming, belc, hmin);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_belc(path) == -1,
+           "a hbelc catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    belc = ng_motive_ham_belc(path);
+    if (rc != 0 || m.hamming < 0 || belc != -1) {
+      fprintf(stderr, "FAIL hbelc catalog rc=%d ham=%d belc=%d\n", rc, m.hamming,
+              belc);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_belc(path) == -1,
+           "a hbelc pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    belc = ng_motive_ham_belc(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(rc == 0 && m.hamming == 22 && belc == -1 && hmin == 22 && hsum == 22 &&
+          belc != hmin && belc != hsum)) {
+      fprintf(stderr, "FAIL hbelc skip rc=%d ham=%d belc=%d hmin=%d hsum=%d\n",
+              rc, m.hamming, belc, hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hcnel = ng_motive_ham_cnel(path);
+    hcnec = ng_motive_ham_cnec(path);
+    hunder = ng_motive_ham_under(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[0] = belc;
+    up_seq[0] = huphi;
+    cnel_seq[0] = hcnel;
+    cnec_seq[0] = hcnec;
+    under_seq[0] = hunder;
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && belc == -1 &&
+          huphi == -1 && hcnel == -1 && hcnec == -1 && hunder == -1 &&
+          hmin == 22 && hsum == 22 && belc == huphi && belc != hmin &&
+          belc != hsum)) {
+      fprintf(stderr,
+              "FAIL hbelc ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "belc=%d huphi=%d hmin=%d hsum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, belc, huphi,
+              hmin, hsum);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-hbelc-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    belc = ng_motive_ham_belc(path);
+    hmin = ng_motive_ham_min(path);
+    if (belc != -1 || hmin != 22) {
+      fprintf(stderr, "FAIL hbelc env belc=%d hmin=%d\n", belc, hmin);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hbelc law rank rc=%d concept=%s lex=%d ham=%d rank=%d "
+              "lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "hbelc leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hbelc leaves ship fail on the pair line");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hsum = ng_motive_ham_sum(path);
+    hunder = ng_motive_ham_under(path);
+    seq[1] = belc;
+    up_seq[1] = huphi;
+    under_seq[1] = hunder;
+    if (!(belc == -1 && huphi == -1 && hsum == 44 && hunder == -1 &&
+          belc == huphi && belc != hsum)) {
+      fprintf(stderr, "FAIL hbelc two-ship belc=%d huphi=%d hsum=%d hunder=%d\n",
+              belc, huphi, hsum, hunder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hmin = ng_motive_ham_min(path);
+    hunder = ng_motive_ham_under(path);
+    seq[2] = belc;
+    up_seq[2] = huphi;
+    under_seq[2] = hunder;
+    if (!(rc == 0 && m.hamming == 0 && belc == -1 && huphi == -1 && hmin == 0 &&
+          hunder == -1 && belc == huphi && belc != hmin)) {
+      fprintf(stderr, "FAIL hbelc dots rc=%d ham=%d belc=%d hmin=%d\n", rc,
+              m.hamming, belc, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    hunder = ng_motive_ham_under(path);
+    seq[3] = belc;
+    up_seq[3] = huphi;
+    under_seq[3] = hunder;
+    if (!(belc == -1 && huphi == -1 && hmin == 0 && hsum == 0 && hunder == -1 &&
+          belc == huphi && belc != hmin)) {
+      fprintf(stderr,
+              "FAIL hbelc two-dots belc=%d huphi=%d hmin=%d hsum=%d hunder=%d\n",
+              belc, huphi, hmin, hsum, hunder);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hcnel = ng_motive_ham_cnel(path);
+    hcnec = ng_motive_ham_cnec(path);
+    hcneq = ng_motive_ham_cneq(path);
+    hunder = ng_motive_ham_under(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[4] = belc;
+    up_seq[4] = huphi;
+    cnel_seq[4] = hcnel;
+    cnec_seq[4] = hcnec;
+    under_seq[4] = hunder;
+    if (!(belc == 1 && huphi == -1 && hcnel == -1 && hcnec == -1 && hcneq == -1 &&
+          hunder == 1 && hmin == 0 && hsum == 22 && belc != huphi &&
+          belc == hunder && belc != hcnel && belc != hcnec && belc != hcneq &&
+          belc != hmin && belc != hsum)) {
+      fprintf(stderr,
+              "FAIL hbelc mixed belc=%d huphi=%d hcnel=%d hcnec=%d hcneq=%d "
+              "hunder=%d hmin=%d hsum=%d\n",
+              belc, huphi, hcnel, hcnec, hcneq, hunder, hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hcnel = ng_motive_ham_cnel(path);
+    hcnec = ng_motive_ham_cnec(path);
+    hcneq = ng_motive_ham_cneq(path);
+    hunder = ng_motive_ham_under(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[5] = belc;
+    up_seq[5] = huphi;
+    cnel_seq[5] = hcnel;
+    cnec_seq[5] = hcnec;
+    under_seq[5] = hunder;
+    if (!(belc == -1 && huphi == 22 && hcnel == 22 && hcnec == 1 && hcneq == 22 &&
+          hunder == 2 && hmin == 0 && hsum == 22 && belc != huphi &&
+          belc != hcnel && belc != hcnec && belc != hcneq && belc != hunder &&
+          belc != hmin && belc != hsum)) {
+      fprintf(stderr,
+              "FAIL hbelc two-dots ship belc=%d huphi=%d hcnel=%d hcnec=%d "
+              "hcneq=%d hunder=%d hmin=%d hsum=%d\n",
+              belc, huphi, hcnel, hcnec, hcneq, hunder, hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hcnel = ng_motive_ham_cnel(path);
+    hcnec = ng_motive_ham_cnec(path);
+    hcneq = ng_motive_ham_cneq(path);
+    hunder = ng_motive_ham_under(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[6] = belc;
+    up_seq[6] = huphi;
+    cnel_seq[6] = hcnel;
+    cnec_seq[6] = hcnec;
+    under_seq[6] = hunder;
+    if (!(belc == 1 && huphi == -1 && hcnel == 0 && hcnec == 1 && hcneq == 0 &&
+          hunder == 1 && hmin == 0 && hsum == 44 && belc != huphi &&
+          belc != hcnel && belc == hcnec && belc != hcneq && belc == hunder &&
+          belc != hmin && belc != hsum)) {
+      fprintf(stderr,
+              "FAIL hbelc two-ship dots belc=%d huphi=%d hcnel=%d hcnec=%d "
+              "hcneq=%d hunder=%d hmin=%d hsum=%d\n",
+              belc, huphi, hcnel, hcnec, hcneq, hunder, hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hunder = ng_motive_ham_under(path);
+    seq[7] = belc;
+    up_seq[7] = huphi;
+    under_seq[7] = hunder;
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && belc == -1 &&
+          huphi == -1 && hunder == -1 && m.lexical != rw.lexical &&
+          m.lexical == rw.lexical + 4)) {
+      fprintf(stderr,
+              "FAIL hbelc audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "belc=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, belc,
+              rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "hbelc cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "hbelc pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "hbelc cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    belc = ng_motive_ham_belc(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "hbelc does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "hbelc does not write the learn cache");
+    if (belc != -1) {
+      fprintf(stderr, "FAIL hbelc probe belc=%d\n", belc);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hunder = ng_motive_ham_under(path);
+    hmin = ng_motive_ham_min(path);
+    seq[8] = belc;
+    up_seq[8] = huphi;
+    under_seq[8] = hunder;
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && belc == -1 &&
+          huphi == -1 && hunder == -1 && hmin == 23 && belc == huphi &&
+          belc != hmin)) {
+      fprintf(stderr,
+              "FAIL hbelc trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "belc=%d hmin=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, belc, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    hcnel = ng_motive_ham_cnel(path);
+    hcnec = ng_motive_ham_cnec(path);
+    hcneq = ng_motive_ham_cneq(path);
+    hunder = ng_motive_ham_under(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[9] = belc;
+    up_seq[9] = huphi;
+    cnel_seq[9] = hcnel;
+    cnec_seq[9] = hcnec;
+    under_seq[9] = hunder;
+    if (!(belc == 1 && huphi == 22 && hcnel == 0 && hcnec == 2 && hcneq == 22 &&
+          hunder == 2 && hmin == 0 && hsum == 40 && belc != huphi &&
+          belc != hcnel && belc != hcnec && belc != hcneq && belc != hunder &&
+          belc != hmin && belc != hsum)) {
+      fprintf(stderr,
+              "FAIL hbelc span belc=%d huphi=%d hcnel=%d hcnec=%d hcneq=%d "
+              "hunder=%d hmin=%d hsum=%d\n",
+              belc, huphi, hcnel, hcnec, hcneq, hunder, hmin, hsum);
+      g_fail++;
+    }
+    if (!(seq[0] == -1 && seq[1] == -1 && seq[2] == -1 && seq[3] == -1 &&
+          seq[4] == 1 && seq[5] == -1 && seq[6] == 1 && seq[7] == -1 &&
+          seq[8] == -1 && seq[9] == 1 && up_seq[0] == -1 && up_seq[1] == -1 &&
+          up_seq[2] == -1 && up_seq[3] == -1 && up_seq[4] == -1 &&
+          up_seq[5] == 22 && up_seq[6] == -1 && up_seq[7] == -1 &&
+          up_seq[8] == -1 && up_seq[9] == 22 && cnel_seq[4] == -1 &&
+          cnel_seq[5] == 22 && cnel_seq[6] == 0 && cnel_seq[9] == 0 &&
+          cnec_seq[4] == -1 && cnec_seq[5] == 1 && cnec_seq[6] == 1 &&
+          cnec_seq[9] == 2 && under_seq[4] == 1 && under_seq[5] == 2 &&
+          under_seq[6] == 1 && under_seq[9] == 2 && seq[4] != up_seq[4] &&
+          seq[5] != up_seq[5] && seq[6] != up_seq[6] && seq[9] != up_seq[9] &&
+          seq[4] == under_seq[4] && seq[5] != under_seq[5] &&
+          seq[6] == under_seq[6] && seq[9] != under_seq[9] &&
+          seq[4] != cnec_seq[4] && seq[5] != cnec_seq[5] &&
+          seq[6] == cnec_seq[6] && seq[9] != cnec_seq[9] &&
+          seq[5] != cnel_seq[5] && seq[6] != cnel_seq[6] &&
+          seq[9] != cnel_seq[9])) {
+      fprintf(stderr,
+              "FAIL hbelc ten %d %d %d %d %d %d %d %d %d %d up %d %d %d %d %d "
+              "%d %d %d %d %d under %d %d %d %d\n",
+              seq[0], seq[1], seq[2], seq[3], seq[4], seq[5], seq[6], seq[7],
+              seq[8], seq[9], up_seq[0], up_seq[1], up_seq[2], up_seq[3],
+              up_seq[4], up_seq[5], up_seq[6], up_seq[7], up_seq[8], up_seq[9],
+              under_seq[4], under_seq[5], under_seq[6], under_seq[9]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc repeated-below file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    belc = ng_motive_ham_belc(path);
+    huphi = ng_motive_ham_uphi(path);
+    if (!(belc == 2 && huphi == 44 && belc != huphi && belc != 1 && belc != 0)) {
+      fprintf(stderr, "FAIL hbelc repeat belc=%d huphi=%d\n", belc, huphi);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hbelc sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hbelc sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hbelc weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "hbelc unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hbelc sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    belc = ng_motive_ham_belc(path);
+    hceq = ng_motive_ham_ceq(path);
+    hcsum = ng_motive_ham_csum(path);
+    hmup = ng_motive_ham_mup(path);
+    hmed = ng_motive_ham_med(path);
+    hmin = ng_motive_ham_min(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (learned != 0 || marked != 1 || belc != -1 || hceq != 22 || hcsum != 44 ||
+        hmup != 22 || hmed != 22 || hmin != 22 || hesum != 44 || hsum != 22 ||
+        belc == hceq || belc == hsum || belc == hmin) {
+      fprintf(stderr,
+              "FAIL hbelc sealed counts learn=%d label=%d belc=%d hceq=%d "
+              "hcsum=%d hmup=%d hmed=%d hmin=%d hesum=%d hsum=%d\n",
+              learned, marked, belc, hceq, hcsum, hmup, hmed, hmin, hesum, hsum);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "hbelc leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "hbelc leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;

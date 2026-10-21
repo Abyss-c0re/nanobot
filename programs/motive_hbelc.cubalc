@@ -1,0 +1,17 @@
+// Count of kept winning labeled hammings strictly below the upper central value.
+// An empty below-set returns -1, not 0.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hbelc ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG hbelc rank
+
+IMPULSE hbelc 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hbelc" UNITY DECIDE ENERGY
