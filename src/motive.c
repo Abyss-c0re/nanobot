@@ -2765,6 +2765,74 @@ int ng_motive_margin_rsum(const char *path) {
   return sum;
 }
 
+/* Same pairs read as the distinct hamming sum. Returns the sum of the
+ * winning labeled hammings from ng_motive_label_rank that appear on at
+ * least two kept pairs. A return of -1 is ignored. Every call at -1
+ * returns -1. A hamming that appears once adds nothing. Each kept pair
+ * whose hamming value appears at least twice adds that hamming. A
+ * repeated hamming is added again, including a repeated 0. When no
+ * hamming value appears at least twice, the result is -1. Zero is a
+ * real hamming. When that sum is 0, the result is 0. Does not read the
+ * environment and does not write the learn cache. */
+int ng_motive_ham_rsum(const char *path) {
+  struct stat st;
+  FILE *fp;
+  char texts_b[32][192];
+  char line[320];
+  int got[32];
+  int n = 0;
+  int budget = 16384;
+  int i, seen, sum, repeated;
+  if (!path || !path[0] || strlen(path) >= 512) return -1;
+  if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+  fp = fopen(path, "r");
+  if (!fp) return -1;
+  while (n < 32 && budget > 0 && fgets(line, sizeof line, fp)) {
+    char *tab;
+    char *nl;
+    size_t tlen, plen_pref;
+    budget -= (int)strlen(line);
+    if (!strchr(line, '\n') && !feof(fp)) {
+      int c;
+      while ((c = fgetc(fp)) != EOF && c != '\n') budget--;
+      continue;
+    }
+    nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    if (line[0] == 0 || line[0] == '#') continue;
+    tab = strchr(line, '\t');
+    if (!tab || tab == line || tab[1] == 0) continue;
+    *tab++ = 0;
+    tlen = strlen(line);
+    plen_pref = strlen(tab);
+    if (tlen >= sizeof texts_b[0] || plen_pref >= 80) continue;
+    memcpy(texts_b[n], line, tlen + 1);
+    n++;
+  }
+  fclose(fp);
+  if (n == 0) return -1;
+  seen = 0;
+  for (i = 0; i < n; i++) {
+    ng_motive m;
+    if (ng_motive_label_rank(texts_b[i], path, &m) < 0) continue;
+    got[seen++] = m.hamming;
+  }
+  if (seen == 0) return -1;
+  sum = 0;
+  repeated = 0;
+  for (i = 0; i < seen; i++) {
+    int j, count = 0;
+    for (j = 0; j < seen; j++)
+      if (got[j] == got[i]) count++;
+    if (count >= 2) {
+      sum += got[i];
+      repeated = 1;
+    }
+  }
+  if (!repeated) return -1;
+  return sum;
+}
+
 void ng_motive_rank_w(const char *text, ng_motive *out, int over) {
   char norm[NORM_CAP];
   uint64_t qh;

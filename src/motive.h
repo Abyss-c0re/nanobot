@@ -373,6 +373,17 @@ int ng_motive_margin_asum(const char *path);
  * bytes or more, a missing file, a non-regular file, or no valid pair
  * returns -1. Does not read the environment or write the learn cache. */
 int ng_motive_margin_rsum(const char *path);
+/* Sum of the winning labeled hammings that appear on at least two
+ * kept pairs of this path. A return of -1 from the labeled rank is
+ * ignored. Every call at -1 returns -1. A hamming that appears once
+ * adds nothing. Each kept pair whose hamming value appears at least
+ * twice adds that hamming. A repeated hamming is added again,
+ * including a repeated 0. When no hamming value appears at least
+ * twice, the result is -1. Zero is a real hamming. When that sum is
+ * 0, the result is 0. Null, empty, a path of 512 bytes or more, a
+ * missing file, a non-regular file, or no valid pair returns -1.
+ * Does not read the environment or write the learn cache. */
+int ng_motive_ham_rsum(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);

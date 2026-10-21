@@ -1,0 +1,17 @@
+// Sum of the winning labeled hammings that appear on at least two kept pairs.
+// A hamming that appears once adds nothing. A repeated hamming is added again.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE hrsum ROLE observer PROTON 1
+CUBE rank  ROLE nanobot  PROTON 1
+
+PLUG hrsum rank
+
+IMPULSE hrsum 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "hrsum" UNITY DECIDE ENERGY
