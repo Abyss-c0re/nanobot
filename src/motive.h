@@ -626,6 +626,27 @@ int ng_motive_ham_cneq(const char *path);
  * or more, a missing file, a non-regular file, or no valid pair
  * returns -1. Does not read the environment or write the learn cache. */
 int ng_motive_ham_cnec(const char *path);
+/* Least kept nonnegative winning labeled hamming equal to neither the
+ * lower central value nor the upper central value on the kept pairs of
+ * this path. A return of -1 from the labeled rank is ignored. Every
+ * call at -1 returns -1. A negative hamming is ignored. When no
+ * nonnegative hamming is kept, the result is -1. Kept hammings,
+ * including duplicates and 0, are sorted ascending. The lower index is
+ * (count - 1) / 2. The upper index is count / 2. The result is the
+ * least kept hamming equal to neither of those values. A duplicate
+ * does not change which value is least. When the count is odd, both
+ * indexes are the same and the least is the smallest kept value that
+ * is not that one central value. When the count is even, the least is
+ * the smallest kept value equal to neither central value. When no kept
+ * hamming is outside those values, the result is -1, not 0. A single
+ * kept pair returns -1, including when that hamming is 0. A uniform
+ * file returns -1, including when every winning hamming is 0. Two
+ * copies of one hamming return -1. Zero is a real hamming. When the
+ * least outside value is 0, the result is 0, not -1. The result is a
+ * hamming value, not a count and not a sum. Null, empty, a path of 512
+ * bytes or more, a missing file, a non-regular file, or no valid pair
+ * returns -1. Does not read the environment or write the learn cache. */
+int ng_motive_ham_cnel(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
