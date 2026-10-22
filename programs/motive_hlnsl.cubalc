@@ -1,0 +1,17 @@
+// Index 1 of the kept winning labeled hammings not equal to the lower central value.
+// Fewer than two outside values returns -1, not 0. An index-1 value of 0 stays 0.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE lnsl ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG lnsl rank
+
+IMPULSE lnsl 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "lnsl" UNITY DECIDE ENERGY
