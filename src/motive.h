@@ -1051,6 +1051,32 @@ int ng_motive_ham_lntl(const char *path);
  * missing file, a non-regular file, or no valid pair returns -1. Does
  * not read the environment or write the learn cache. */
 int ng_motive_ham_lnfl(const char *path);
+/* Index 4 of the kept nonnegative winning labeled hammings that are not
+ * equal to the lower central value on the kept pairs of this path. A
+ * return of -1 from the labeled rank is ignored. Every call at -1
+ * returns -1. A negative hamming is ignored. When no nonnegative
+ * hamming is kept, the result is -1. Kept hammings, including duplicates
+ * and 0, are sorted ascending. The lower index is (count - 1) / 2. The
+ * outside list keeps every value not equal to the value at that index,
+ * duplicates included, in that same order. The result is the value at
+ * index 4 of that list. Fewer than five outside values returns -1, not
+ * 0, not the value at outside index 0, not the value at outside index 1,
+ * not the value at outside index 2, and not the value at outside index 3.
+ * When the count is odd, both central indexes are the same. When the
+ * count is even, a value equal to the upper central value stays outside
+ * when it is not the lower central value. A value equal to the lower
+ * central value is not outside, including 0. When every kept hamming
+ * equals that lower value, the result is -1, not 0. A single kept pair
+ * returns -1, including when that hamming is 0. A uniform file returns
+ * -1, including when every winning hamming is 0. Two copies of one
+ * hamming return -1. Zero is a real hamming. When the value at index 4
+ * is 0, the result is 0, not -1. The result is a hamming value, not a
+ * count of those hammings, not a sum of those hammings, not the least
+ * of those hammings, not the greatest of those hammings, and not the
+ * value at outside index 3. Null, empty, a path of 512 bytes or more, a
+ * missing file, a non-regular file, or no valid pair returns -1. Does
+ * not read the environment or write the learn cache. */
+int ng_motive_ham_lnil(const char *path);
 char *ng_motive_format(const ng_motive *m);
 /* 1 when the act is a destructive plate (purge or protect). */
 int ng_motive_blocks(const char *text);
