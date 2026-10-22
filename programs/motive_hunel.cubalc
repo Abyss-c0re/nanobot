@@ -1,0 +1,17 @@
+// Least kept winning labeled hamming not equal to the upper central value.
+// An empty difference set returns -1, not 0. A least of 0 stays 0.
+// Ordinary program: no HOLD_FLASH line.
+
+CUBE unel ROLE observer PROTON 1
+CUBE rank ROLE nanobot  PROTON 1
+
+PLUG unel rank
+
+IMPULSE unel 1
+IMPULSE rank 1
+ENERGYFLOW 1
+FLOW 1
+HARMONY rank
+DECIDE rank
+ASSERT CUBES >= 2
+PRINT "unel" UNITY DECIDE ENERGY
