@@ -39136,6 +39136,815 @@ int main(void) {
     unlink(path);
   }
 
+
+  {
+    const char *path = "/tmp/nb-motive-hlxsm.pairs";
+    const char *dirp = "/tmp/nb-motive-hlxsm.dir";
+    const char *keep = "keep free energy flowing";
+    const char *pair = "pair vote then ship the step";
+    const char *law = "read the law and prove";
+    const char *audit_c = "audit the last code change";
+    const char *peer = "prompt a peer to move";
+    const char *ship = "ship fail\tkeep free energy flowing\n";
+    const char *dots = "...\tprompt a peer to move\n";
+    const char *audit = "why did the ship fail\taudit the last code change\n";
+    const char *padded = "why did the ship fail\tkeep free energy flowing  \n";
+    const char *trail = "ship fail\tkeep free energy flowing \n";
+    const char *far = "prompt avlk";
+    const char *far_line = "prompt avlk\tprompt a peer to move\n";
+    char longp[520];
+    char qbuf[200];
+    char cbuf[96];
+    char blob[16384];
+    char big[420];
+    FILE *pf;
+    ng_motive m, ranked, rw;
+    struct stat st;
+    struct timespec ts[2];
+    int rc, lxsm, cnec, lhcn, lbcn, hover, lbsm, hmin, hsum;
+    int lphi, cneq, xcn, uphi;
+    int learned, marked, hceq, hcsum, hmup, hmed, hesum;
+    int seq[10], ce_seq[10], lh_seq[10], lb_seq[10], ov_seq[10], sm_seq[10];
+    int lp_seq[10], nq_seq[10], xc_seq[10], up_seq[10];
+    int si;
+
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    for (si = 0; si < 10; si++) {
+      seq[si] = -2;
+      ce_seq[si] = -2;
+      lh_seq[si] = -2;
+      lb_seq[si] = -2;
+      ov_seq[si] = -2;
+      sm_seq[si] = -2;
+      lp_seq[si] = -2;
+      nq_seq[si] = -2;
+      xc_seq[si] = -2;
+      up_seq[si] = -2;
+    }
+    expect(ng_motive_ham_lxsm(NULL) == -1, "a null hlxsm path returns -1");
+    expect(ng_motive_ham_lxsm("") == -1, "an empty hlxsm path returns -1");
+    memset(longp, 'd', 512);
+    longp[512] = 0;
+    expect(strlen(longp) == 512, "the long hlxsm path is 512 bytes");
+    expect(ng_motive_ham_lxsm(longp) == -1, "a hlxsm path of 512 bytes returns -1");
+    expect(ng_motive_ham_lxsm("/tmp/nb-motive-hlxsm-missing") == -1,
+           "a missing hlxsm file returns -1");
+    unlink(dirp);
+    rmdir(dirp);
+    expect(mkdir(dirp, 0700) == 0, "hlxsm directory creates");
+    expect(ng_motive_ham_lxsm(dirp) == -1, "a non-regular hlxsm path returns -1");
+    rmdir(dirp);
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm empty file opens");
+    if (pf) {
+      fputs("# note\n\n\tkeep\nship fail\t\n", pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_lxsm(path) == -1, "a hlxsm file with no pair returns -1");
+
+    memset(qbuf, 'q', 192);
+    qbuf[192] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm overlong query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_lxsm(path) == -1, "a hlxsm query of 192 bytes is not a pair");
+    qbuf[191] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm bounded query file opens");
+    if (pf) {
+      fprintf(pf, "%s\t%s\n", qbuf, keep);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank(qbuf, path, &m);
+    lxsm = ng_motive_ham_lxsm(path);
+    hmin = ng_motive_ham_min(path);
+    if (rc != 0 || m.hamming < 0 || lxsm != -1 || hmin != m.hamming ||
+        lxsm == hmin) {
+      fprintf(stderr, "FAIL hlxsm bounded rc=%d ham=%d lxsm=%d hmin=%d\n", rc,
+              m.hamming, lxsm, hmin);
+      g_fail++;
+    }
+
+    memset(cbuf, 'c', 80);
+    cbuf[80] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm overlong catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_lxsm(path) == -1,
+           "a hlxsm catalog line of 80 bytes is not a pair");
+    cbuf[79] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm bounded catalog file opens");
+    if (pf) {
+      fprintf(pf, "ship fail\t%s\n", cbuf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    lxsm = ng_motive_ham_lxsm(path);
+    if (rc != 0 || m.hamming < 0 || lxsm != -1) {
+      fprintf(stderr, "FAIL hlxsm catalog rc=%d ham=%d lxsm=%d\n", rc, m.hamming,
+              lxsm);
+      g_fail++;
+    }
+
+    memset(blob, 'x', sizeof blob);
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm budget file opens");
+    if (pf) {
+      fwrite(blob, 1, sizeof blob, pf);
+      fputc('\n', pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    expect(ng_motive_ham_lxsm(path) == -1,
+           "a hlxsm pair past the 16384 byte budget is not read");
+
+    memset(big, 'z', 400);
+    big[400] = 0;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm overlong line file opens");
+    if (pf) {
+      fprintf(pf, "# note\n\n%s\n", big);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    if (!(rc == 0 && m.hamming == 22 && lxsm == -1 && cnec == -1 && hmin == 22 &&
+          hsum == 22 && lxsm != hmin && lxsm != hsum && lxsm == cnec)) {
+      fprintf(stderr,
+              "FAIL hlxsm skip rc=%d ham=%d lxsm=%d cnec=%d hmin=%d hsum=%d\n",
+              rc, m.hamming, lxsm, cnec, hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    lhcn = ng_motive_ham_lhcn(path);
+    lbcn = ng_motive_ham_lbcn(path);
+    hover = ng_motive_ham_over(path);
+    lbsm = ng_motive_ham_lbsm(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[0] = lxsm;
+    lp_seq[0] = ng_motive_ham_lphi(path);
+    nq_seq[0] = ng_motive_ham_cneq(path);
+    xc_seq[0] = ng_motive_ham_lxcn(path);
+    up_seq[0] = ng_motive_ham_uphi(path);
+    ce_seq[0] = cnec;
+    lh_seq[0] = lhcn;
+    lb_seq[0] = lbcn;
+    ov_seq[0] = hover;
+    sm_seq[0] = lbsm;
+    if (!(rc == 0 && strcmp(m.concept, keep) == 0 && m.lexical == 2 &&
+          m.hamming == 22 && m.rank == 170 && m.lex_w == 64 && lxsm == -1 &&
+          cnec == -1 && lhcn == -1 && lbcn == -1 && hover == -1 && lbsm == -1 &&
+          hmin == 22 && hsum == 22 && lxsm == cnec && lxsm != hmin &&
+          lxsm != hsum)) {
+      fprintf(stderr,
+              "FAIL hlxsm ship rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "lxsm=%d cnec=%d lhcn=%d lbcn=%d over=%d lbsm=%d hmin=%d hsum=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, lxsm, cnec,
+              lhcn, lbcn, hover, lbsm, hmin, hsum);
+      g_fail++;
+    }
+    setenv("NANOBOT_MOTIVE_LEARN", "/tmp/nb-motive-hlxsm-missing", 1);
+    setenv("NANOBOT_MOTIVE_LEX_W", "1", 1);
+    lxsm = ng_motive_ham_lxsm(path);
+    hmin = ng_motive_ham_min(path);
+    if (lxsm != -1 || hmin != 22) {
+      fprintf(stderr, "FAIL hlxsm env lxsm=%d hmin=%d\n", lxsm, hmin);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    rc = ng_motive_label_rank(law, path, &m);
+    if (!(rc == 0 && strcmp(m.concept, law) == 0 && m.lexical == 3 &&
+          m.hamming == 0 && m.rank == 256 && m.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hlxsm law rank rc=%d concept=%s lex=%d ham=%d rank=%d "
+              "lex_w=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w);
+      g_fail++;
+    }
+    expect(getenv("NANOBOT_MOTIVE_LEARN") == NULL, "hlxsm leaves LEARN unset");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hlxsm leaves ship fail on the pair line");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm two-ship file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[1] = lxsm;
+    lp_seq[1] = ng_motive_ham_lphi(path);
+    nq_seq[1] = ng_motive_ham_cneq(path);
+    xc_seq[1] = ng_motive_ham_lxcn(path);
+    up_seq[1] = ng_motive_ham_uphi(path);
+    ce_seq[1] = cnec;
+    lh_seq[1] = ng_motive_ham_lhcn(path);
+    lb_seq[1] = ng_motive_ham_lbcn(path);
+    ov_seq[1] = ng_motive_ham_over(path);
+    sm_seq[1] = ng_motive_ham_lbsm(path);
+    if (!(lxsm == -1 && cnec == -1 && hsum == 44 && lxsm == cnec &&
+          lxsm != hsum)) {
+      fprintf(stderr, "FAIL hlxsm two-ship lxsm=%d cnec=%d hsum=%d\n", lxsm,
+              cnec, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("...", path, &m);
+    lxsm = ng_motive_ham_lxsm(path);
+    hmin = ng_motive_ham_min(path);
+    seq[2] = lxsm;
+    lp_seq[2] = ng_motive_ham_lphi(path);
+    nq_seq[2] = ng_motive_ham_cneq(path);
+    xc_seq[2] = ng_motive_ham_lxcn(path);
+    up_seq[2] = ng_motive_ham_uphi(path);
+    ce_seq[2] = ng_motive_ham_cnec(path);
+    lh_seq[2] = ng_motive_ham_lhcn(path);
+    lb_seq[2] = ng_motive_ham_lbcn(path);
+    ov_seq[2] = ng_motive_ham_over(path);
+    sm_seq[2] = ng_motive_ham_lbsm(path);
+    if (!(rc == 0 && m.hamming == 0 && lxsm == -1 && hmin == 0 && lxsm != hmin)) {
+      fprintf(stderr, "FAIL hlxsm dots rc=%d ham=%d lxsm=%d hmin=%d\n", rc,
+              m.hamming, lxsm, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm two-dots file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    lxsm = ng_motive_ham_lxsm(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[3] = lxsm;
+    lp_seq[3] = ng_motive_ham_lphi(path);
+    nq_seq[3] = ng_motive_ham_cneq(path);
+    xc_seq[3] = ng_motive_ham_lxcn(path);
+    up_seq[3] = ng_motive_ham_uphi(path);
+    ce_seq[3] = ng_motive_ham_cnec(path);
+    lh_seq[3] = ng_motive_ham_lhcn(path);
+    lb_seq[3] = ng_motive_ham_lbcn(path);
+    ov_seq[3] = ng_motive_ham_over(path);
+    sm_seq[3] = ng_motive_ham_lbsm(path);
+    if (!(lxsm == -1 && hmin == 0 && hsum == 0 && lxsm != hmin)) {
+      fprintf(stderr, "FAIL hlxsm two-dots lxsm=%d hmin=%d hsum=%d\n", lxsm,
+              hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm mixed file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    lhcn = ng_motive_ham_lhcn(path);
+    lbcn = ng_motive_ham_lbcn(path);
+    hover = ng_motive_ham_over(path);
+    lbsm = ng_motive_ham_lbsm(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[4] = lxsm;
+    lp_seq[4] = ng_motive_ham_lphi(path);
+    nq_seq[4] = ng_motive_ham_cneq(path);
+    xc_seq[4] = ng_motive_ham_lxcn(path);
+    up_seq[4] = ng_motive_ham_uphi(path);
+    ce_seq[4] = cnec;
+    lh_seq[4] = lhcn;
+    lb_seq[4] = lbcn;
+    ov_seq[4] = hover;
+    sm_seq[4] = lbsm;
+    lphi = lp_seq[4];
+    cneq = nq_seq[4];
+    xcn = xc_seq[4];
+    uphi = up_seq[4];
+    if (!(lxsm == 22 && cnec == -1 && lhcn == 1 && lbcn == -1 && hover == 1 &&
+          lbsm == -1 && lphi == 22 && cneq == -1 && xcn == 1 && uphi == -1 &&
+          hmin == 0 && hsum == 22 && lxsm == lphi && lxsm != cneq &&
+          lxsm != xcn && lxsm != lbsm && lxsm != uphi && lxsm != hmin &&
+          lxsm != -1 && lxsm != 1 && lxsm != 0)) {
+      fprintf(stderr,
+              "FAIL hlxsm mixed lxsm=%d cnec=%d lhcn=%d lbcn=%d over=%d "
+              "lbsm=%d lphi=%d cneq=%d xcn=%d uphi=%d hmin=%d hsum=%d\n",
+              lxsm, cnec, lhcn, lbcn, hover, lbsm, lphi, cneq, xcn, uphi,
+              hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm two-dots ship file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    lhcn = ng_motive_ham_lhcn(path);
+    lbcn = ng_motive_ham_lbcn(path);
+    hover = ng_motive_ham_over(path);
+    lbsm = ng_motive_ham_lbsm(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[5] = lxsm;
+    lp_seq[5] = ng_motive_ham_lphi(path);
+    nq_seq[5] = ng_motive_ham_cneq(path);
+    xc_seq[5] = ng_motive_ham_lxcn(path);
+    up_seq[5] = ng_motive_ham_uphi(path);
+    ce_seq[5] = cnec;
+    lh_seq[5] = lhcn;
+    lb_seq[5] = lbcn;
+    ov_seq[5] = hover;
+    sm_seq[5] = lbsm;
+    lphi = lp_seq[5];
+    cneq = nq_seq[5];
+    xcn = xc_seq[5];
+    uphi = up_seq[5];
+    if (!(lxsm == 22 && cnec == 1 && lhcn == 1 && lbcn == -1 && hover == 1 &&
+          lbsm == -1 && lphi == 22 && cneq == 22 && xcn == 1 && uphi == 22 &&
+          hmin == 0 && hsum == 22 && lxsm == hsum && lxsm == lphi &&
+          lxsm == cneq && lxsm == uphi && lxsm != xcn && lxsm != cnec &&
+          lxsm != lbsm && lxsm != -1 && lxsm != 1 && lxsm != 0)) {
+      fprintf(stderr,
+              "FAIL hlxsm two-dots ship lxsm=%d cnec=%d lhcn=%d lbcn=%d "
+              "over=%d lbsm=%d lphi=%d cneq=%d xcn=%d uphi=%d hmin=%d hsum=%d\n",
+              lxsm, cnec, lhcn, lbcn, hover, lbsm, lphi, cneq, xcn, uphi,
+              hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm two-ship dots file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fputs(dots, pf);
+      fclose(pf);
+    }
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    lhcn = ng_motive_ham_lhcn(path);
+    lbcn = ng_motive_ham_lbcn(path);
+    hover = ng_motive_ham_over(path);
+    lbsm = ng_motive_ham_lbsm(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[6] = lxsm;
+    lp_seq[6] = ng_motive_ham_lphi(path);
+    nq_seq[6] = ng_motive_ham_cneq(path);
+    xc_seq[6] = ng_motive_ham_lxcn(path);
+    up_seq[6] = ng_motive_ham_uphi(path);
+    ce_seq[6] = cnec;
+    lh_seq[6] = lhcn;
+    lb_seq[6] = lbcn;
+    ov_seq[6] = hover;
+    sm_seq[6] = lbsm;
+    lphi = lp_seq[6];
+    cneq = nq_seq[6];
+    xcn = xc_seq[6];
+    uphi = up_seq[6];
+    if (!(lxsm == 0 && cnec == 1 && lhcn == -1 && lbcn == 1 && hover == 2 &&
+          lbsm == 0 && lphi == -1 && cneq == 0 && xcn == 1 && uphi == -1 &&
+          hmin == 0 && hsum == 44 && lxsm == lbsm && lxsm == cneq &&
+          lxsm != lphi && lxsm != xcn && lxsm != uphi && lxsm != cnec &&
+          lxsm != hsum && lxsm != -1 && lxsm != 1 && lxsm != 22)) {
+      fprintf(stderr,
+              "FAIL hlxsm two-ship dots lxsm=%d cnec=%d lhcn=%d lbcn=%d "
+              "over=%d lbsm=%d lphi=%d cneq=%d xcn=%d uphi=%d hmin=%d hsum=%d\n",
+              lxsm, cnec, lhcn, lbcn, hover, lbsm, lphi, cneq, xcn, uphi,
+              hmin, hsum);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm audit file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fclose(pf);
+    }
+    ng_motive_rank_w("why did the ship fail", &rw, 0);
+    rc = ng_motive_label_rank("why did the ship fail", path, &m);
+    lxsm = ng_motive_ham_lxsm(path);
+    seq[7] = lxsm;
+    lp_seq[7] = ng_motive_ham_lphi(path);
+    nq_seq[7] = ng_motive_ham_cneq(path);
+    xc_seq[7] = ng_motive_ham_lxcn(path);
+    up_seq[7] = ng_motive_ham_uphi(path);
+    ce_seq[7] = ng_motive_ham_cnec(path);
+    lh_seq[7] = ng_motive_ham_lhcn(path);
+    lb_seq[7] = ng_motive_ham_lbcn(path);
+    ov_seq[7] = ng_motive_ham_over(path);
+    sm_seq[7] = ng_motive_ham_lbsm(path);
+    if (!(rc == 0 && strcmp(m.concept, audit_c) == 0 && m.lexical == 4 &&
+          m.hamming == 18 && m.rank == 46 && m.lex_w == 0 && lxsm == -1 &&
+          m.lexical != rw.lexical && m.lexical == rw.lexical + 4)) {
+      fprintf(stderr,
+              "FAIL hlxsm audit rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "lxsm=%d rw_lex=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, lxsm,
+              rw.lexical);
+      g_fail++;
+    }
+    expect(strlen(audit) == strlen(padded), "hlxsm cache probe stays the same size");
+    expect(stat(path, &st) == 0 && st.st_size == (off_t)strlen(audit),
+           "hlxsm pairs stat");
+    ts[0].tv_sec = st.st_atim.tv_sec;
+    ts[0].tv_nsec = st.st_atim.tv_nsec;
+    ts[1].tv_sec = st.st_mtim.tv_sec;
+    ts[1].tv_nsec = st.st_mtim.tv_nsec;
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm cache probe opens");
+    if (pf) {
+      fputs(padded, pf);
+      fclose(pf);
+    }
+    expect(utimensat(AT_FDCWD, path, ts, 0) == 0, "hlxsm cache probe restores mtime");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    lxsm = ng_motive_ham_lxsm(path);
+    expect(stat(path, &st) == 0 && st.st_mtim.tv_sec == ts[1].tv_sec &&
+               st.st_mtim.tv_nsec == ts[1].tv_nsec &&
+               st.st_size == (off_t)strlen(padded),
+           "hlxsm does not write the pairs file");
+    ng_motive_rank("why did the ship fail", &ranked);
+    expect(ranked.lex_w == 64 && strcmp(ranked.concept, pair) == 0,
+           "hlxsm does not write the learn cache");
+    if (lxsm != -1) {
+      fprintf(stderr, "FAIL hlxsm probe lxsm=%d\n", lxsm);
+      g_fail++;
+    }
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm trail file opens");
+    if (pf) {
+      fputs(trail, pf);
+      fclose(pf);
+    }
+    rc = ng_motive_label_rank("ship fail", path, &m);
+    lxsm = ng_motive_ham_lxsm(path);
+    hmin = ng_motive_ham_min(path);
+    seq[8] = lxsm;
+    lp_seq[8] = ng_motive_ham_lphi(path);
+    nq_seq[8] = ng_motive_ham_cneq(path);
+    xc_seq[8] = ng_motive_ham_lxcn(path);
+    up_seq[8] = ng_motive_ham_uphi(path);
+    ce_seq[8] = ng_motive_ham_cnec(path);
+    lh_seq[8] = ng_motive_ham_lhcn(path);
+    lb_seq[8] = ng_motive_ham_lbcn(path);
+    ov_seq[8] = ng_motive_ham_over(path);
+    sm_seq[8] = ng_motive_ham_lbsm(path);
+    if (!(rc == 0 && strcmp(m.concept, pair) == 0 && m.lexical == 1 &&
+          m.hamming == 23 && m.rank == 105 && m.lex_w == 64 && lxsm == -1 &&
+          hmin == 23 && lxsm != hmin)) {
+      fprintf(stderr,
+              "FAIL hlxsm trail rc=%d concept=%s lex=%d ham=%d rank=%d lex_w=%d "
+              "lxsm=%d hmin=%d\n",
+              rc, m.concept, m.lexical, m.hamming, m.rank, m.lex_w, lxsm, hmin);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm span file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    lhcn = ng_motive_ham_lhcn(path);
+    lbcn = ng_motive_ham_lbcn(path);
+    hover = ng_motive_ham_over(path);
+    lbsm = ng_motive_ham_lbsm(path);
+    hmin = ng_motive_ham_min(path);
+    hsum = ng_motive_ham_sum(path);
+    seq[9] = lxsm;
+    lp_seq[9] = ng_motive_ham_lphi(path);
+    nq_seq[9] = ng_motive_ham_cneq(path);
+    xc_seq[9] = ng_motive_ham_lxcn(path);
+    up_seq[9] = ng_motive_ham_uphi(path);
+    ce_seq[9] = cnec;
+    lh_seq[9] = lhcn;
+    lb_seq[9] = lbcn;
+    ov_seq[9] = hover;
+    sm_seq[9] = lbsm;
+    lphi = lp_seq[9];
+    cneq = nq_seq[9];
+    xcn = xc_seq[9];
+    uphi = up_seq[9];
+    if (!(lxsm == 22 && cnec == 2 && lhcn == 1 && lbcn == 1 && hover == 2 &&
+          lbsm == 0 && lphi == 22 && cneq == 22 && xcn == 2 && uphi == 22 &&
+          hmin == 0 && hsum == 40 && lxsm == lphi && lxsm == cneq &&
+          lxsm == uphi && lxsm != xcn && lxsm != cnec && lxsm != lhcn &&
+          lxsm != lbcn && lxsm != hover && lxsm != lbsm && lxsm != hsum &&
+          lxsm != 2 && lxsm != 0 && lxsm != 1 && lxsm != -1)) {
+      fprintf(stderr,
+              "FAIL hlxsm span lxsm=%d cnec=%d lhcn=%d lbcn=%d over=%d "
+              "lbsm=%d lphi=%d cneq=%d xcn=%d uphi=%d hmin=%d hsum=%d\n",
+              lxsm, cnec, lhcn, lbcn, hover, lbsm, lphi, cneq, xcn, uphi,
+              hmin, hsum);
+      g_fail++;
+    }
+    if (!(seq[0] == -1 && seq[1] == -1 && seq[2] == -1 && seq[3] == -1 &&
+          seq[4] == 22 && seq[5] == 22 && seq[6] == 0 && seq[7] == -1 &&
+          seq[8] == -1 && seq[9] == 22 &&
+          lp_seq[0] == -1 && lp_seq[4] == 22 && lp_seq[5] == 22 &&
+          lp_seq[6] == -1 && lp_seq[9] == 22 &&
+          nq_seq[4] == -1 && nq_seq[5] == 22 && nq_seq[6] == 0 &&
+          nq_seq[9] == 22 &&
+          xc_seq[4] == 1 && xc_seq[5] == 1 && xc_seq[6] == 1 &&
+          xc_seq[9] == 2 &&
+          up_seq[4] == -1 && up_seq[5] == 22 && up_seq[6] == -1 &&
+          up_seq[9] == 22 &&
+          sm_seq[4] == -1 && sm_seq[5] == -1 && sm_seq[6] == 0 &&
+          sm_seq[9] == 0 &&
+          ce_seq[4] == -1 && ce_seq[6] == 1 && ce_seq[9] == 2 &&
+          lh_seq[6] == -1 && lh_seq[9] == 1 &&
+          lb_seq[4] == -1 && lb_seq[6] == 1 && lb_seq[9] == 1 &&
+          ov_seq[4] == 1 && ov_seq[6] == 2 && ov_seq[9] == 2 &&
+          seq[4] != nq_seq[4] && seq[4] != xc_seq[4] && seq[4] != up_seq[4] &&
+          seq[4] != sm_seq[4] && seq[4] == lp_seq[4] &&
+          seq[5] != xc_seq[5] && seq[5] != sm_seq[5] && seq[5] == lp_seq[5] &&
+          seq[6] != lp_seq[6] && seq[6] != xc_seq[6] && seq[6] != up_seq[6] &&
+          seq[6] == nq_seq[6] && seq[6] == sm_seq[6] &&
+          seq[9] != xc_seq[9] && seq[9] != sm_seq[9] && seq[9] == lp_seq[9] &&
+          seq[4] != 1 && seq[4] != 0 && seq[4] != -1 &&
+          seq[5] != 1 && seq[5] != -1 &&
+          seq[6] != -1 && seq[6] != 1 && seq[6] != 22 &&
+          seq[9] != 2 && seq[9] != 0 && seq[9] != 1)) {
+      fprintf(stderr,
+              "FAIL hlxsm ten %d %d %d %d %d %d %d %d %d %d\n", seq[0], seq[1],
+              seq[2], seq[3], seq[4], seq[5], seq[6], seq[7], seq[8], seq[9]);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm paired file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(ship, pf);
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    lxsm = ng_motive_ham_lxsm(path);
+    cnec = ng_motive_ham_cnec(path);
+    xcn = ng_motive_ham_lxcn(path);
+    cneq = ng_motive_ham_cneq(path);
+    lphi = ng_motive_ham_lphi(path);
+    if (!(lxsm == 44 && xcn == 2 && cneq == -1 && lphi == 44 && cnec == -1 &&
+          lxsm != xcn && lxsm != cneq && lxsm == lphi && lxsm != cnec &&
+          lxsm != 2 && lxsm != 22 && lxsm != -1)) {
+      fprintf(stderr,
+              "FAIL hlxsm paired lxsm=%d xcn=%d cneq=%d lphi=%d cnec=%d\n",
+              lxsm, xcn, cneq, lphi, cnec);
+      g_fail++;
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm duplicate file opens");
+    if (pf) {
+      fputs(dots, pf);
+      fputs(dots, pf);
+      fputs(audit, pf);
+      fputs(far_line, pf);
+      fputs(far_line, pf);
+      fclose(pf);
+    }
+    {
+      const char *qs[5];
+      int got[5];
+      int ng = 0;
+      int gi, gj, lower_v, outside, distinct;
+      qs[0] = "...";
+      qs[1] = "...";
+      qs[2] = "why did the ship fail";
+      qs[3] = far;
+      qs[4] = far;
+      for (gi = 0; gi < 5; gi++) {
+        rc = ng_motive_label_rank(qs[gi], path, &m);
+        if (rc == 0 && m.hamming >= 0) got[ng++] = m.hamming;
+      }
+      for (gi = 1; gi < ng; gi++) {
+        int v = got[gi];
+        gj = gi;
+        while (gj > 0 && got[gj - 1] > v) {
+          got[gj] = got[gj - 1];
+          gj--;
+        }
+        got[gj] = v;
+      }
+      outside = 0;
+      distinct = 0;
+      lower_v = ng > 0 ? got[(ng - 1) / 2] : -1;
+      {
+        int acc = 0;
+        int saw = 0;
+        for (gi = 0; gi < ng; gi++) {
+          if (ng == 0 || got[gi] == lower_v) continue;
+          acc += got[gi];
+          saw = 1;
+          if (gi == 0 || got[gi] != got[gi - 1]) distinct++;
+        }
+        outside = saw ? acc : -1;
+      }
+      lxsm = ng_motive_ham_lxsm(path);
+      lphi = ng_motive_ham_lphi(path);
+      xcn = ng_motive_ham_lxcn(path);
+      if (!(ng == 5 && lower_v == 18 && outside == 80 && distinct == 2 &&
+            got[0] == 0 && got[1] == 0 && got[2] == 18 && got[3] == 40 &&
+            got[4] == 40 && lxsm == outside && lxsm == 80 && lphi == 80 &&
+            xcn == 4 && lxsm == lphi && lxsm != xcn && lxsm != distinct &&
+            lxsm != 40 && lxsm != 4 && lxsm != -1 &&
+            strcmp(m.concept, peer) == 0)) {
+        fprintf(stderr,
+                "FAIL hlxsm dup lxsm=%d lphi=%d xcn=%d lower=%d distinct=%d n=%d "
+                "out=%d hams=%d %d %d %d %d concept=%s\n",
+                lxsm, lphi, xcn, lower_v, distinct, ng, outside,
+                ng > 0 ? got[0] : -1, ng > 1 ? got[1] : -1,
+                ng > 2 ? got[2] : -1, ng > 3 ? got[3] : -1,
+                ng > 4 ? got[4] : -1, m.concept);
+        g_fail++;
+      }
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm repeated file opens");
+    if (pf) {
+      fputs(audit, pf);
+      fputs(audit, pf);
+      fputs(ship, pf);
+      fputs(far_line, pf);
+      fputs(far_line, pf);
+      fclose(pf);
+    }
+    {
+      const char *qs[5];
+      int got[5];
+      int ng = 0;
+      int gi, gj, lower_v, outside, distinct;
+      qs[0] = "why did the ship fail";
+      qs[1] = "why did the ship fail";
+      qs[2] = "ship fail";
+      qs[3] = far;
+      qs[4] = far;
+      for (gi = 0; gi < 5; gi++) {
+        rc = ng_motive_label_rank(qs[gi], path, &m);
+        if (rc == 0 && m.hamming >= 0) got[ng++] = m.hamming;
+      }
+      for (gi = 1; gi < ng; gi++) {
+        int v = got[gi];
+        gj = gi;
+        while (gj > 0 && got[gj - 1] > v) {
+          got[gj] = got[gj - 1];
+          gj--;
+        }
+        got[gj] = v;
+      }
+      outside = 0;
+      distinct = 0;
+      lower_v = ng > 0 ? got[(ng - 1) / 2] : -1;
+      {
+        int acc = 0;
+        int saw = 0;
+        int kinds = 0;
+        for (gi = 0; gi < ng; gi++) {
+          if (ng == 0 || got[gi] == lower_v) continue;
+          acc += got[gi];
+          saw = 1;
+          if (gi == 0 || got[gi] != got[gi - 1]) kinds++;
+        }
+        outside = saw ? acc : -1;
+        distinct = kinds;
+      }
+      lxsm = ng_motive_ham_lxsm(path);
+      lphi = ng_motive_ham_lphi(path);
+      xcn = ng_motive_ham_lxcn(path);
+      cneq = ng_motive_ham_cneq(path);
+      if (!(ng == 5 && lower_v == 22 && outside == 116 && distinct == 2 &&
+            got[0] == 18 && got[1] == 18 && got[2] == 22 && got[3] == 40 &&
+            got[4] == 40 && lxsm == outside && lxsm == 116 && lphi == 80 &&
+            cneq == 116 && xcn == 4 && lxsm == cneq && lxsm != lphi &&
+            lxsm != xcn && lxsm != 80 && lxsm != 58 && lxsm != 4 &&
+            lxsm != -1 && strcmp(m.concept, peer) == 0)) {
+        fprintf(stderr,
+                "FAIL hlxsm repeat lxsm=%d lphi=%d cneq=%d xcn=%d lower=%d "
+                "distinct=%d n=%d out=%d hams=%d %d %d %d %d concept=%s\n",
+                lxsm, lphi, cneq, xcn, lower_v, distinct, ng, outside,
+                ng > 0 ? got[0] : -1, ng > 1 ? got[1] : -1,
+                ng > 2 ? got[2] : -1, ng > 3 ? got[3] : -1,
+                ng > 4 ? got[4] : -1, m.concept);
+        g_fail++;
+      }
+    }
+
+    pf = fopen(path, "w");
+    expect(pf != NULL, "hlxsm sealed file opens");
+    if (pf) {
+      fputs(ship, pf);
+      fclose(pf);
+    }
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    setenv("NANOBOT_MOTIVE_LEARN", path, 1);
+    ng_motive_rank("ship fail", &ranked);
+    if (!(strcmp(ranked.concept, keep) == 0 && ranked.lexical == 2 &&
+          ranked.hamming == 22 && ranked.rank == 170 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hlxsm sealed concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    ng_motive_rank_w("ship fail", &ranked, 64);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lexical == 1 && ranked.hamming == 23 && ranked.lex_w == 64,
+           "hlxsm weight 64 still returns the pair line");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    ng_motive_rank("ship fail", &ranked);
+    expect(strcmp(ranked.concept, pair) == 0 && ranked.rank == 105 &&
+               ranked.lex_w == 64,
+           "hlxsm unset learn still leaves the pair line");
+    ng_motive_rank(law, &ranked);
+    if (!(strcmp(ranked.concept, law) == 0 && ranked.rank == 256 &&
+          ranked.lexical == 3 && ranked.hamming == 0 && ranked.lex_w == 64)) {
+      fprintf(stderr,
+              "FAIL hlxsm sealed law concept=%s lex=%d ham=%d rank=%d lex_w=%d\n",
+              ranked.concept, ranked.lexical, ranked.hamming, ranked.rank,
+              ranked.lex_w);
+      g_fail++;
+    }
+    learned = ng_motive_learn_hits(path);
+    marked = ng_motive_label_hits(path);
+    lxsm = ng_motive_ham_lxsm(path);
+    hceq = ng_motive_ham_ceq(path);
+    hcsum = ng_motive_ham_csum(path);
+    hmup = ng_motive_ham_mup(path);
+    hmed = ng_motive_ham_med(path);
+    hmin = ng_motive_ham_min(path);
+    hesum = ng_motive_ham_esum(path);
+    hsum = ng_motive_ham_sum(path);
+    if (learned != 0 || marked != 1 || lxsm != -1 || hceq != 22 || hcsum != 44 ||
+        hmup != 22 || hmed != 22 || hmin != 22 || hesum != 44 || hsum != 22 ||
+        lxsm == hceq || lxsm == hsum || lxsm == hmin) {
+      fprintf(stderr,
+              "FAIL hlxsm sealed counts learn=%d label=%d lxsm=%d hceq=%d "
+              "hcsum=%d hmup=%d hmed=%d hmin=%d hesum=%d hsum=%d\n",
+              learned, marked, lxsm, hceq, hcsum, hmup, hmed, hmin, hesum, hsum);
+      g_fail++;
+    }
+    ng_motive_rank("you lied", &ranked);
+    expect(ranked.plate == NG_PLATE_CONFESS && ranked.lexical == 0,
+           "hlxsm leaves you lied");
+    ng_motive_rank("", &ranked);
+    expect(ranked.rank == 0, "hlxsm leaves an empty query at rank 0");
+    unsetenv("NANOBOT_MOTIVE_LEARN");
+    unsetenv("NANOBOT_MOTIVE_LEX_W");
+    unlink(path);
+  }
+
   if (g_fail) {
     fprintf(stderr, "%d motive checks failed\n", g_fail);
     return 1;
